@@ -183,3 +183,16 @@
 - [x] Link orders to user in database
 - [x] "My Orders" navigation item
 - [ ] Order search and filter functionality
+
+## Product Listing Page - NOW BUILDING
+- [x] Create product grid layout
+- [x] Add brand filter (Nike, Adidas, Jordan, Yeezy, etc.)
+- [x] Add category filter (Basketball, Running, Lifestyle, etc.)
+- [x] Add price range slider filter
+- [x] Add size availability filter
+- [x] Add search functionality
+- [x] Add sorting options (Price: Low to High, High to Low, Newest, Popular)
+- [x] Show active filters with clear buttons
+- [x] Display product count
+- [x] Add "On Sale" and "Clearance" quick filters
+- [x] Mobile-responsive filter sidebar

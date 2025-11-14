@@ -1,1 +1,413 @@
-export default function Products() { return <div>Products</div>; }
+import { trpc } from "@/lib/trpc";
+import { useState, useMemo } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Slider } from "@/components/ui/slider";
+import { useLocation } from "wouter";
+import { Search, SlidersHorizontal } from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+export default function Products() {
+  const [, setLocation] = useLocation();
+  const { data: products, isLoading } = trpc.products.list.useQuery();
+
+  // Filter states
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
+  const [priceRange, setPriceRange] = useState([0, 50000]);
+  const [showOnSale, setShowOnSale] = useState(false);
+  const [showClearance, setShowClearance] = useState(false);
+  const [sortBy, setSortBy] = useState("newest");
+
+  // Extract unique values for filters
+  const brands = useMemo(() => {
+    if (!products) return [];
+    return Array.from(new Set(products.map(p => p.brand))).sort();
+  }, [products]);
+
+  const categories = useMemo(() => {
+    if (!products) return [];
+    return Array.from(new Set(products.map(p => p.category))).sort();
+  }, [products]);
+
+  const sizes = useMemo(() => {
+    if (!products) return [];
+    const allSizes = new Set<string>();
+    products.forEach(p => {
+      if (p.sizes) {
+        try {
+          const productSizes = JSON.parse(p.sizes);
+          productSizes.forEach((size: string) => allSizes.add(size));
+        } catch (e) {}
+      }
+    });
+    return Array.from(allSizes).sort();
+  }, [products]);
+
+  // Filter and sort products
+  const filteredProducts = useMemo(() => {
+    if (!products) return [];
+
+    let filtered = products.filter(product => {
+      // Search query
+      if (searchQuery && !product.name.toLowerCase().includes(searchQuery.toLowerCase())) {
+        return false;
+      }
+
+      // Brand filter
+      if (selectedBrands.length > 0 && !selectedBrands.includes(product.brand)) {
+        return false;
+      }
+
+      // Category filter
+      if (selectedCategories.length > 0 && !selectedCategories.includes(product.category)) {
+        return false;
+      }
+
+      // Price filter
+      const price = product.salePrice || product.basePrice;
+      if (price < priceRange[0] * 100 || price > priceRange[1] * 100) {
+        return false;
+      }
+
+      // Size filter
+      if (selectedSizes.length > 0) {
+        try {
+          const productSizes = JSON.parse(product.sizes);
+          const hasSize = selectedSizes.some(size => productSizes.includes(size));
+          if (!hasSize) return false;
+        } catch (e) {
+          return false;
+        }
+      }
+
+      // On Sale filter
+      if (showOnSale && !product.salePrice) {
+        return false;
+      }
+
+      // Clearance filter
+      if (showClearance && product.clearance !== 1) {
+        return false;
+      }
+
+      return true;
+    });
+
+    // Sort
+    switch (sortBy) {
+      case "price-low":
+        filtered.sort((a, b) => {
+          const priceA = a.salePrice || a.basePrice;
+          const priceB = b.salePrice || b.basePrice;
+          return priceA - priceB;
+        });
+        break;
+      case "price-high":
+        filtered.sort((a, b) => {
+          const priceA = a.salePrice || a.basePrice;
+          const priceB = b.salePrice || b.basePrice;
+          return priceB - priceA;
+        });
+        break;
+      case "newest":
+        filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        break;
+      case "name":
+        filtered.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+    }
+
+    return filtered;
+  }, [products, searchQuery, selectedBrands, selectedCategories, selectedSizes, priceRange, showOnSale, showClearance, sortBy]);
+
+  const toggleBrand = (brand: string) => {
+    setSelectedBrands(prev =>
+      prev.includes(brand) ? prev.filter(b => b !== brand) : [...prev, brand]
+    );
+  };
+
+  const toggleCategory = (category: string) => {
+    setSelectedCategories(prev =>
+      prev.includes(category) ? prev.filter(c => c !== category) : [...prev, category]
+    );
+  };
+
+  const toggleSize = (size: string) => {
+    setSelectedSizes(prev =>
+      prev.includes(size) ? prev.filter(s => s !== size) : [...prev, size]
+    );
+  };
+
+  const clearAllFilters = () => {
+    setSearchQuery("");
+    setSelectedBrands([]);
+    setSelectedCategories([]);
+    setSelectedSizes([]);
+    setPriceRange([0, 50000]);
+    setShowOnSale(false);
+    setShowClearance(false);
+  };
+
+  const activeFilterCount = selectedBrands.length + selectedCategories.length + selectedSizes.length + 
+    (showOnSale ? 1 : 0) + (showClearance ? 1 : 0);
+
+  const FilterContent = () => (
+    <div className="space-y-6">
+      {/* Quick Filters */}
+      <div>
+        <h3 className="font-semibold mb-3">Quick Filters</h3>
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <Checkbox
+              checked={showOnSale}
+              onCheckedChange={(checked) => setShowOnSale(checked as boolean)}
+            />
+            <span className="text-sm">On Sale</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <Checkbox
+              checked={showClearance}
+              onCheckedChange={(checked) => setShowClearance(checked as boolean)}
+            />
+            <span className="text-sm">Clearance</span>
+          </label>
+        </div>
+      </div>
+
+      {/* Brand Filter */}
+      <div>
+        <h3 className="font-semibold mb-3">Brand</h3>
+        <div className="space-y-2 max-h-48 overflow-y-auto">
+          {brands.map(brand => (
+            <label key={brand} className="flex items-center gap-2 cursor-pointer">
+              <Checkbox
+                checked={selectedBrands.includes(brand)}
+                onCheckedChange={() => toggleBrand(brand)}
+              />
+              <span className="text-sm">{brand}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* Category Filter */}
+      <div>
+        <h3 className="font-semibold mb-3">Category</h3>
+        <div className="space-y-2">
+          {categories.map(category => (
+            <label key={category} className="flex items-center gap-2 cursor-pointer">
+              <Checkbox
+                checked={selectedCategories.includes(category)}
+                onCheckedChange={() => toggleCategory(category)}
+              />
+              <span className="text-sm">{category}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* Size Filter */}
+      <div>
+        <h3 className="font-semibold mb-3">Size</h3>
+        <div className="grid grid-cols-3 gap-2">
+          {sizes.map(size => (
+            <Button
+              key={size}
+              variant={selectedSizes.includes(size) ? "default" : "outline"}
+              size="sm"
+              onClick={() => toggleSize(size)}
+              className="text-xs"
+            >
+              {size}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {/* Price Range */}
+      <div>
+        <h3 className="font-semibold mb-3">Price Range</h3>
+        <div className="space-y-4">
+          <Slider
+            value={priceRange}
+            onValueChange={setPriceRange}
+            min={0}
+            max={50000}
+            step={500}
+            className="w-full"
+          />
+          <div className="flex justify-between text-sm text-muted-foreground">
+            <span>₱{priceRange[0].toLocaleString()}</span>
+            <span>₱{priceRange[1].toLocaleString()}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Clear Filters */}
+      {activeFilterCount > 0 && (
+        <Button variant="outline" onClick={clearAllFilters} className="w-full">
+          Clear All Filters ({activeFilterCount})
+        </Button>
+      )}
+    </div>
+  );
+
+  if (isLoading) {
+    return <div className="flex items-center justify-center min-h-screen">Loading products...</div>;
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="container py-8">
+        {/* Header */}
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold mb-2">All Products</h1>
+          <p className="text-muted-foreground">
+            Showing {filteredProducts.length} of {products?.length || 0} products
+          </p>
+        </div>
+
+        {/* Search and Sort Bar */}
+        <div className="flex flex-col md:flex-row gap-4 mb-6">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search products..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <Select value={sortBy} onValueChange={setSortBy}>
+            <SelectTrigger className="w-full md:w-[200px]">
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">Newest</SelectItem>
+              <SelectItem value="price-low">Price: Low to High</SelectItem>
+              <SelectItem value="price-high">Price: High to Low</SelectItem>
+              <SelectItem value="name">Name: A to Z</SelectItem>
+            </SelectContent>
+          </Select>
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="outline" className="md:hidden">
+                <SlidersHorizontal className="mr-2 h-4 w-4" />
+                Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left">
+              <SheetHeader>
+                <SheetTitle>Filters</SheetTitle>
+                <SheetDescription>
+                  Refine your product search
+                </SheetDescription>
+              </SheetHeader>
+              <div className="mt-6">
+                <FilterContent />
+              </div>
+            </SheetContent>
+          </Sheet>
+        </div>
+
+        <div className="flex gap-6">
+          {/* Desktop Filters Sidebar */}
+          <aside className="hidden md:block w-64 flex-shrink-0">
+            <Card>
+              <CardContent className="p-6">
+                <FilterContent />
+              </CardContent>
+            </Card>
+          </aside>
+
+          {/* Product Grid */}
+          <div className="flex-1">
+            {filteredProducts.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredProducts.map(product => {
+                  const price = product.salePrice || product.basePrice;
+                  const hasDiscount = !!product.salePrice;
+                  const images = product.images ? JSON.parse(product.images) : [];
+
+                  return (
+                    <Card
+                      key={product.id}
+                      className="cursor-pointer hover:shadow-lg transition-shadow"
+                      onClick={() => setLocation(`/product/${product.id}`)}
+                    >
+                      <div className="relative aspect-square">
+                        {images[0] && (
+                          <img
+                            src={images[0]}
+                            alt={product.name}
+                            className="object-cover w-full h-full rounded-t-lg"
+                          />
+                        )}
+                        {hasDiscount && (
+                          <span className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded">
+                            SALE
+                          </span>
+                        )}
+                        {product.clearance === 1 && (
+                          <span className="absolute top-2 left-2 bg-yellow-500 text-black text-xs px-2 py-1 rounded font-bold">
+                            CLEARANCE
+                          </span>
+                        )}
+                      </div>
+                      <CardContent className="p-4">
+                        <p className="text-xs text-muted-foreground mb-1">{product.brand}</p>
+                        <h3 className="font-semibold mb-2 line-clamp-2">{product.name}</h3>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-bold">
+                            ₱{(price / 100).toLocaleString()}
+                          </span>
+                          {hasDiscount && (
+                            <span className="text-sm text-muted-foreground line-through">
+                              ₱{(product.basePrice / 100).toLocaleString()}
+                            </span>
+                          )}
+                        </div>
+                        {product.stock < 10 && product.stock > 0 && (
+                          <p className="text-xs text-orange-500 mt-2">Only {product.stock} left!</p>
+                        )}
+                        {product.stock === 0 && (
+                          <p className="text-xs text-red-500 mt-2">Out of stock</p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            ) : (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <p className="text-muted-foreground mb-4">No products found matching your filters</p>
+                  <Button onClick={clearAllFilters}>Clear Filters</Button>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
