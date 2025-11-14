@@ -57,6 +57,13 @@
       "when": 1763145326828,
       "tag": "0007_common_doctor_spectrum",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1763161703680,
+      "tag": "0008_pink_nick_fury",
+      "breakpoints": true
     }
   ]
 }

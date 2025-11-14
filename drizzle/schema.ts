@@ -220,6 +220,19 @@ export type PointsTransaction = typeof pointsTransactions.$inferSelect;
 export type InsertPointsTransaction = typeof pointsTransactions.$inferInsert;
 
 /**
+ * Browsing history table to track user product views for AI recommendations
+ */
+export const browsingHistory = mysqlTable("browsingHistory", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  productId: int("productId").notNull(),
+  viewedAt: timestamp("viewedAt").defaultNow().notNull(),
+});
+
+export type BrowsingHistory = typeof browsingHistory.$inferSelect;
+export type InsertBrowsingHistory = typeof browsingHistory.$inferInsert;
+
+/**
  * Product comparison list
  */
 export const comparisons = mysqlTable("comparisons", {

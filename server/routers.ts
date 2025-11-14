@@ -315,6 +315,302 @@ export const appRouter = router({
         return { success: true };
       }),
   }),
+  
+  wishlist: router({
+    get: protectedProcedure.query(async ({ ctx }) => {
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) return [];
+      const { wishlist, products } = await import("../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+      
+      const items = await db
+        .select({
+          id: wishlist.id,
+          productId: wishlist.productId,
+          createdAt: wishlist.createdAt,
+          product: products,
+        })
+        .from(wishlist)
+        .leftJoin(products, eq(wishlist.productId, products.id))
+        .where(eq(wishlist.userId, ctx.user.id));
+      
+      return items;
+    }),
+    
+    add: protectedProcedure
+      .input((val: unknown) => {
+        if (typeof val === "object" && val !== null && "productId" in val) {
+          return val as { productId: number };
+        }
+        throw new Error("Invalid input");
+      })
+      .mutation(async ({ ctx, input }) => {
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+        const { wishlist } = await import("../drizzle/schema");
+        
+        await db.insert(wishlist).values({
+          userId: ctx.user.id,
+          productId: input.productId,
+        });
+        
+        return { success: true };
+      }),
+    
+    remove: protectedProcedure
+      .input((val: unknown) => {
+        if (typeof val === "object" && val !== null && "productId" in val) {
+          return val as { productId: number };
+        }
+        throw new Error("Invalid input");
+      })
+      .mutation(async ({ ctx, input }) => {
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+        const { wishlist } = await import("../drizzle/schema");
+        const { eq, and } = await import("drizzle-orm");
+        
+        await db
+          .delete(wishlist)
+          .where(
+            and(
+              eq(wishlist.userId, ctx.user.id),
+              eq(wishlist.productId, input.productId)
+            )
+          );
+        
+        return { success: true };
+      }),
+  }),
+  
+  loyalty: router({
+    getPoints: protectedProcedure.query(async ({ ctx }) => {
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) return null;
+      const { loyaltyPoints } = await import("../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+      
+      const result = await db
+        .select()
+        .from(loyaltyPoints)
+        .where(eq(loyaltyPoints.userId, ctx.user.id))
+        .limit(1);
+      
+      return result[0] || null;
+    }),
+    
+    getTransactions: protectedProcedure.query(async ({ ctx }) => {
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) return [];
+      const { pointsTransactions } = await import("../drizzle/schema");
+      const { eq, desc } = await import("drizzle-orm");
+      
+      return await db
+        .select()
+        .from(pointsTransactions)
+        .where(eq(pointsTransactions.userId, ctx.user.id))
+        .orderBy(desc(pointsTransactions.createdAt));
+    }),
+  }),
+  
+  recommendations: router({
+    getPersonalized: protectedProcedure.query(async ({ ctx }) => {
+      const { invokeLLM } = await import("./_core/llm");
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) return [];
+      
+      const { browsingHistory, wishlist, products } = await import("../drizzle/schema");
+      const { eq, desc, and, ne, inArray } = await import("drizzle-orm");
+      
+      // Get user's browsing history (last 20 products)
+      const viewedProducts = await db
+        .select({ product: products })
+        .from(browsingHistory)
+        .leftJoin(products, eq(browsingHistory.productId, products.id))
+        .where(eq(browsingHistory.userId, ctx.user.id))
+        .orderBy(desc(browsingHistory.viewedAt))
+        .limit(20);
+      
+      // Get user's wishlist
+      const wishlistProducts = await db
+        .select({ product: products })
+        .from(wishlist)
+        .leftJoin(products, eq(wishlist.productId, products.id))
+        .where(eq(wishlist.userId, ctx.user.id));
+      
+      // Get all products for recommendation pool
+      const allProducts = await db.select().from(products).limit(100);
+      
+      // Extract viewed and wishlisted product IDs
+      const viewedIds = viewedProducts.map(v => v.product?.id).filter(Boolean);
+      const wishlistIds = wishlistProducts.map(w => w.product?.id).filter(Boolean);
+      const excludeIds = Array.from(new Set([...viewedIds, ...wishlistIds]));
+      
+      // Prepare data for AI
+      const viewedProductsInfo = viewedProducts
+        .filter(v => v.product)
+        .map(v => `${v.product!.brand} ${v.product!.name} (${v.product!.category})`);
+      
+      const wishlistProductsInfo = wishlistProducts
+        .filter(w => w.product)
+        .map(w => `${w.product!.brand} ${w.product!.name} (${w.product!.category})`);
+      
+      const availableProducts = allProducts
+        .filter(p => !excludeIds.includes(p.id))
+        .map(p => ({ id: p.id, info: `${p.brand} ${p.name} (${p.category})` }));
+      
+      // Use AI to recommend products
+      const prompt = `You are a sneaker recommendation expert. Based on the user's browsing history and wishlist, recommend 6 products from the available list.
+
+User's Recently Viewed Products:
+${viewedProductsInfo.length > 0 ? viewedProductsInfo.join('\n') : 'None'}
+
+User's Wishlist:
+${wishlistProductsInfo.length > 0 ? wishlistProductsInfo.join('\n') : 'None'}
+
+Available Products:
+${availableProducts.map((p, i) => `${i + 1}. ID:${p.id} - ${p.info}`).join('\n')}
+
+Recommend 6 product IDs that best match the user's preferences. Consider brand affinity, category preferences, and style similarity. Return ONLY a JSON array of product IDs, like: [1, 5, 12, 23, 45, 67]`;
+      
+      try {
+        const response = await invokeLLM({
+          messages: [
+            { role: "system", content: "You are a helpful sneaker recommendation assistant. Always respond with valid JSON." },
+            { role: "user", content: prompt },
+          ],
+        });
+        
+        const content = response.choices[0]?.message?.content || "[]";
+        const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
+        const recommendedIds = JSON.parse(contentStr.match(/\[(.*?)\]/)?.[0] || "[]");
+        
+        // Fetch recommended products
+        if (recommendedIds.length > 0) {
+          const recommended = await db
+            .select()
+            .from(products)
+            .where(inArray(products.id, recommendedIds))
+            .limit(6);
+          return recommended;
+        }
+      } catch (error) {
+        console.error("AI recommendation error:", error);
+      }
+      
+      // Fallback: return random products if AI fails
+      return allProducts.filter(p => !excludeIds.includes(p.id)).slice(0, 6);
+    }),
+    
+    getSimilar: publicProcedure
+      .input((val: unknown) => {
+        if (typeof val === "object" && val !== null && "productId" in val) {
+          return val as { productId: number };
+        }
+        throw new Error("Invalid input");
+      })
+      .query(async ({ input }) => {
+        const { invokeLLM } = await import("./_core/llm");
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) return [];
+        
+        const { products } = await import("../drizzle/schema");
+        const { eq, ne } = await import("drizzle-orm");
+        
+        // Get the target product
+        const targetProduct = await db
+          .select()
+          .from(products)
+          .where(eq(products.id, input.productId))
+          .limit(1);
+        
+        if (!targetProduct[0]) return [];
+        
+        const target = targetProduct[0];
+        
+        // Get other products
+        const otherProducts = await db
+          .select()
+          .from(products)
+          .where(ne(products.id, input.productId))
+          .limit(50);
+        
+        const availableProducts = otherProducts.map(p => ({
+          id: p.id,
+          info: `${p.brand} ${p.name} (${p.category})`,
+        }));
+        
+        const prompt = `You are a sneaker recommendation expert. Find 4 products similar to the target product.
+
+Target Product:
+${target.brand} ${target.name} (${target.category})
+
+Available Products:
+${availableProducts.map((p, i) => `${i + 1}. ID:${p.id} - ${p.info}`).join('\n')}
+
+Recommend 4 product IDs that are most similar in brand, style, or category. Return ONLY a JSON array of product IDs, like: [1, 5, 12, 23]`;
+        
+        try {
+          const response = await invokeLLM({
+            messages: [
+              { role: "system", content: "You are a helpful sneaker recommendation assistant. Always respond with valid JSON." },
+              { role: "user", content: prompt },
+            ],
+          });
+          
+          const content = response.choices[0]?.message?.content || "[]";
+          const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
+          const recommendedIds = JSON.parse(contentStr.match(/\[(.*?)\]/)?.[0] || "[]");
+          
+          if (recommendedIds.length > 0) {
+            const { inArray } = await import("drizzle-orm");
+            const recommended = await db
+              .select()
+              .from(products)
+              .where(inArray(products.id, recommendedIds))
+              .limit(4);
+            return recommended;
+          }
+        } catch (error) {
+          console.error("AI similarity error:", error);
+        }
+        
+        // Fallback: return products from same brand or category
+        return otherProducts
+          .filter(p => p.brand === target.brand || p.category === target.category)
+          .slice(0, 4);
+      }),
+    
+    trackView: protectedProcedure
+      .input((val: unknown) => {
+        if (typeof val === "object" && val !== null && "productId" in val) {
+          return val as { productId: number };
+        }
+        throw new Error("Invalid input");
+      })
+      .mutation(async ({ ctx, input }) => {
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) return { success: false };
+        
+        const { browsingHistory } = await import("../drizzle/schema");
+        
+        await db.insert(browsingHistory).values({
+          userId: ctx.user.id,
+          productId: input.productId,
+        });
+        
+        return { success: true };
+      }),
+  }),
+  
   admin: router({
     // Product Management
     products: router({

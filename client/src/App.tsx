@@ -18,6 +18,8 @@ import AdminProducts from "./pages/admin/Products";
 import AdminInquiries from "./pages/admin/Inquiries";
 import AdminRaffles from "./pages/admin/Raffles";
 import AdminChat from "./pages/admin/Chat";
+import Wishlist from "./pages/Wishlist";
+import LoyaltyProgram from "./pages/LoyaltyProgram";
 import ShippingPolicy from "./pages/ShippingPolicy";
 import ReturnsPolicy from "./pages/ReturnsPolicy";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
@@ -39,6 +41,8 @@ function Router() {
       <Route path={"/raffles"} component={Raffles} />
       <Route path={"/sale-events"} component={SaleEvents} />
       <Route path={"/profile"} component={Profile} />
+      <Route path={"/wishlist"} component={Wishlist} />
+      <Route path={"/loyalty"} component={LoyaltyProgram} />
       <Route path={"/order/:id"} component={OrderDetail} />
       <Route path={"/admin"} component={AdminDashboard} />
       <Route path={"/admin/products"} component={AdminProducts} />

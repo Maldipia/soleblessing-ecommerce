@@ -1,6 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { useParams, useLocation } from "wouter";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import SimilarProducts from "@/components/SimilarProducts";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -23,7 +24,18 @@ export default function ProductDetail() {
   const params = useParams();
   const [, setLocation] = useLocation();
   const { user } = useAuth();
+  const utils = trpc.useUtils();
   const productId = parseInt(params.id || "0");
+  
+  // Track product view for recommendations
+  const trackViewMutation = trpc.recommendations.trackView.useMutation();
+  
+  // Track view when product loads
+  useEffect(() => {
+    if (user && productId > 0) {
+      trackViewMutation.mutate({ productId });
+    }
+  }, [productId, user]);
 
   const { data: product, isLoading } = trpc.products.getById.useQuery(
     { id: productId },
@@ -45,6 +57,44 @@ export default function ProductDetail() {
       toast.error(error.message || "Failed to add to cart");
     },
   });
+
+  const { data: wishlistItems } = trpc.wishlist.get.useQuery(undefined, {
+    enabled: !!user,
+  });
+  
+  const addToWishlistMutation = trpc.wishlist.add.useMutation({
+    onSuccess: () => {
+      toast.success("Added to wishlist");
+      utils.wishlist.get.invalidate();
+    },
+    onError: () => {
+      toast.error("Failed to add to wishlist");
+    },
+  });
+  
+  const removeFromWishlistMutation = trpc.wishlist.remove.useMutation({
+    onSuccess: () => {
+      toast.success("Removed from wishlist");
+      utils.wishlist.get.invalidate();
+    },
+    onError: () => {
+      toast.error("Failed to remove from wishlist");
+    },
+  });
+  
+  const isInWishlist = wishlistItems?.some((item: any) => item.productId === productId);
+  
+  const toggleWishlist = () => {
+    if (!user) {
+      window.location.href = getLoginUrl();
+      return;
+    }
+    if (isInWishlist) {
+      removeFromWishlistMutation.mutate({ productId });
+    } else {
+      addToWishlistMutation.mutate({ productId });
+    }
+  };
 
   const submitInquiryMutation = trpc.admin.inquiries.create.useMutation({
     onSuccess: () => {
@@ -327,8 +377,16 @@ export default function ProductDetail() {
                 <ShoppingCart className="mr-2 h-5 w-5" />
                 Add to Cart
               </Button>
-              <Button variant="outline" size="lg">
-                <Heart className="h-5 w-5" />
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={toggleWishlist}
+              >
+                <Heart
+                  className={`h-5 w-5 ${
+                    isInWishlist ? "fill-red-500 text-red-500" : ""
+                  }`}
+                />
               </Button>
             </div>
 
@@ -399,6 +457,11 @@ export default function ProductDetail() {
               </div>
             </div>
           </div>
+        </div>
+        
+        {/* Similar Products */}
+        <div className="container">
+          <SimilarProducts productId={productId} />
         </div>
       </div>
     </div>

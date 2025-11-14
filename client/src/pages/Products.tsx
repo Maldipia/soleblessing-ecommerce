@@ -6,7 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
 import { useLocation } from "wouter";
-import { Search, SlidersHorizontal } from "lucide-react";
+import { Search, SlidersHorizontal, Heart } from "lucide-react";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { toast } from "sonner";
 import {
   Sheet,
   SheetContent,
@@ -25,7 +27,50 @@ import {
 
 export default function Products() {
   const [, setLocation] = useLocation();
+  const { user } = useAuth();
+  const utils = trpc.useUtils();
   const { data: products, isLoading } = trpc.products.list.useQuery();
+  
+  const { data: wishlistItems } = trpc.wishlist.get.useQuery(undefined, {
+    enabled: !!user,
+  });
+  
+  const addToWishlistMutation = trpc.wishlist.add.useMutation({
+    onSuccess: () => {
+      toast.success("Added to wishlist");
+      utils.wishlist.get.invalidate();
+    },
+    onError: () => {
+      toast.error("Failed to add to wishlist");
+    },
+  });
+  
+  const removeFromWishlistMutation = trpc.wishlist.remove.useMutation({
+    onSuccess: () => {
+      toast.success("Removed from wishlist");
+      utils.wishlist.get.invalidate();
+    },
+    onError: () => {
+      toast.error("Failed to remove from wishlist");
+    },
+  });
+  
+  const isInWishlist = (productId: number) => {
+    return wishlistItems?.some((item: any) => item.productId === productId);
+  };
+  
+  const toggleWishlist = (e: React.MouseEvent, productId: number) => {
+    e.stopPropagation();
+    if (!user) {
+      toast.error("Please sign in to add to wishlist");
+      return;
+    }
+    if (isInWishlist(productId)) {
+      removeFromWishlistMutation.mutate({ productId });
+    } else {
+      addToWishlistMutation.mutate({ productId });
+    }
+  };
 
   // Filter states
   const [searchQuery, setSearchQuery] = useState("");
@@ -354,7 +399,21 @@ export default function Products() {
                       className="cursor-pointer hover:shadow-lg transition-shadow"
                       onClick={() => setLocation(`/product/${product.id}`)}
                     >
-                      <div className="relative aspect-square">
+                      <div className="relative aspect-square group">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="absolute top-2 right-2 z-10 bg-white/90 hover:bg-white opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={(e) => toggleWishlist(e, product.id)}
+                        >
+                          <Heart
+                            className={`h-5 w-5 ${
+                              isInWishlist(product.id)
+                                ? "fill-red-500 text-red-500"
+                                : "text-gray-600"
+                            }`}
+                          />
+                        </Button>
                         {images[0] && (
                           <img
                             src={images[0]}

@@ -18,7 +18,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Search, ShoppingCart, User, Menu, LogOut, Package, Shield, MessageCircle } from "lucide-react";
+import { Search, ShoppingCart, User, Menu, LogOut, Package, Shield, MessageCircle, Heart, Trophy } from "lucide-react";
 import { useLocation } from "wouter";
 import { useState } from "react";
 
@@ -132,6 +132,14 @@ export default function Header() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setLocation("/wishlist")}>
+                  <Heart className="mr-2 h-4 w-4" />
+                  Wishlist
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setLocation("/loyalty")}>
+                  <Trophy className="mr-2 h-4 w-4" />
+                  Rewards
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setLocation("/profile")}>
                   <Package className="mr-2 h-4 w-4" />
                   My Orders

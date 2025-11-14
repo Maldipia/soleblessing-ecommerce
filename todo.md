@@ -276,3 +276,39 @@
 - [ ] Add search/filter for conversations
 - [x] Show timestamp for last message in each conversation
 - [x] Real-time updates for new customer messages (polling every 5 seconds)
+
+## Wishlist/Favorites System - NOW BUILDING
+- [x] Add wishlist procedures to backend (add, remove, get)
+- [x] Add "Add to Wishlist" heart button on product cards
+- [x] Add "Add to Wishlist" button on product detail page
+- [x] Create dedicated Wishlist page showing all saved products
+- [x] Show wishlist link in header/navigation
+- [x] Remove from wishlist functionality
+- [x] Visual indicator when product is in wishlist (filled heart)
+- [ ] Show sale notifications for wishlisted items
+- [x] Empty wishlist state with call-to-action
+
+## Loyalty Rewards Program - NOW BUILDING
+- [x] Display loyalty points balance in user profile
+- [x] Show current tier (Bronze/Silver/Gold/Platinum)
+- [x] Display tier benefits and requirements
+- [x] Show points transaction history
+- [ ] Award points automatically on order completion
+- [ ] Create points redemption system for discounts
+- [ ] Add birthday bonus points feature
+- [x] Show progress to next tier
+- [ ] Early raffle access for higher tiers
+- [x] Create loyalty program info page
+
+## AI-Powered Product Recommendations - NOW BUILDING
+- [x] Create browsing history table to track viewed products
+- [x] Track product views automatically when users visit product pages
+- [x] Build AI recommendation algorithm using LLM
+- [x] Create recommendation API endpoint
+- [x] Add "Recommended for You" section on homepage
+- [x] Add "You Might Also Like" section on product detail pages
+- [x] Add "Similar Products" based on wishlist items
+- [x] Consider user's brand preferences in recommendations
+- [x] Consider user's category preferences in recommendations
+- [ ] Show personalized recommendations in user profile
+- [ ] Cache recommendations for performance
