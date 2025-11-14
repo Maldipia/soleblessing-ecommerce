@@ -320,3 +320,13 @@
 - [x] Show "NEW" badge on recently added products
 - [x] Limit to 8 most recent products
 - [x] Add "View All New Arrivals" button linking to filtered products page
+
+## Sale Countdown Timers - NOW BUILDING
+- [x] Add saleEndDate field to products table
+- [x] Create CountdownTimer component
+- [x] Display countdown on product cards for sale items
+- [x] Display countdown on product detail page
+- [x] Show "Sale Ends In: X days Y hours Z minutes" format
+- [x] Automatically hide sale price when timer expires
+- [x] Add visual urgency indicators (red text when < 24 hours)
+- [x] Update seed data with sale end dates

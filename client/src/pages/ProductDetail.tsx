@@ -2,6 +2,7 @@ import { trpc } from "@/lib/trpc";
 import { useParams, useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import SimilarProducts from "@/components/SimilarProducts";
+import CountdownTimer from "@/components/CountdownTimer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -238,6 +239,13 @@ export default function ProductDetail() {
             <h1 className="text-3xl font-bold mb-2">{product.name}</h1>
             <p className="text-sm text-muted-foreground mb-4">{product.category}</p>
 
+            {/* Sale Countdown */}
+            {product.salePrice && product.saleEndDate && (
+              <div className="mb-4">
+                <CountdownTimer endDate={product.saleEndDate} />
+              </div>
+            )}
+            
             {/* Price */}
             <div className="flex items-center gap-3 mb-6">
               <span className="text-3xl font-bold">₱{(price / 100).toLocaleString()}</span>

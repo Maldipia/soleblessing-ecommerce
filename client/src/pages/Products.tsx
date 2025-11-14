@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
 import { useLocation } from "wouter";
 import { Search, SlidersHorizontal, Heart } from "lucide-react";
+import CountdownTimer from "@/components/CountdownTimer";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 import {
@@ -422,9 +423,16 @@ export default function Products() {
                           />
                         )}
                         {hasDiscount && (
-                          <span className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded">
-                            SALE
-                          </span>
+                          <>
+                            <span className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded">
+                              SALE
+                            </span>
+                            {product.saleEndDate && (
+                              <div className="absolute bottom-2 left-2">
+                                <CountdownTimer endDate={product.saleEndDate} compact />
+                              </div>
+                            )}
+                          </>
                         )}
                         {product.clearance === 1 && (
                           <span className="absolute top-2 left-2 bg-yellow-500 text-black text-xs px-2 py-1 rounded font-bold">

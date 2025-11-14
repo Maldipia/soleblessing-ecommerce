@@ -35,13 +35,15 @@ export const products = mysqlTable("products", {
   brand: varchar("brand", { length: 100 }).notNull(),
   category: varchar("category", { length: 100 }).notNull(),
   basePrice: int("basePrice").notNull(), // Price in centavos (PHP)
-  salePrice: int("salePrice"), // Sale price in centavos, null if not on sale
+  salePrice: int("salePrice"),
+  saleEndDate: timestamp("saleEndDate"), // Sale price in centavos, null if not on sale
   images: text("images").notNull(), // JSON array of image URLs
   sizes: text("sizes").notNull(), // JSON array of available sizes
   sizeStock: text("sizeStock").notNull(), // JSON object mapping size to stock count {"US 8": 5, "US 9": 0}
   stock: int("stock").default(0).notNull(), // Total stock across all sizes
   featured: int("featured").default(0).notNull(), // 0 = false, 1 = true
   clearance: int("clearance").default(0).notNull(), // 0 = false, 1 = true
+  clearanceEndDate: timestamp("clearanceEndDate"),
   fitNotes: varchar("fitNotes", { length: 100 }), // "True to size", "Runs small", "Runs large"
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
