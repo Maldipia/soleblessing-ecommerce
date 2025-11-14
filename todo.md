@@ -312,3 +312,11 @@
 - [x] Consider user's category preferences in recommendations
 - [ ] Show personalized recommendations in user profile
 - [ ] Cache recommendations for performance
+
+## New Arrivals Section - NOW BUILDING
+- [x] Add "getNewArrivals" procedure to fetch latest products
+- [x] Create NewArrivals component for homepage
+- [x] Display products sorted by creation date (newest first)
+- [x] Show "NEW" badge on recently added products
+- [x] Limit to 8 most recent products
+- [x] Add "View All New Arrivals" button linking to filtered products page

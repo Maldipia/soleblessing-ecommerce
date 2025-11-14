@@ -1,5 +1,6 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import RecommendedProducts from "@/components/RecommendedProducts";
+import NewArrivals from "@/components/NewArrivals";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
@@ -251,6 +252,9 @@ export default function Home() {
         </div>
       </footer>
 
+      {/* New Arrivals */}
+      <NewArrivals />
+      
       {/* AI Recommendations */}
       {user && <RecommendedProducts />}
     </div>

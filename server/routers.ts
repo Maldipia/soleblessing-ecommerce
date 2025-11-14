@@ -41,6 +41,21 @@ export const appRouter = router({
         const { getProductById } = await import("./db");
         return await getProductById(input.id);
       }),
+    newArrivals: publicProcedure.query(async () => {
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) return [];
+      
+      const { products } = await import("../drizzle/schema");
+      const { desc } = await import("drizzle-orm");
+      
+      return await db
+        .select()
+        .from(products)
+        .orderBy(desc(products.createdAt))
+        .limit(8);
+    }),
+    
     featured: publicProcedure.query(async () => {
       const { getFeaturedProducts } = await import("./db");
       return await getFeaturedProducts();
