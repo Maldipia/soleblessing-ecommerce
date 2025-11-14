@@ -17,10 +17,13 @@ import AdminDashboard from "./pages/admin/Dashboard";
 import AdminProducts from "./pages/admin/Products";
 import AdminInquiries from "./pages/admin/Inquiries";
 import AdminRaffles from "./pages/admin/Raffles";
+import Header from "./components/Header";
 
 function Router() {
   return (
-    <Switch>
+    <>
+      <Header />
+      <Switch>
       <Route path={"/"} component={Home} />
       <Route path={"/products"} component={Products} />
       <Route path={"/product/:id"} component={ProductDetail} />
@@ -36,7 +39,8 @@ function Router() {
       <Route path={"/admin/raffles"} component={AdminRaffles} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
-    </Switch>
+      </Switch>
+    </>
   );
 }
 
