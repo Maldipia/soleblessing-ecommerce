@@ -232,3 +232,15 @@ export const comparisons = mysqlTable("comparisons", {
 
 export type Comparison = typeof comparisons.$inferSelect;
 export type InsertComparison = typeof comparisons.$inferInsert;
+
+export const chatMessages = mysqlTable("chatMessages", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").references(() => users.id),
+  message: text("message").notNull(),
+  senderType: mysqlEnum("senderType", ["customer", "admin"]).notNull(),
+  isRead: int("isRead").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ChatMessage = typeof chatMessages.$inferSelect;
+export type InsertChatMessage = typeof chatMessages.$inferInsert;

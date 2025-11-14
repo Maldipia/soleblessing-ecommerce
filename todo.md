@@ -251,3 +251,15 @@
 - [x] Create Terms of Service page
 - [x] Add copyright notice
 - [x] Make footer responsive
+
+## Live Chat Widget - NOW BUILDING
+- [x] Create floating chat button component
+- [x] Build chat interface with message history
+- [x] Add chat message input and send functionality
+- [x] Create chat messages table in database
+- [x] Add real-time message updates (polling every 3 seconds)
+- [ ] Show online/offline status
+- [ ] Add admin chat interface to respond to customers
+- [ ] Display unread message count badge
+- [ ] Add typing indicator
+- [x] Make chat widget responsive

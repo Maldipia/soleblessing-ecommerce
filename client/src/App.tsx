@@ -23,6 +23,7 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
+import ChatWidget from "./components/ChatWidget";
 
 function Router() {
   return (
@@ -50,6 +51,7 @@ function Router() {
       <Route component={NotFound} />
       </Switch>
       <Footer />
+      <ChatWidget />
     </>
   );
 }

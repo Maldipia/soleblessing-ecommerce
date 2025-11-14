@@ -151,6 +151,7 @@ export const appRouter = router({
         const { eq, and } = await import("drizzle-orm");
         const { getDb } = await import("./db");
         
+        const { getDb } = await import("./db");
       const db = await getDb();
         if (!db) return null;
         
@@ -194,8 +195,8 @@ export const appRouter = router({
         throw new Error("Invalid input: expected { message: string }");
       })
       .mutation(async ({ ctx, input }) => {
-      const { getDb } = await import("./db");
-        const db = await getDb();
+        const { getDb } = await import("./db");
+      const db = await getDb();
         if (!db) throw new Error("Database not available");
         const { chatMessages } = await import("../drizzle/schema");
         await db.insert(chatMessages).values({
@@ -224,6 +225,7 @@ export const appRouter = router({
         .mutation(async ({ input }) => {
           const { products } = await import("../drizzle/schema");
           const { getDb } = await import("./db");
+          const { getDb } = await import("./db");
       const db = await getDb();
           if (!db) throw new Error("Database not available");
           await db.insert(products).values(input);
@@ -243,6 +245,7 @@ export const appRouter = router({
         })
         .mutation(async ({ input }) => {
           const { products } = await import("../drizzle/schema");
+          const { getDb } = await import("./db");
           const { eq } = await import("drizzle-orm");
           const { getDb } = await import("./db");
       const db = await getDb();
@@ -260,6 +263,7 @@ export const appRouter = router({
         })
         .mutation(async ({ input }) => {
           const { products } = await import("../drizzle/schema");
+          const { getDb } = await import("./db");
           const { eq } = await import("drizzle-orm");
           const { getDb } = await import("./db");
       const db = await getDb();
@@ -281,6 +285,7 @@ export const appRouter = router({
         .mutation(async ({ input, ctx }) => {
           const { inquiries } = await import("../drizzle/schema");
           const { getDb } = await import("./db");
+          const { getDb } = await import("./db");
       const db = await getDb();
           if (!db) throw new Error("Database not available");
           await db.insert(inquiries).values({
@@ -292,6 +297,7 @@ export const appRouter = router({
         }),
       list: adminProcedure.query(async () => {
         const { inquiries } = await import("../drizzle/schema");
+        const { getDb } = await import("./db");
         const { getDb } = await import("./db");
       const db = await getDb();
         if (!db) return [];
@@ -311,6 +317,7 @@ export const appRouter = router({
         })
         .mutation(async ({ input }) => {
           const { inquiries } = await import("../drizzle/schema");
+          const { getDb } = await import("./db");
           const { eq } = await import("drizzle-orm");
           const { getDb } = await import("./db");
       const db = await getDb();
@@ -328,6 +335,7 @@ export const appRouter = router({
       list: adminProcedure.query(async () => {
         const { raffles } = await import("../drizzle/schema");
         const { getDb } = await import("./db");
+        const { getDb } = await import("./db");
       const db = await getDb();
         if (!db) return [];
         return await db.select().from(raffles);
@@ -342,6 +350,7 @@ export const appRouter = router({
         .mutation(async ({ input }) => {
           const { raffles } = await import("../drizzle/schema");
           const { getDb } = await import("./db");
+          const { getDb } = await import("./db");
       const db = await getDb();
           if (!db) throw new Error("Database not available");
           await db.insert(raffles).values(input);
@@ -353,6 +362,7 @@ export const appRouter = router({
     orders: router({
       list: adminProcedure.query(async () => {
         const { orders } = await import("../drizzle/schema");
+        const { getDb } = await import("./db");
         const { getDb } = await import("./db");
       const db = await getDb();
         if (!db) return [];
