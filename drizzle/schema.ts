@@ -38,9 +38,11 @@ export const products = mysqlTable("products", {
   salePrice: int("salePrice"), // Sale price in centavos, null if not on sale
   images: text("images").notNull(), // JSON array of image URLs
   sizes: text("sizes").notNull(), // JSON array of available sizes
-  stock: int("stock").default(0).notNull(),
+  sizeStock: text("sizeStock").notNull(), // JSON object mapping size to stock count {"US 8": 5, "US 9": 0}
+  stock: int("stock").default(0).notNull(), // Total stock across all sizes
   featured: int("featured").default(0).notNull(), // 0 = false, 1 = true
   clearance: int("clearance").default(0).notNull(), // 0 = false, 1 = true
+  fitNotes: varchar("fitNotes", { length: 100 }), // "True to size", "Runs small", "Runs large"
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -169,3 +171,64 @@ export const inquiries = mysqlTable("inquiries", {
 
 export type Inquiry = typeof inquiries.$inferSelect;
 export type InsertInquiry = typeof inquiries.$inferInsert;
+
+/**
+ * Wishlist for saved products
+ */
+export const wishlist = mysqlTable("wishlist", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  productId: int("productId").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Wishlist = typeof wishlist.$inferSelect;
+export type InsertWishlist = typeof wishlist.$inferInsert;
+
+/**
+ * Loyalty points for rewards program
+ */
+export const loyaltyPoints = mysqlTable("loyaltyPoints", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  points: int("points").default(0).notNull(),
+  tier: mysqlEnum("tier", ["bronze", "silver", "gold", "platinum"]).default("bronze").notNull(),
+  lifetimePoints: int("lifetimePoints").default(0).notNull(),
+  referralCode: varchar("referralCode", { length: 20 }).unique(),
+  birthday: timestamp("birthday"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type LoyaltyPoints = typeof loyaltyPoints.$inferSelect;
+export type InsertLoyaltyPoints = typeof loyaltyPoints.$inferInsert;
+
+/**
+ * Points transaction history
+ */
+export const pointsTransactions = mysqlTable("pointsTransactions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  points: int("points").notNull(), // Positive for earn, negative for redeem
+  type: mysqlEnum("type", ["purchase", "referral", "birthday", "redemption", "bonus"]).notNull(),
+  description: text("description"),
+  orderId: int("orderId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type PointsTransaction = typeof pointsTransactions.$inferSelect;
+export type InsertPointsTransaction = typeof pointsTransactions.$inferInsert;
+
+/**
+ * Product comparison list
+ */
+export const comparisons = mysqlTable("comparisons", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId"),
+  sessionId: varchar("sessionId", { length: 255 }), // For non-logged in users
+  productIds: text("productIds").notNull(), // JSON array of product IDs
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Comparison = typeof comparisons.$inferSelect;
+export type InsertComparison = typeof comparisons.$inferInsert;

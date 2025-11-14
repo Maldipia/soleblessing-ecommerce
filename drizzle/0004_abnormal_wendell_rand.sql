@@ -1,0 +1,1 @@
+ALTER TABLE `products` ADD `sizeStock` text NOT NULL;
