@@ -17,6 +17,7 @@ import AdminDashboard from "./pages/admin/Dashboard";
 import AdminProducts from "./pages/admin/Products";
 import AdminInquiries from "./pages/admin/Inquiries";
 import AdminRaffles from "./pages/admin/Raffles";
+import AdminChat from "./pages/admin/Chat";
 import ShippingPolicy from "./pages/ShippingPolicy";
 import ReturnsPolicy from "./pages/ReturnsPolicy";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
@@ -43,6 +44,7 @@ function Router() {
       <Route path={"/admin/products"} component={AdminProducts} />
       <Route path={"/admin/inquiries"} component={AdminInquiries} />
       <Route path={"/admin/raffles"} component={AdminRaffles} />
+      <Route path={"/admin/chat"} component={AdminChat} />
       <Route path={"/shipping-policy"} component={ShippingPolicy} />
       <Route path={"/returns-policy"} component={ReturnsPolicy} />
       <Route path={"/privacy-policy"} component={PrivacyPolicy} />

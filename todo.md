@@ -263,3 +263,16 @@
 - [ ] Display unread message count badge
 - [ ] Add typing indicator
 - [x] Make chat widget responsive
+
+## Admin Chat Interface - NOW BUILDING
+- [x] Create admin chat page at /admin/chat
+- [x] Display list of all customer conversations
+- [x] Show unread message count per conversation
+- [x] Highlight conversations with new messages
+- [x] Click conversation to view full chat history
+- [x] Add reply functionality for admins
+- [x] Show customer name and email in conversation header
+- [x] Mark messages as read when admin views them
+- [ ] Add search/filter for conversations
+- [x] Show timestamp for last message in each conversation
+- [x] Real-time updates for new customer messages (polling every 5 seconds)

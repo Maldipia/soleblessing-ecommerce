@@ -169,6 +169,114 @@ export const appRouter = router({
 
 
   chat: router({
+    // Admin: Get all conversations
+    getAllConversations: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user.role !== "admin") throw new Error("Admin only");
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) return [];
+      const { chatMessages, users } = await import("../drizzle/schema");
+      const { eq, desc, sql } = await import("drizzle-orm");
+      
+      // Get all users who have sent messages
+      const conversations = await db
+        .select({
+          userId: chatMessages.userId,
+          userName: users.name,
+          userEmail: users.email,
+          lastMessage: sql<string>`MAX(${chatMessages.message})`,
+          lastMessageTime: sql<Date>`MAX(${chatMessages.createdAt})`,
+          unreadCount: sql<number>`SUM(CASE WHEN ${chatMessages.isRead} = 0 AND ${chatMessages.senderType} = 'customer' THEN 1 ELSE 0 END)`,
+        })
+        .from(chatMessages)
+        .leftJoin(users, eq(chatMessages.userId, users.id))
+        .groupBy(chatMessages.userId, users.name, users.email)
+        .orderBy(desc(sql`MAX(${chatMessages.createdAt})`));
+      
+      return conversations;
+    }),
+    
+    // Admin: Get messages for a specific user
+    getUserMessages: protectedProcedure
+      .input((val: unknown) => {
+        if (typeof val === "object" && val !== null && "userId" in val) {
+          return val as { userId: number };
+        }
+        throw new Error("Invalid input");
+      })
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new Error("Admin only");
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) return [];
+        const { chatMessages } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        
+        return await db
+          .select()
+          .from(chatMessages)
+          .where(eq(chatMessages.userId, input.userId))
+          .orderBy(chatMessages.createdAt);
+      }),
+    
+    // Admin: Send reply to customer
+    sendAdminReply: protectedProcedure
+      .input((val: unknown) => {
+        if (
+          typeof val === "object" &&
+          val !== null &&
+          "userId" in val &&
+          "message" in val
+        ) {
+          return val as { userId: number; message: string };
+        }
+        throw new Error("Invalid input");
+      })
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new Error("Admin only");
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+        const { chatMessages } = await import("../drizzle/schema");
+        
+        await db.insert(chatMessages).values({
+          userId: input.userId,
+          message: input.message,
+          senderType: "admin",
+          isRead: 1,
+        });
+        
+        return { success: true };
+      }),
+    
+    // Admin: Mark messages as read
+    markAsRead: protectedProcedure
+      .input((val: unknown) => {
+        if (typeof val === "object" && val !== null && "userId" in val) {
+          return val as { userId: number };
+        }
+        throw new Error("Invalid input");
+      })
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new Error("Admin only");
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+        const { chatMessages } = await import("../drizzle/schema");
+        const { eq, and } = await import("drizzle-orm");
+        
+        await db
+          .update(chatMessages)
+          .set({ isRead: 1 })
+          .where(
+            and(
+              eq(chatMessages.userId, input.userId),
+              eq(chatMessages.senderType, "customer")
+            )
+          );
+        
+        return { success: true };
+      }),
     getMessages: protectedProcedure.query(async ({ ctx }) => {
       const { getDb } = await import("./db");
       const db = await getDb();
