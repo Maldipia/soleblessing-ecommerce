@@ -208,3 +208,19 @@
 - [x] Mobile responsive hamburger menu
 - [ ] Smooth scroll behavior
 - [x] Active link highlighting
+
+## Product Detail Page - NOW BUILDING
+- [x] Create product detail page layout
+- [x] Add image gallery with main image and thumbnails
+- [x] Display product name, brand, category, price
+- [x] Show sale price and discount percentage
+- [x] Add size selector with stock availability indicators
+- [x] Add quantity selector
+- [x] Add to Cart button
+- [x] Add to Wishlist button
+- [x] Show product description
+- [x] Add size guide modal with US/UK/EU conversions
+- [x] Add inquiry form for out-of-stock sizes
+- [x] Show "Only X left" for low stock items
+- [x] Add breadcrumb navigation
+- [ ] Related products section

@@ -231,6 +231,25 @@ export const appRouter = router({
 
     // Inquiry Management
     inquiries: router({
+      create: protectedProcedure
+        .input((val: unknown) => {
+          if (typeof val === "object" && val !== null) {
+            return val as any;
+          }
+          throw new Error("Invalid inquiry data");
+        })
+        .mutation(async ({ input, ctx }) => {
+          const { inquiries } = await import("../drizzle/schema");
+          const { getDb } = await import("./db");
+          const db = await getDb();
+          if (!db) throw new Error("Database not available");
+          await db.insert(inquiries).values({
+            ...input,
+            userId: ctx.user.id,
+            status: "pending",
+          });
+          return { success: true };
+        }),
       list: adminProcedure.query(async () => {
         const { inquiries } = await import("../drizzle/schema");
         const { getDb } = await import("./db");
