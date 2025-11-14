@@ -250,10 +250,26 @@ export async function getOrderItems(orderId: number) {
 export async function updateOrderStatus(orderId: number, status: string, paymentId?: string) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const { orders } = await import("../drizzle/schema");
+  const { orders, users } = await import("../drizzle/schema");
   const updateData: any = { status };
   if (paymentId) updateData.paymentId = paymentId;
   await db.update(orders).set(updateData).where(eq(orders.id, orderId));
+  
+  // Send email notification based on status
+  if (status === 'Shipped' || status === 'Delivered') {
+    const order = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
+    if (order[0]) {
+      const user = await db.select().from(users).where(eq(users.id, order[0].userId)).limit(1);
+      if (user[0] && user[0].email && user[0].emailNotifications === 1) {
+        const { sendShippingUpdateEmail, sendDeliveryConfirmationEmail } = await import("./email");
+        if (status === 'Shipped') {
+          await sendShippingUpdateEmail(user[0].email, user[0].name || 'Customer', orderId);
+        } else if (status === 'Delivered') {
+          await sendDeliveryConfirmationEmail(user[0].email, user[0].name || 'Customer', orderId);
+        }
+      }
+    }
+  }
 }
 
 export async function getUserOrders(userId: number) {

@@ -330,3 +330,14 @@
 - [x] Automatically hide sale price when timer expires
 - [x] Add visual urgency indicators (red text when < 24 hours)
 - [x] Update seed data with sale end dates
+
+## Email Notification System - NOW BUILDING
+- [x] Create email notification helper functions
+- [x] Send order confirmation email when order is placed
+- [x] Send shipping update email when order status changes to "Shipped"
+- [x] Send delivery confirmation email when order is delivered
+- [x] Create restock alert subscription system
+- [x] Send restock alert emails when wishlisted items come back in stock
+- [x] Add email preferences in user profile
+- [x] Create email templates for each notification type
+- [ ] Add unsubscribe functionality

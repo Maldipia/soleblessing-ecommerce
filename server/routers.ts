@@ -3,6 +3,9 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
+import { z } from "zod";
+import { eq, and, sql } from "drizzle-orm";
+import { restockAlerts } from "../drizzle/schema";
 
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
   if (ctx.user.role !== 'admin') {
@@ -331,6 +334,55 @@ export const appRouter = router({
       }),
   }),
   
+  restockAlerts: router({
+    subscribe: protectedProcedure
+      .input(z.object({
+        productId: z.number(),
+        size: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+        
+        await db.insert(restockAlerts).values({
+          userId: ctx.user.id,
+          productId: input.productId,
+          size: input.size,
+        });
+        
+        return { success: true };
+      }),
+    unsubscribe: protectedProcedure
+      .input(z.object({
+        productId: z.number(),
+        size: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+        
+        await db.delete(restockAlerts)
+          .where(and(
+            eq(restockAlerts.userId, ctx.user.id),
+            eq(restockAlerts.productId, input.productId),
+            input.size ? eq(restockAlerts.size, input.size) : sql`1=1`
+          ));
+        
+        return { success: true };
+      }),
+    get: protectedProcedure.query(async ({ ctx }) => {
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) return [];
+      
+      return await db.select()
+        .from(restockAlerts)
+        .where(eq(restockAlerts.userId, ctx.user.id));
+    }),
+  }),
+
   wishlist: router({
     get: protectedProcedure.query(async ({ ctx }) => {
       const { getDb } = await import("./db");

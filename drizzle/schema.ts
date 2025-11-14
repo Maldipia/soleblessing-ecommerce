@@ -20,6 +20,7 @@ export const users = mysqlTable("users", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  emailNotifications: int("emailNotifications").default(1).notNull(), // 0 = disabled, 1 = enabled
 });
 
 export type User = typeof users.$inferSelect;
@@ -177,6 +178,15 @@ export type InsertInquiry = typeof inquiries.$inferInsert;
 /**
  * Wishlist for saved products
  */
+export const restockAlerts = mysqlTable("restockAlerts", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  productId: int("productId").notNull(),
+  size: varchar("size", { length: 20 }),
+  notified: int("notified").default(0).notNull(), // 0 = not notified, 1 = notified
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
 export const wishlist = mysqlTable("wishlist", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
