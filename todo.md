@@ -160,3 +160,16 @@
 - [ ] Add Google reviews link in footer
 - [ ] Display review count and rating
 - [ ] "Check our reviews" section on homepage
+
+## Admin Dashboard - NOW BUILDING
+- [x] Create admin layout with sidebar navigation
+- [x] Admin authentication check (role-based access)
+- [x] Dashboard overview with key metrics
+- [x] Product management page (list, add, edit, delete)
+- [x] Stock management interface
+- [x] Inquiry management with reply functionality
+- [x] Excel export for inquiries
+- [x] Raffle creation and management
+- [x] Order management and status updates
+- [ ] Loyalty program member overview
+- [ ] Sale events creation and scheduling

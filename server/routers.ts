@@ -2,6 +2,14 @@ import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { TRPCError } from "@trpc/server";
+
+const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (ctx.user.role !== 'admin') {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+  }
+  return next({ ctx });
+});
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -121,6 +129,158 @@ export const appRouter = router({
       const { clearCart } = await import("./db");
       await clearCart(ctx.user.id);
       return { success: true };
+    }),
+  }),
+
+  admin: router({
+    // Product Management
+    products: router({
+      list: adminProcedure.query(async () => {
+        const { getAllProducts } = await import("./db");
+        return await getAllProducts();
+      }),
+      create: adminProcedure
+        .input((val: unknown) => {
+          if (typeof val === "object" && val !== null) {
+            return val as any;
+          }
+          throw new Error("Invalid product data");
+        })
+        .mutation(async ({ input }) => {
+          const { products } = await import("../drizzle/schema");
+          const { getDb } = await import("./db");
+          const db = await getDb();
+          if (!db) throw new Error("Database not available");
+          await db.insert(products).values(input);
+          return { success: true };
+        }),
+      update: adminProcedure
+        .input((val: unknown) => {
+          if (
+            typeof val === "object" &&
+            val !== null &&
+            "id" in val &&
+            typeof (val as any).id === "number"
+          ) {
+            return val as any;
+          }
+          throw new Error("Invalid update data");
+        })
+        .mutation(async ({ input }) => {
+          const { products } = await import("../drizzle/schema");
+          const { getDb } = await import("./db");
+          const { eq } = await import("drizzle-orm");
+          const db = await getDb();
+          if (!db) throw new Error("Database not available");
+          const { id, ...data } = input;
+          await db.update(products).set(data).where(eq(products.id, id));
+          return { success: true };
+        }),
+      delete: adminProcedure
+        .input((val: unknown) => {
+          if (typeof val === "object" && val !== null && "id" in val) {
+            return val as { id: number };
+          }
+          throw new Error("Invalid input");
+        })
+        .mutation(async ({ input }) => {
+          const { products } = await import("../drizzle/schema");
+          const { getDb } = await import("./db");
+          const { eq } = await import("drizzle-orm");
+          const db = await getDb();
+          if (!db) throw new Error("Database not available");
+          await db.delete(products).where(eq(products.id, input.id));
+          return { success: true };
+        }),
+    }),
+
+    // Inquiry Management
+    inquiries: router({
+      list: adminProcedure.query(async () => {
+        const { inquiries } = await import("../drizzle/schema");
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) return [];
+        return await db.select().from(inquiries);
+      }),
+      reply: adminProcedure
+        .input((val: unknown) => {
+          if (
+            typeof val === "object" &&
+            val !== null &&
+            "id" in val &&
+            "reply" in val
+          ) {
+            return val as { id: number; reply: string };
+          }
+          throw new Error("Invalid input");
+        })
+        .mutation(async ({ input }) => {
+          const { inquiries } = await import("../drizzle/schema");
+          const { getDb } = await import("./db");
+          const { eq } = await import("drizzle-orm");
+          const db = await getDb();
+          if (!db) throw new Error("Database not available");
+          await db
+            .update(inquiries)
+            .set({ adminReply: input.reply, status: "replied" })
+            .where(eq(inquiries.id, input.id));
+          return { success: true };
+        }),
+    }),
+
+    // Raffle Management
+    raffles: router({
+      list: adminProcedure.query(async () => {
+        const { raffles } = await import("../drizzle/schema");
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) return [];
+        return await db.select().from(raffles);
+      }),
+      create: adminProcedure
+        .input((val: unknown) => {
+          if (typeof val === "object" && val !== null) {
+            return val as any;
+          }
+          throw new Error("Invalid raffle data");
+        })
+        .mutation(async ({ input }) => {
+          const { raffles } = await import("../drizzle/schema");
+          const { getDb } = await import("./db");
+          const db = await getDb();
+          if (!db) throw new Error("Database not available");
+          await db.insert(raffles).values(input);
+          return { success: true };
+        }),
+    }),
+
+    // Order Management  
+    orders: router({
+      list: adminProcedure.query(async () => {
+        const { orders } = await import("../drizzle/schema");
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) return [];
+        return await db.select().from(orders);
+      }),
+      updateStatus: adminProcedure
+        .input((val: unknown) => {
+          if (
+            typeof val === "object" &&
+            val !== null &&
+            "id" in val &&
+            "status" in val
+          ) {
+            return val as { id: number; status: string };
+          }
+          throw new Error("Invalid input");
+        })
+        .mutation(async ({ input }) => {
+          const { updateOrderStatus } = await import("./db");
+          await updateOrderStatus(input.id, input.status);
+          return { success: true };
+        }),
     }),
   }),
 });

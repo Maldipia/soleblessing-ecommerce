@@ -13,6 +13,9 @@ import Raffles from "./pages/Raffles";
 import SaleEvents from "./pages/SaleEvents";
 import Profile from "./pages/Profile";
 import AdminDashboard from "./pages/admin/Dashboard";
+import AdminProducts from "./pages/admin/Products";
+import AdminInquiries from "./pages/admin/Inquiries";
+import AdminRaffles from "./pages/admin/Raffles";
 
 function Router() {
   return (
@@ -26,6 +29,9 @@ function Router() {
       <Route path={"/sale-events"} component={SaleEvents} />
       <Route path={"/profile"} component={Profile} />
       <Route path={"/admin"} component={AdminDashboard} />
+      <Route path={"/admin/products"} component={AdminProducts} />
+      <Route path={"/admin/inquiries"} component={AdminInquiries} />
+      <Route path={"/admin/raffles"} component={AdminRaffles} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>
