@@ -237,3 +237,17 @@
 - [x] Add "Proceed to Checkout" button
 - [x] Show item count in cart
 - [x] Persist cart state across sessions
+
+## Footer & Policy Pages - NOW BUILDING
+- [x] Create footer component
+- [x] Add social media links (Facebook, Instagram, Twitter)
+- [x] Add contact information (email, phone, address)
+- [x] Add quick links section (Products, Raffles, Sale Events)
+- [x] Add policy links (Shipping, Returns, Privacy Policy, Terms of Service)
+- [x] Add newsletter signup form
+- [x] Create Shipping Policy page
+- [x] Create Returns Policy page
+- [x] Create Privacy Policy page
+- [x] Create Terms of Service page
+- [x] Add copyright notice
+- [x] Make footer responsive

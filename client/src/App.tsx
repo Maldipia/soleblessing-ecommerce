@@ -17,7 +17,12 @@ import AdminDashboard from "./pages/admin/Dashboard";
 import AdminProducts from "./pages/admin/Products";
 import AdminInquiries from "./pages/admin/Inquiries";
 import AdminRaffles from "./pages/admin/Raffles";
+import ShippingPolicy from "./pages/ShippingPolicy";
+import ReturnsPolicy from "./pages/ReturnsPolicy";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfService from "./pages/TermsOfService";
 import Header from "./components/Header";
+import Footer from "./components/Footer";
 
 function Router() {
   return (
@@ -37,9 +42,14 @@ function Router() {
       <Route path={"/admin/products"} component={AdminProducts} />
       <Route path={"/admin/inquiries"} component={AdminInquiries} />
       <Route path={"/admin/raffles"} component={AdminRaffles} />
+      <Route path={"/shipping-policy"} component={ShippingPolicy} />
+      <Route path={"/returns-policy"} component={ReturnsPolicy} />
+      <Route path={"/privacy-policy"} component={PrivacyPolicy} />
+      <Route path={"/terms-of-service"} component={TermsOfService} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
       </Switch>
+      <Footer />
     </>
   );
 }
