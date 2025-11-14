@@ -255,3 +255,23 @@ export async function updateOrderStatus(orderId: number, status: string, payment
   if (paymentId) updateData.paymentId = paymentId;
   await db.update(orders).set(updateData).where(eq(orders.id, orderId));
 }
+
+export async function getUserOrders(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const { orders, orderItems } = await import("../drizzle/schema");
+  const { eq } = await import("drizzle-orm");
+  
+  const userOrders = await db.select().from(orders).where(eq(orders.userId, userId));
+  
+  // Get order items for each order
+  const ordersWithItems = await Promise.all(
+    userOrders.map(async (order) => {
+      const items = await db.select().from(orderItems).where(eq(orderItems.orderId, order.id));
+      return { ...order, items };
+    })
+  );
+  
+  return ordersWithItems;
+}

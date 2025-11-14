@@ -132,6 +132,41 @@ export const appRouter = router({
     }),
   }),
 
+  // Customer Orders
+  orders: router({
+    myOrders: protectedProcedure.query(async ({ ctx }) => {
+      const { getUserOrders } = await import("./db");
+      return await getUserOrders(ctx.user.id);
+    }),
+    getById: protectedProcedure
+      .input((val: unknown) => {
+        if (typeof val === "object" && val !== null && "id" in val) {
+          return val as { id: number };
+        }
+        throw new Error("Invalid input");
+      })
+      .query(async ({ input, ctx }) => {
+        const { getOrderById, getOrderItems } = await import("./db");
+        const { orders } = await import("../drizzle/schema");
+        const { eq, and } = await import("drizzle-orm");
+        const { getDb } = await import("./db");
+        
+        const db = await getDb();
+        if (!db) return null;
+        
+        const orderResult = await db.select().from(orders).where(
+          and(eq(orders.id, input.id), eq(orders.userId, ctx.user.id))
+        ).limit(1);
+        
+        if (orderResult.length === 0) return null;
+        
+        const order = orderResult[0];
+        const items = await getOrderItems(order.id);
+        
+        return { ...order, items };
+      }),
+  }),
+
   admin: router({
     // Product Management
     products: router({

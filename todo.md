@@ -173,3 +173,13 @@
 - [x] Order management and status updates
 - [ ] Loyalty program member overview
 - [ ] Sale events creation and scheduling
+
+## Customer Profile & Order Tracking - NOW BUILDING
+- [x] Create customer profile page
+- [x] Display user account information
+- [x] Show order history with status
+- [x] Order detail view with tracking
+- [x] Order status timeline (Pending → Processing → Shipped → Delivered)
+- [x] Link orders to user in database
+- [x] "My Orders" navigation item
+- [ ] Order search and filter functionality
