@@ -224,3 +224,16 @@
 - [x] Show "Only X left" for low stock items
 - [x] Add breadcrumb navigation
 - [ ] Related products section
+
+## Shopping Cart Page - NOW BUILDING
+- [x] Create cart page layout
+- [x] Display cart items with product images
+- [x] Show product name, brand, size, and price per item
+- [x] Add quantity adjustment controls (increase/decrease)
+- [x] Add remove item button
+- [x] Calculate and display subtotal
+- [x] Calculate and display total
+- [x] Show empty cart state with "Continue Shopping" button
+- [x] Add "Proceed to Checkout" button
+- [x] Show item count in cart
+- [x] Persist cart state across sessions
