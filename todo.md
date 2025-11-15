@@ -386,3 +386,8 @@
 - [x] Copy SoleBlessing logo to public folder
 - [x] Update APP_LOGO constant in const.ts
 - [x] Test logo display on website
+
+## Product Filters Update
+- [x] Exclude products with Condition = "GOOD"
+- [x] Exclude products with Supplier = "UNKNOWN"
+- [x] Test import with new filters

@@ -101,8 +101,8 @@ export async function importProductsFromSheets(): Promise<{
         continue;
       }
       
-      // Skip if CONDITION is "NO RECORD" or SUPPLIER is "2024"
-      if (row.CONDITION === "NO RECORD" || row.SUPPLIER === "2024") {
+      // Skip if CONDITION is "NO RECORD" or "GOOD", or SUPPLIER is "2024" or "UNKNOWN"
+      if (row.CONDITION === "NO RECORD" || row.CONDITION === "GOOD" || row.SUPPLIER === "2024" || row.SUPPLIER === "UNKNOWN") {
         skipped++;
         continue;
       }
