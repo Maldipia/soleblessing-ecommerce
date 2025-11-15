@@ -81,18 +81,21 @@ async function importProducts() {
       return isNaN(num) ? 0 : num;
     };
     
-    const sellingPrice = parsePrice(row["SELLING PRICE"]);
-    const srp = parsePrice(row.SRP);
+    const sellingPrice = parsePrice(row["SELLING PRICE"]); // Column F - Sale price
+    const srp = parsePrice(row.SRP); // Column N - Original price (SRP)
     
-    // Skip if no price at all
-    if (sellingPrice === 0 && srp === 0) {
+    // Skip if no SELLING PRICE
+    if (sellingPrice === 0) {
       skipped++;
       continue;
     }
     
-    // Determine final price to show
-    const price = sellingPrice > 0 ? sellingPrice : srp;
-    const originalPrice = srp > 0 && srp > price ? srp : null;
+    // Correct pricing logic:
+    // basePrice = SRP (original retail price, shown crossed out)
+    // salePrice = SELLING PRICE (discounted price, shown bold)
+    // If no SRP, basePrice = SELLING PRICE (no discount shown)
+    const basePrice = srp > 0 ? srp : sellingPrice;
+    const salePrice = (srp > 0 && srp > sellingPrice) ? sellingPrice : null;
     
     // Extract brand from product name (first word usually)
     const brand = row.DETAILS.split(" ")[0] || "Unknown";
@@ -104,7 +107,14 @@ async function importProducts() {
       // Create new product entry
       // Get image URL and convert Google Drive links to direct image URLs
       let imageUrl = row["PRODUCTS URL"] || "";
-      if (imageUrl && imageUrl.includes("drive.google.com")) {
+      
+      // SKIP if no image URL
+      if (!imageUrl || imageUrl.trim() === "") {
+        skipped++;
+        continue;
+      }
+      
+      if (imageUrl.includes("drive.google.com")) {
         // Convert Google Drive link to direct image URL
         const fileIdMatch = imageUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
         if (fileIdMatch) {
@@ -116,8 +126,8 @@ async function importProducts() {
         name: row.DETAILS,
         brand: brand,
         category: "Sneakers",
-        basePrice: Math.round(price * 100), // Convert to centavos (PHP cents)
-        salePrice: originalPrice ? Math.round(price * 100) : null,
+        basePrice: Math.round(basePrice * 100), // SRP (or SELLING PRICE if no SRP) in centavos
+        salePrice: salePrice ? Math.round(salePrice * 100) : null, // SELLING PRICE if SRP > SELLING PRICE
         description: `${row.DETAILS}\nSKU: ${row.SKU || productKey}\nCondition: ${row.CONDITION || "New"}${row.SUPPLIER ? `\nSupplier: ${row.SUPPLIER}` : ""}`,
         images: imageUrl ? [imageUrl] : [], // Store image URL if available
         sizes: [] as string[], // Temporary array
