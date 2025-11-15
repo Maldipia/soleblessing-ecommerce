@@ -1,0 +1,22 @@
+{
+  "query": "SELECT name, images FROM products LIMIT 3",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user DtYL5Hf4Qj4teLW.root --database 7CGRzDMbJGT2VFYbX2uJ8a --execute SELECT name, images FROM products LIMIT 3",
+  "rows": [
+    {
+      "name": "PUREBOOST 22",
+      "images": "[\"https://drive.google.com/uc?export=view&id=10gvi_utnwsI8W33lVEXujs3_ClEIOnqZ\"]"
+    },
+    {
+      "name": "CLOUD FOAM WALK",
+      "images": "[\"https://assets.adidas.com/images/w_600,f_auto,q_auto/95d4d6bf349a400583383dec7ffea3d9_9366/Cloudfoam_Walk_Shoes_Black_ID6488_01_standard.jpg\"]"
+    },
+    {
+      "name": "RIVALRY LOW",
+      "images": "[\"https://drive.google.com/uc?export=view&id=1zFpdwdrWo724bV9VWd0GtfQbYwfvFmav\"]"
+    }
+  ],
+  "messages": [],
+  "stdout": "name\timages\nPUREBOOST 22\t[\"https://drive.google.com/uc?export=view&id=10gvi_utnwsI8W33lVEXujs3_ClEIOnqZ\"]\nCLOUD FOAM WALK\t[\"https://assets.adidas.com/images/w_600,f_auto,q_auto/95d4d6bf349a400583383dec7ffea3d9_9366/Cloudfoam_Walk_Shoes_Black_ID6488_01_standard.jpg\"]\nRIVALRY LOW\t[\"https://drive.google.com/uc?export=view&id=1zFpdwdrWo724bV9VWd0GtfQbYwfvFmav\"]\n",
+  "stderr": "",
+  "execution_time_ms": 1907
+}
