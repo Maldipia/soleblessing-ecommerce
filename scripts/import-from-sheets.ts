@@ -111,8 +111,9 @@ async function importProducts() {
     // Extract brand from product name (first word usually)
     const brand = row.DETAILS.split(" ")[0] || "Unknown";
     
-    // Use ITEM CODE as the unique key to group sizes
-    const productKey = String(row["ITEM CODE"]);
+    // Use SKU (Column C) as the unique key to group sizes
+    // Same SKU = same product with different sizes
+    const productKey = String(row.SKU);
     
     if (!productMap.has(productKey)) {
       // Create new product entry
