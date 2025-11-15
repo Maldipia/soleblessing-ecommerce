@@ -1,7 +1,7 @@
 import { drizzle } from "drizzle-orm/mysql2";
 import { products } from "../drizzle/schema";
 
-const SHEETS_API_URL = "https://script.google.com/macros/s/AKfycbxfY1kGjC-wllJUzfYCxo7HV6RGU5maCqLIOqEOj7QiIftdohuDA7XUq8QBbDuCLTC8OQ/exec";
+const SHEETS_API_URL = "https://script.google.com/macros/s/AKfycbwJxkSFhjuPAWbIEmKa80w404DVtQ3k2h4YuaLdMEMTAoPTXGF2LhtQ_X98IDk8yY-oiA/exec";
 const TABS = ["2025", "2024", "ABB", "MBB", "ABKK", "PERFUME"];
 
 interface SheetRow {
@@ -17,6 +17,7 @@ interface SheetRow {
   "DATE ADDED"?: string;
   NOTES?: string;
   SRP?: number;
+  "PRODUCTS URL"?: string;
 }
 
 async function fetchSheetData(tab: string): Promise<SheetRow[]> {
@@ -101,14 +102,24 @@ async function importProducts() {
     
     if (!productMap.has(productKey)) {
       // Create new product entry
+      // Get image URL and convert Google Drive links to direct image URLs
+      let imageUrl = row["PRODUCTS URL"] || "";
+      if (imageUrl && imageUrl.includes("drive.google.com")) {
+        // Convert Google Drive link to direct image URL
+        const fileIdMatch = imageUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        if (fileIdMatch) {
+          imageUrl = `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}`;
+        }
+      }
+      
       productMap.set(productKey, {
         name: row.DETAILS,
         brand: brand,
         category: "Sneakers",
         basePrice: Math.round(price * 100), // Convert to centavos (PHP cents)
         salePrice: originalPrice ? Math.round(price * 100) : null,
-        description: `${row.DETAILS}\nSKU: ${row.SKU || row.CODE}\nCondition: ${row.CONDITION || "New"}${row.SUPPLIER ? `\nSupplier: ${row.SUPPLIER}` : ""}`,
-        images: JSON.stringify([]), // Empty for now, can be added later
+        description: `${row.DETAILS}\nSKU: ${row.SKU || productKey}\nCondition: ${row.CONDITION || "New"}${row.SUPPLIER ? `\nSupplier: ${row.SUPPLIER}` : ""}`,
+        images: imageUrl ? [imageUrl] : [], // Store image URL if available
         sizes: [] as string[], // Temporary array
         sizeStock: {} as Record<string, number>, // Temporary object
         stock: 0,
@@ -130,6 +141,7 @@ async function importProducts() {
   // Convert map to array and stringify JSON fields
   const productsToInsert = Array.from(productMap.values()).map(p => ({
     ...p,
+    images: JSON.stringify(p.images),
     sizes: JSON.stringify(p.sizes),
     sizeStock: JSON.stringify(p.sizeStock),
   }));
