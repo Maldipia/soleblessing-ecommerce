@@ -126,10 +126,26 @@ async function importProducts() {
       }
       
       if (imageUrl.includes("drive.google.com")) {
-        // Convert Google Drive link to direct image URL
-        const fileIdMatch = imageUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
-        if (fileIdMatch) {
-          imageUrl = `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}`;
+        // Convert Google Drive link to direct image URL that works in browsers
+        // Extract file ID from various Google Drive URL formats
+        let fileId = null;
+        
+        // Format: https://drive.google.com/file/d/FILE_ID/view
+        const viewMatch = imageUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        if (viewMatch) {
+          fileId = viewMatch[1];
+        }
+        
+        // Format: https://drive.google.com/open?id=FILE_ID
+        const openMatch = imageUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+        if (openMatch) {
+          fileId = openMatch[1];
+        }
+        
+        if (fileId) {
+          // Use thumbnail endpoint which works reliably in img tags
+          // sz=w1000 requests 1000px width (adjust as needed)
+          imageUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
         }
       }
       
