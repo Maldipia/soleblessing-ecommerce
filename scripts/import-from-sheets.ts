@@ -1,7 +1,7 @@
 import { drizzle } from "drizzle-orm/mysql2";
 import { products } from "../drizzle/schema";
 
-const SHEETS_API_URL = "https://script.google.com/macros/s/AKfycbwJxkSFhjuPAWbIEmKa80w404DVtQ3k2h4YuaLdMEMTAoPTXGF2LhtQ_X98IDk8yY-oiA/exec";
+const SHEETS_API_URL = "https://script.google.com/macros/s/AKfycbygl0UCB3flWvlS1pHkjcq_AAjs4GNsmbKTnlTjYpmR8AZsqNfCtD2z_wL_6Me8rQlH7w/exec";
 const TABS = ["2025", "2024", "ABB", "MBB", "ABKK", "PERFUME"];
 
 interface SheetRow {
@@ -62,12 +62,23 @@ async function importProducts() {
   const productMap = new Map<string, any>();
   
   for (const row of allRows) {
-    // Skip if not AVAILABLE
+    // Skip if status is not AVAILABLE
     if (row.STATUS !== "AVAILABLE") {
       skipped++;
       continue;
     }
     
+    // Skip if Condition is "NO RECORD" (not brand new)
+    if (row.CONDITION === "NO RECORD") {
+      skipped++;
+      continue;
+    }
+    
+    // Skip if Supplier is "2024" (not brand new)
+    if (row.SUPPLIER === "2024") {
+      skipped++;
+      continue;
+    }    
     // Skip if no product name
     if (!row.DETAILS || !row["ITEM CODE"]) {
       skipped++;
