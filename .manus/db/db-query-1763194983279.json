@@ -1,0 +1,19 @@
+{
+  "query": "SELECT id, name, email, role, loginMethod, createdAt, lastSignedIn FROM users LIMIT 10",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user DtYL5Hf4Qj4teLW.root --database 7CGRzDMbJGT2VFYbX2uJ8a --execute SELECT id, name, email, role, loginMethod, createdAt, lastSignedIn FROM users LIMIT 10",
+  "rows": [
+    {
+      "id": "1",
+      "name": "legeryn pia",
+      "email": "tygfsb@gmail.com",
+      "role": "admin",
+      "loginMethod": "google",
+      "createdAt": "2025-11-14 17:45:38",
+      "lastSignedIn": "2025-11-15 08:21:20"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\temail\trole\tloginMethod\tcreatedAt\tlastSignedIn\n1\tlegeryn pia\ttygfsb@gmail.com\tadmin\tgoogle\t2025-11-14 17:45:38\t2025-11-15 08:21:20\n",
+  "stderr": "",
+  "execution_time_ms": 1529
+}

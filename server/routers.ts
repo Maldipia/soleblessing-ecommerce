@@ -679,6 +679,12 @@ Recommend 4 product IDs that are most similar in brand, style, or category. Retu
   }),
   
   admin: router({
+    // Sync inventory from Google Sheets
+    syncInventory: adminProcedure.mutation(async () => {
+      const { importProductsFromSheets } = await import("./importFromSheets");
+      return await importProductsFromSheets();
+    }),
+    
     // Product Management
     products: router({
       list: adminProcedure.query(async () => {

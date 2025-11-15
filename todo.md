@@ -366,3 +366,23 @@
 - [ ] Handle product images (upload to S3)
 - [ ] Set stock levels based on STATUS column
 - [ ] Test imported products display correctly
+
+
+## Login & Authentication UI - NOW BUILDING
+- [ ] Add visible Login button to navigation header
+- [ ] Fix admin dashboard React hooks error
+- [ ] Test login flow for customers
+- [ ] Test admin access after login
+- [ ] Add user dropdown menu in header (Profile, Orders, Wishlist, Logout)
+
+## Inventory Sync Button - COMPLETE
+- [x] Create backend tRPC procedure for syncing Google Sheets
+- [x] Add "Sync Inventory" button to admin dashboard
+- [x] Show loading state during sync
+- [x] Display success/error messages
+- [x] Show sync statistics (products added/updated)
+
+## Logo Update
+- [x] Copy SoleBlessing logo to public folder
+- [x] Update APP_LOGO constant in const.ts
+- [x] Test logo display on website
