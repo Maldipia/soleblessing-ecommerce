@@ -1,0 +1,50 @@
+[
+  {
+    "name": "Adidas Pureboost 22",
+    "sku": "HQ8586",
+    "sizes_cm": [25, 28, 28.5],
+    "price": 2040,
+    "brand": "Adidas",
+    "category": "Running"
+  },
+  {
+    "name": "Adidas Terrex Agravic Speed",
+    "sku": "IG8017",
+    "sizes_cm": [25],
+    "price": 2550,
+    "brand": "Adidas",
+    "category": "Trail Running"
+  },
+  {
+    "name": "Adidas Cloud Foam Walk",
+    "sku": "ID6488",
+    "sizes_cm": [23.5, 25],
+    "price": 1290,
+    "brand": "Adidas",
+    "category": "Lifestyle"
+  },
+  {
+    "name": "Adidas Rivalry Low",
+    "sku": "IE7210",
+    "sizes_cm": [28.5, 30],
+    "price": 1500,
+    "brand": "Adidas",
+    "category": "Lifestyle"
+  },
+  {
+    "name": "Adidas Forum 84 Low",
+    "sku": "FZ6294",
+    "sizes_cm": [29],
+    "price": 0,
+    "brand": "Adidas",
+    "category": "Basketball"
+  },
+  {
+    "name": "Adidas Terrex Agravic Flow 2",
+    "sku": "GZ8888",
+    "sizes_cm": [],
+    "price": 0,
+    "brand": "Adidas",
+    "category": "Trail Running"
+  }
+]

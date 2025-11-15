@@ -341,3 +341,28 @@
 - [x] Add email preferences in user profile
 - [x] Create email templates for each notification type
 - [ ] Add unsubscribe functionality
+
+## Real Inventory Import - NOW BUILDING
+- [ ] Access Google Sheets inventory data
+- [ ] Parse product information from spreadsheet
+- [ ] Clear sample products from database
+- [ ] Import real sneaker products with all details
+- [ ] Upload product images to storage
+- [ ] Set correct stock levels per size
+- [ ] Verify all products display correctly
+
+
+## Google Sheets Integration - NOW BUILDING
+- [ ] Review existing products table schema
+- [ ] Create Google Sheets import script
+- [ ] Fetch data from Google Sheets API using deployed web app URL
+- [ ] Map Google Sheets columns to database fields
+- [ ] Import products from 2025 tab
+- [ ] Import products from 2024 tab
+- [ ] Import products from ABB tab
+- [ ] Import products from MBB tab
+- [ ] Import products from ABKK tab
+- [ ] Import products from PERFUME tab
+- [ ] Handle product images (upload to S3)
+- [ ] Set stock levels based on STATUS column
+- [ ] Test imported products display correctly
