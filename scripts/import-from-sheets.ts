@@ -1,7 +1,7 @@
 import { drizzle } from "drizzle-orm/mysql2";
 import { products } from "../drizzle/schema";
 
-const SHEETS_API_URL = "https://script.google.com/macros/s/AKfycbygl0UCB3flWvlS1pHkjcq_AAjs4GNsmbKTnlTjYpmR8AZsqNfCtD2z_wL_6Me8rQlH7w/exec";
+const SHEETS_API_URL = "https://script.google.com/macros/s/AKfycbzpAMnNug5WkWJ6kqm7zeEvoIx7C_wMHCd_jEZ5s0clTxG8f1CZhtBefDRsKS5NWBLcwA/exec";
 const TABS = ["2025", "2024", "ABB", "MBB", "ABKK", "PERFUME"];
 
 interface SheetRow {
