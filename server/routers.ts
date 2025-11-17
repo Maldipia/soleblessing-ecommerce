@@ -183,6 +183,91 @@ export const appRouter = router({
         
         return { ...order, items };
       }),
+    create: protectedProcedure
+      .input((val: unknown) => {
+        if (
+          typeof val === "object" &&
+          val !== null &&
+          "customerName" in val &&
+          "customerEmail" in val &&
+          "contactNumber" in val &&
+          "shippingAddress" in val &&
+          "paymentMethod" in val &&
+          "paymentProofUrl" in val &&
+          "items" in val &&
+          Array.isArray((val as any).items)
+        ) {
+          return val as {
+            customerName: string;
+            customerEmail: string;
+            contactNumber: string;
+            shippingAddress: string;
+            paymentMethod: string;
+            paymentProofUrl: string;
+            notes?: string;
+            items: Array<{ productId: number; size: string; quantity: number }>;
+          };
+        }
+        throw new Error("Invalid input");
+      })
+      .mutation(async ({ ctx, input }) => {
+        const { getDb } = await import("./db");
+        const { orders, orderItems, products, cartItems } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+        
+        // Calculate total amount
+        let totalAmount = 0;
+        for (const item of input.items) {
+          const productResult = await db.select().from(products).where(eq(products.id, item.productId)).limit(1);
+          if (productResult.length === 0) throw new Error(`Product ${item.productId} not found`);
+          const product = productResult[0];
+          const price = product.salePrice || product.basePrice;
+          totalAmount += price * item.quantity;
+        }
+        
+        // Add shipping fee
+        totalAmount += 15000; // ₱150 flat rate
+        
+        // Create order
+        const orderResult = await db.insert(orders).values({
+          userId: ctx.user.id,
+          totalAmount,
+          status: "pending",
+          paymentMethod: input.paymentMethod,
+          paymentProofUrl: input.paymentProofUrl,
+          shippingAddress: input.shippingAddress,
+          contactNumber: input.contactNumber,
+          customerName: input.customerName,
+          customerEmail: input.customerEmail,
+          notes: input.notes || null,
+        });
+        
+        const orderId = Number((orderResult as any).insertId);
+        
+        // Create order items
+        for (const item of input.items) {
+          const productResult = await db.select().from(products).where(eq(products.id, item.productId)).limit(1);
+          const product = productResult[0];
+          const price = product.salePrice || product.basePrice;
+          
+          await db.insert(orderItems).values({
+            orderId,
+            productId: item.productId,
+            productName: product.name,
+            size: item.size,
+            quantity: item.quantity,
+            price,
+          });
+        }
+        
+        // Clear cart
+        await db.delete(cartItems).where(eq(cartItems.userId, ctx.user.id));
+        
+        return { id: orderId, status: "pending" };
+      }),
   }),
 
 

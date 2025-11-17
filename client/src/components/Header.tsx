@@ -18,7 +18,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Search, ShoppingCart, User, Menu, LogOut, Package, Shield, MessageCircle, Heart, Trophy } from "lucide-react";
+import { Search, ShoppingCart, User, Menu, LogOut, Package, Shield, MessageCircle, Heart, Trophy, ClipboardList } from "lucide-react";
 import { useLocation } from "wouter";
 import { useState } from "react";
 
@@ -154,6 +154,10 @@ export default function Header() {
                     <DropdownMenuItem onClick={() => setLocation("/admin/chat")}>
                       <MessageCircle className="mr-2 h-4 w-4" />
                       Customer Chat
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setLocation("/admin/orders")}>
+                      <ClipboardList className="mr-2 h-4 w-4" />
+                      Order Management
                     </DropdownMenuItem>
                   </>
                 )}

@@ -391,3 +391,33 @@
 - [x] Exclude products with Condition = "GOOD"
 - [x] Exclude products with Supplier = "UNKNOWN"
 - [x] Test import with new filters
+
+## COD with Payment Proof System
+- [ ] Update orders table schema for payment proof URL
+- [ ] Add payment method field (Bank Transfer, GCash, etc)
+- [ ] Create checkout page with payment proof upload
+- [ ] Implement S3 upload for payment screenshots
+- [ ] Create order placement procedure
+- [ ] Build admin orders management page
+- [ ] Add payment verification UI for admin
+- [ ] Implement order status updates (Pending → Paid → Shipped)
+- [ ] Test complete checkout and verification flow
+
+## Checkout System with Payment Proof - COMPLETED
+- [x] Create checkout page with customer information form
+- [x] Add shipping address input
+- [x] Add payment method selection (Bank Transfer / GCash)
+- [x] Display payment instructions (bank account details)
+- [x] Implement payment proof file upload (up to 5MB images)
+- [x] Upload payment proof to S3 storage
+- [x] Create orders.create procedure in backend
+- [x] Calculate order total with shipping fee
+- [x] Create order with "pending" status
+- [x] Clear cart after successful order placement
+- [x] Create admin orders management page at /admin/orders
+- [x] Display all orders with customer information
+- [x] Show payment proof image in modal
+- [x] Add approve/reject buttons for pending orders
+- [x] Update order status (pending → processing → shipped → delivered)
+- [x] Add order management link to admin dropdown menu
+- [x] Add route for /admin/orders in App.tsx

@@ -77,9 +77,13 @@ export const orders = mysqlTable("orders", {
   totalAmount: int("totalAmount").notNull(), // Total in centavos
   status: mysqlEnum("status", ["pending", "paid", "processing", "shipped", "delivered", "cancelled"]).default("pending").notNull(),
   paymentMethod: varchar("paymentMethod", { length: 50 }),
+  paymentProofUrl: text("paymentProofUrl"), // S3 URL of payment screenshot
   paymentId: varchar("paymentId", { length: 255 }), // PayMongo payment ID
   shippingAddress: text("shippingAddress"),
   contactNumber: varchar("contactNumber", { length: 50 }),
+  customerName: varchar("customerName", { length: 255 }),
+  customerEmail: varchar("customerEmail", { length: 320 }),
+  notes: text("notes"), // Customer notes or special instructions
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
