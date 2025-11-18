@@ -1,0 +1,50 @@
+{
+  "query": "SELECT id, name, brand, basePrice, salePrice, images FROM products LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user DtYL5Hf4Qj4teLW.root --database 7CGRzDMbJGT2VFYbX2uJ8a --execute SELECT id, name, brand, basePrice, salePrice, images FROM products LIMIT 5;",
+  "rows": [
+    {
+      "id": "210001",
+      "name": "EQ21 RUN",
+      "brand": "EQ21",
+      "basePrice": "5500",
+      "salePrice": "2363",
+      "images": "[\"https://drive.google.com/uc?export=view&id=1bmNT68nYYOu66ojdu9LEpqFVeCmqGyS0\"]"
+    },
+    {
+      "id": "210002",
+      "name": "SWIFT RUN 22",
+      "brand": "SWIFT",
+      "basePrice": "5500",
+      "salePrice": "2625",
+      "images": "[\"1 PIECE\"]"
+    },
+    {
+      "id": "210003",
+      "name": "STAN SMITH W ",
+      "brand": "STAN",
+      "basePrice": "5500",
+      "salePrice": "3975",
+      "images": "[\"STAINED\",\"ISSUE\"]"
+    },
+    {
+      "id": "210004",
+      "name": "STAN SMITH",
+      "brand": "STAN",
+      "basePrice": "6500",
+      "salePrice": "3975",
+      "images": "[\"1 PAIR\"]"
+    },
+    {
+      "id": "210005",
+      "name": "STAN SMITH J",
+      "brand": "STAN",
+      "basePrice": "8500",
+      "salePrice": "4095",
+      "images": "[\"ISSUE\",\"1 PIECE\"]"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tbrand\tbasePrice\tsalePrice\timages\n210001\tEQ21 RUN\tEQ21\t5500\t2363\t[\"https://drive.google.com/uc?export=view&id=1bmNT68nYYOu66ojdu9LEpqFVeCmqGyS0\"]\n210002\tSWIFT RUN 22\tSWIFT\t5500\t2625\t[\"1 PIECE\"]\n210003\tSTAN SMITH W \tSTAN\t5500\t3975\t[\"STAINED\",\"ISSUE\"]\n210004\tSTAN SMITH\tSTAN\t6500\t3975\t[\"1 PAIR\"]\n210005\tSTAN SMITH J\tSTAN\t8500\t4095\t[\"ISSUE\",\"1 PIECE\"]\n",
+  "stderr": "",
+  "execution_time_ms": 1551
+}

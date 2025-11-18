@@ -421,3 +421,9 @@
 - [x] Update order status (pending → processing → shipped → delivered)
 - [x] Add order management link to admin dropdown menu
 - [x] Add route for /admin/orders in App.tsx
+
+## URGENT BUG FIXES - COMPLETED
+- [x] Fix product images not displaying (showing dark placeholders instead of photos)
+- [x] Fix price display showing wrong values (₱26.25 instead of ₱2,625 - divide by 100 error)
+- [x] Verify image URLs are correct from Google Sheets import
+- [x] Check price formatting across all product cards and pages
