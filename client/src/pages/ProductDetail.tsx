@@ -215,6 +215,7 @@ export default function ProductDetail() {
                   src={images[selectedImage]}
                   alt={product.name}
                   className="w-full h-full object-cover"
+                  loading="eager"
                 />
               )}
             </div>
@@ -227,7 +228,7 @@ export default function ProductDetail() {
                     selectedImage === index ? "border-primary" : "border-transparent"
                   }`}
                 >
-                  <img src={img} alt={`${product.name} ${index + 1}`} className="w-full h-full object-cover" />
+                  <img src={img} alt={`${product.name} ${index + 1}`} className="w-full h-full object-cover" loading="lazy" />
                 </button>
               ))}
             </div>

@@ -153,6 +153,7 @@ export default function Cart() {
                             src={images[0]}
                             alt={item.product.name}
                             className="w-full h-full object-cover"
+                            loading="lazy"
                           />
                         )}
                       </div>

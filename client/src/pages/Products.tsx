@@ -420,6 +420,7 @@ export default function Products() {
                             src={images[0]}
                             alt={product.name}
                             className="object-cover w-full h-full rounded-t-lg"
+                            loading="lazy"
                           />
                         )}
                         {hasDiscount && (

@@ -40,7 +40,7 @@ export default function SimilarProducts({ productId }: SimilarProductsProps) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {similar.map((product: any) => {
           const images = product.images ? JSON.parse(product.images) : [];
-          const mainImage = images[0] || "/placeholder.png";
+          const thumbnailImage = images[0] || "/placeholder.png";
           const price = product.salePrice || product.basePrice;
           const hasDiscount = !!product.salePrice;
 
@@ -52,9 +52,10 @@ export default function SimilarProducts({ productId }: SimilarProductsProps) {
             >
               <div className="relative aspect-square overflow-hidden bg-muted">
                 <img
-                  src={mainImage}
+                  src={thumbnailImage}
                   alt={product.name}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  loading="lazy"
                 />
                 {hasDiscount && (
                   <div className="absolute top-2 left-2 bg-red-500 text-white px-2 py-1 rounded text-xs font-bold">

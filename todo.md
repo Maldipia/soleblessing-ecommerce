@@ -427,3 +427,10 @@
 - [x] Fix price display showing wrong values (₱26.25 instead of ₱2,625 - divide by 100 error)
 - [x] Verify image URLs are correct from Google Sheets import
 - [x] Check price formatting across all product cards and pages
+
+## Image Optimization - COMPLETED
+- [x] Update import script to generate multiple Google Drive thumbnail URLs (400px, 800px, 1200px)
+- [x] Add lazy loading attribute to all product images
+- [x] Use 400px thumbnails for product cards
+- [x] Use 1200px images for product detail views
+- [x] Test image loading performance

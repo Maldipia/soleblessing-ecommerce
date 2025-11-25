@@ -48,7 +48,8 @@ export default function NewArrivals() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {newProducts.map((product: any) => {
           const images = product.images ? JSON.parse(product.images) : [];
-          const mainImage = images[0] || "/placeholder.png";
+          // Use thumbnail (index 0) for card display
+          const thumbnailImage = images[0] || "/placeholder.png";
           const price = product.salePrice || product.basePrice;
           const hasDiscount = !!product.salePrice;
           
@@ -64,7 +65,8 @@ export default function NewArrivals() {
             >
               <div className="relative aspect-square overflow-hidden bg-muted">
                 <img
-                  src={mainImage}
+                  src={thumbnailImage}
+                  loading="lazy"
                   alt={product.name}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />

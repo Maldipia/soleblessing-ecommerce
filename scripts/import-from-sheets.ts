@@ -126,8 +126,10 @@ async function importProducts() {
         continue;
       }
       
+      // Generate multiple image sizes for responsive loading
+      let imageUrls: string[] = [];
+      
       if (imageUrl.includes("drive.google.com")) {
-        // Convert Google Drive link to direct image URL that works in browsers
         // Extract file ID from various Google Drive URL formats
         let fileId = null;
         
@@ -144,10 +146,17 @@ async function importProducts() {
         }
         
         if (fileId) {
-          // Use thumbnail endpoint which works reliably in img tags
-          // sz=w1000 requests 1000px width (adjust as needed)
-          imageUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
+          // Generate 3 sizes: thumbnail (400px), medium (800px), large (1200px)
+          // Google Drive's thumbnail API automatically optimizes and converts formats
+          imageUrls = [
+            `https://drive.google.com/thumbnail?id=${fileId}&sz=w400`,  // Thumbnail for cards
+            `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`,  // Medium for quick preview
+            `https://drive.google.com/thumbnail?id=${fileId}&sz=w1200`  // Large for detail view
+          ];
         }
+      } else {
+        // For non-Google Drive URLs, use the original URL for all sizes
+        imageUrls = [imageUrl, imageUrl, imageUrl];
       }
       
       productMap.set(productKey, {
@@ -157,7 +166,7 @@ async function importProducts() {
         basePrice: Math.round(basePrice * 100), // SRP (or SELLING PRICE if no SRP) in centavos
         salePrice: salePrice ? Math.round(salePrice * 100) : null, // SELLING PRICE if SRP > SELLING PRICE
         description: `${row.DETAILS}\nSKU: ${row.SKU || productKey}\nCondition: ${row.CONDITION || "New"}${row.SUPPLIER ? `\nSupplier: ${row.SUPPLIER}` : ""}`,
-        images: imageUrl ? [imageUrl] : [], // Store image URL if available
+        images: imageUrls.length > 0 ? imageUrls : [], // Store image URLs [thumb, medium, large]
         sizes: [] as string[], // Temporary array
         sizeStock: {} as Record<string, number>, // Temporary object
         stock: 0,
