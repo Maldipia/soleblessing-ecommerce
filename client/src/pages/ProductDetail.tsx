@@ -3,6 +3,7 @@ import { useParams, useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import SimilarProducts from "@/components/SimilarProducts";
 import CountdownTimer from "@/components/CountdownTimer";
+import ImageLightbox from "@/components/ImageLightbox";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -48,6 +49,7 @@ export default function ProductDetail() {
   const [quantity, setQuantity] = useState(1);
   const [inquiryOpen, setInquiryOpen] = useState(false);
   const [inquirySize, setInquirySize] = useState("");
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const [inquiryMessage, setInquiryMessage] = useState("");
 
   const addToCartMutation = trpc.cart.add.useMutation({
@@ -209,15 +211,24 @@ export default function ProductDetail() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Image Gallery */}
           <div>
-            <div className="aspect-square mb-4 rounded-lg overflow-hidden bg-muted">
+            <div 
+              className="aspect-square mb-4 rounded-lg overflow-hidden bg-muted cursor-zoom-in relative group"
+              onClick={() => setLightboxOpen(true)}
+            >
               {images[selectedImage] && (
                 <img
                   src={images[selectedImage]}
                   alt={product.name}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover transition-transform group-hover:scale-105"
                   loading="eager"
                 />
               )}
+              {/* Zoom hint overlay */}
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 px-4 py-2 rounded-full text-sm font-medium">
+                  Click to zoom
+                </div>
+              </div>
             </div>
             <div className="grid grid-cols-4 gap-2">
               {images.map((img: string, index: number) => (
@@ -473,6 +484,16 @@ export default function ProductDetail() {
           <SimilarProducts productId={productId} />
         </div>
       </div>
+
+      {/* Image Lightbox */}
+      {lightboxOpen && (
+        <ImageLightbox
+          images={images}
+          currentIndex={selectedImage}
+          onClose={() => setLightboxOpen(false)}
+          onNavigate={(index) => setSelectedImage(index)}
+        />
+      )}
     </div>
   );
 }

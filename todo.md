@@ -434,3 +434,13 @@
 - [x] Use 400px thumbnails for product cards
 - [x] Use 1200px images for product detail views
 - [x] Test image loading performance
+
+## Product Image Lightbox/Zoom - COMPLETED
+- [x] Create ImageLightbox component with full-screen viewer
+- [x] Add click-to-zoom functionality on product detail page
+- [x] Implement navigation controls (prev/next arrows)
+- [x] Add keyboard navigation (arrow keys, ESC to close)
+- [x] Support mobile touch gestures (swipe)
+- [x] Use large (1200px) images in lightbox for maximum detail
+- [x] Add close button and click-outside-to-close
+- [x] Test on desktop and mobile
