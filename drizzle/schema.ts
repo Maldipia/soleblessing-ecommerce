@@ -273,3 +273,51 @@ export const chatMessages = mysqlTable("chatMessages", {
 
 export type ChatMessage = typeof chatMessages.$inferSelect;
 export type InsertChatMessage = typeof chatMessages.$inferInsert;
+
+/**
+ * Product reviews table for customer feedback
+ */
+export const reviews = mysqlTable("reviews", {
+  id: int("id").autoincrement().primaryKey(),
+  productId: int("productId").notNull(),
+  userId: int("userId").notNull(),
+  orderId: int("orderId"), // Link to order for verified purchase badge
+  rating: int("rating").notNull(), // 1-5 stars
+  title: varchar("title", { length: 255 }),
+  comment: text("comment"),
+  size: varchar("size", { length: 20 }), // Size purchased
+  verifiedPurchase: int("verifiedPurchase").default(0).notNull(), // 0 = false, 1 = true
+  helpfulCount: int("helpfulCount").default(0).notNull(), // Number of helpful votes
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Review = typeof reviews.$inferSelect;
+export type InsertReview = typeof reviews.$inferInsert;
+
+/**
+ * Review images table for photo uploads
+ */
+export const reviewImages = mysqlTable("reviewImages", {
+  id: int("id").autoincrement().primaryKey(),
+  reviewId: int("reviewId").notNull(),
+  imageUrl: text("imageUrl").notNull(), // S3 URL
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ReviewImage = typeof reviewImages.$inferSelect;
+export type InsertReviewImage = typeof reviewImages.$inferInsert;
+
+/**
+ * Review votes for helpful/not helpful tracking
+ */
+export const reviewVotes = mysqlTable("reviewVotes", {
+  id: int("id").autoincrement().primaryKey(),
+  reviewId: int("reviewId").notNull(),
+  userId: int("userId").notNull(),
+  helpful: int("helpful").notNull(), // 1 = helpful, 0 = not helpful
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ReviewVote = typeof reviewVotes.$inferSelect;
+export type InsertReviewVote = typeof reviewVotes.$inferInsert;

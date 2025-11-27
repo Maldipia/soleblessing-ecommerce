@@ -2,6 +2,10 @@ import { trpc } from "@/lib/trpc";
 import { useParams, useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import SimilarProducts from "@/components/SimilarProducts";
+import { ReviewList } from "@/components/ReviewList";
+import { ReviewForm } from "@/components/ReviewForm";
+import { StarRating } from "@/components/StarRating";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import CountdownTimer from "@/components/CountdownTimer";
 import ImageLightbox from "@/components/ImageLightbox";
 import { Button } from "@/components/ui/button";
@@ -479,6 +483,46 @@ export default function ProductDetail() {
           </div>
         </div>
         
+        {/* Reviews Section */}
+        <div className="container my-12">
+          <h2 className="text-3xl font-bold mb-8">Customer Reviews</h2>
+          
+          <Tabs defaultValue="reviews" className="w-full">
+            <TabsList className="grid w-full max-w-md grid-cols-2">
+              <TabsTrigger value="reviews">All Reviews</TabsTrigger>
+              <TabsTrigger value="write">Write a Review</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="reviews" className="mt-6">
+              <ReviewList productId={productId} />
+            </TabsContent>
+            
+            <TabsContent value="write" className="mt-6">
+              {user ? (
+                <div className="max-w-2xl">
+                  <ReviewForm
+                    productId={productId}
+                    onSuccess={() => {
+                      // Switch to reviews tab after submission
+                      const reviewsTab = document.querySelector('[value="reviews"]') as HTMLButtonElement;
+                      reviewsTab?.click();
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="text-center py-12 border rounded-lg">
+                  <p className="text-muted-foreground mb-4">
+                    Please log in to write a review
+                  </p>
+                  <Button onClick={() => window.location.href = getLoginUrl()}>
+                    Log In
+                  </Button>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+        </div>
+
         {/* Similar Products */}
         <div className="container">
           <SimilarProducts productId={productId} />

@@ -38,6 +38,9 @@ async function startServer() {
   registerOAuthRoutes(app);
   // Payment proof upload endpoint
   app.post("/api/upload-payment-proof", uploadPaymentProofMiddleware, uploadPaymentProof);
+  // Review image upload endpoint
+  const { uploadReviewImage, uploadReviewImageMiddleware } = await import("../uploadReviewImage");
+  app.post("/api/upload-review-image", uploadReviewImageMiddleware, uploadReviewImage);
   // tRPC API
   app.use(
     "/api/trpc",

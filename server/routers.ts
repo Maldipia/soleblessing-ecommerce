@@ -939,6 +939,205 @@ Recommend 4 product IDs that are most similar in brand, style, or category. Retu
         }),
     }),
   }),
+
+  reviews: router({
+    // Get reviews for a product
+    list: publicProcedure
+      .input(z.object({
+        productId: z.number(),
+        page: z.number().default(1),
+        limit: z.number().default(10),
+      }))
+      .query(async ({ input }) => {
+        const { reviews, reviewImages, users } = await import("../drizzle/schema");
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) return { reviews: [], total: 0, averageRating: 0 };
+
+        const offset = (input.page - 1) * input.limit;
+
+        // Get reviews with user info and images
+        const reviewList = await db
+          .select({
+            id: reviews.id,
+            productId: reviews.productId,
+            userId: reviews.userId,
+            rating: reviews.rating,
+            title: reviews.title,
+            comment: reviews.comment,
+            size: reviews.size,
+            verifiedPurchase: reviews.verifiedPurchase,
+            helpfulCount: reviews.helpfulCount,
+            createdAt: reviews.createdAt,
+            userName: users.name,
+          })
+          .from(reviews)
+          .leftJoin(users, eq(reviews.userId, users.id))
+          .where(eq(reviews.productId, input.productId))
+          .orderBy(sql`${reviews.createdAt} DESC`)
+          .limit(input.limit)
+          .offset(offset);
+
+        // Get images for each review
+        const reviewsWithImages = await Promise.all(
+          reviewList.map(async (review) => {
+            const images = await db
+              .select()
+              .from(reviewImages)
+              .where(eq(reviewImages.reviewId, review.id));
+            return {
+              ...review,
+              images: images.map((img) => img.imageUrl),
+            };
+          })
+        );
+
+        // Get total count
+        const [{ count }] = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(reviews)
+          .where(eq(reviews.productId, input.productId));
+
+        // Calculate average rating
+        const [{ avg }] = await db
+          .select({ avg: sql<number>`AVG(${reviews.rating})` })
+          .from(reviews)
+          .where(eq(reviews.productId, input.productId));
+
+        return {
+          reviews: reviewsWithImages,
+          total: Number(count),
+          averageRating: avg ? Number(avg) : 0,
+        };
+      }),
+
+    // Create a review
+    create: protectedProcedure
+      .input(z.object({
+        productId: z.number(),
+        orderId: z.number().optional(),
+        rating: z.number().min(1).max(5),
+        title: z.string().optional(),
+        comment: z.string().optional(),
+        size: z.string().optional(),
+        images: z.array(z.string()).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { reviews, reviewImages, orderItems } = await import("../drizzle/schema");
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+
+        // Check if user has already reviewed this product
+        const existingReview = await db
+          .select()
+          .from(reviews)
+          .where(and(
+            eq(reviews.productId, input.productId),
+            eq(reviews.userId, ctx.user.id)
+          ))
+          .limit(1);
+
+        if (existingReview.length > 0) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'You have already reviewed this product' });
+        }
+
+        // Check if this is a verified purchase
+        let verifiedPurchase = 0;
+        if (input.orderId) {
+          const orderItem = await db
+            .select()
+            .from(orderItems)
+            .where(and(
+              eq(orderItems.orderId, input.orderId),
+              eq(orderItems.productId, input.productId)
+            ))
+            .limit(1);
+          verifiedPurchase = orderItem.length > 0 ? 1 : 0;
+        }
+
+        // Insert review
+        const [review] = await db.insert(reviews).values({
+          productId: input.productId,
+          userId: ctx.user.id,
+          orderId: input.orderId,
+          rating: input.rating,
+          title: input.title,
+          comment: input.comment,
+          size: input.size,
+          verifiedPurchase,
+        }).$returningId();
+
+        // Insert images if provided
+        if (input.images && input.images.length > 0) {
+          await db.insert(reviewImages).values(
+            input.images.map((imageUrl) => ({
+              reviewId: review.id,
+              imageUrl,
+            }))
+          );
+        }
+
+        return { success: true, reviewId: review.id };
+      }),
+
+    // Vote on review helpfulness
+    vote: protectedProcedure
+      .input(z.object({
+        reviewId: z.number(),
+        helpful: z.boolean(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { reviewVotes, reviews } = await import("../drizzle/schema");
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+
+        // Check if user has already voted
+        const existingVote = await db
+          .select()
+          .from(reviewVotes)
+          .where(and(
+            eq(reviewVotes.reviewId, input.reviewId),
+            eq(reviewVotes.userId, ctx.user.id)
+          ))
+          .limit(1);
+
+        if (existingVote.length > 0) {
+          // Update existing vote
+          await db
+            .update(reviewVotes)
+            .set({ helpful: input.helpful ? 1 : 0 })
+            .where(and(
+              eq(reviewVotes.reviewId, input.reviewId),
+              eq(reviewVotes.userId, ctx.user.id)
+            ));
+        } else {
+          // Insert new vote
+          await db.insert(reviewVotes).values({
+            reviewId: input.reviewId,
+            userId: ctx.user.id,
+            helpful: input.helpful ? 1 : 0,
+          });
+        }
+
+        // Update helpful count on review
+        const [{ count }] = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(reviewVotes)
+          .where(and(
+            eq(reviewVotes.reviewId, input.reviewId),
+            eq(reviewVotes.helpful, 1)
+          ));
+
+        await db
+          .update(reviews)
+          .set({ helpfulCount: Number(count) })
+          .where(eq(reviews.id, input.reviewId));
+
+        return { success: true };
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;
