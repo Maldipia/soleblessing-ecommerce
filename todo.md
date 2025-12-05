@@ -481,3 +481,18 @@
 - [x] List all required environment variables for Vercel
 - [x] Create database migration scripts
 - [x] Test deployment instructions
+
+## Railway + Vercel Deployment Guide - NOW CREATING
+- [ ] Create streamlined Railway + Vercel quick start guide
+- [ ] Document Railway MySQL setup
+- [ ] Document Vercel deployment steps
+- [ ] List required environment variables
+- [ ] Test deployment instructions
+
+## Database Export & Migration Package - NOW CREATING
+- [ ] Export complete database with mysqldump
+- [ ] Document all accessible environment variables
+- [ ] Create Railway database setup guide
+- [ ] Create Vercel deployment guide
+- [ ] Package migration files
+- [ ] Push to GitHub
