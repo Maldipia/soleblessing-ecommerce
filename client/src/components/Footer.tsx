@@ -103,19 +103,19 @@ export default function Footer() {
             <ul className="space-y-3 text-sm mb-6">
               <li className="flex items-start gap-2 text-muted-foreground">
                 <Mail className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                <a href="mailto:info@soleblessing.com" className="hover:text-foreground transition-colors">
-                  info@soleblessing.com
+                <a href="mailto:inquiry@soleblessing.com" className="hover:text-foreground transition-colors">
+                  inquiry@soleblessing.com
                 </a>
               </li>
               <li className="flex items-start gap-2 text-muted-foreground">
                 <Phone className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                <a href="tel:+639123456789" className="hover:text-foreground transition-colors">
-                  +63 912 345 6789
+                <a href="tel:+639674000040" className="hover:text-foreground transition-colors">
+                  (0967) 400 0040
                 </a>
               </li>
               <li className="flex items-start gap-2 text-muted-foreground">
                 <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                <span>Manila, Philippines</span>
+                <span>C-1, One Audrey's Place, Kaybagal South, Tagaytay City</span>
               </li>
             </ul>
 
