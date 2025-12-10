@@ -547,3 +547,13 @@
 - [ ] Add error handling for failed syncs
 - [ ] Log sync operations for monitoring
 - [ ] Test auto-sync functionality
+
+## Clearance Sale Section - NOW BUILDING
+- [x] Create dedicated Clearance Sale page component
+- [x] Add special styling for clearance section (red/orange theme, urgency elements)
+- [x] Filter products with high discount percentage (>50%) as clearance items
+- [x] Add clearance badge to product cards
+- [x] Add "Clearance Sale" link to main navigation
+- [x] Create clearance section on homepage with top deals
+- [x] Show "Limited Stock" and countdown timers for clearance items
+- [x] Add sorting by discount percentage on clearance page

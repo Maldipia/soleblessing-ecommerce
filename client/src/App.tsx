@@ -21,6 +21,7 @@ import AdminChat from "./pages/admin/Chat";
 import AdminOrders from "./pages/admin/Orders";
 import Wishlist from "./pages/Wishlist";
 import LoyaltyProgram from "./pages/LoyaltyProgram";
+import ClearanceSale from "./pages/ClearanceSale";
 import ShippingPolicy from "./pages/ShippingPolicy";
 import ReturnsPolicy from "./pages/ReturnsPolicy";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
@@ -36,6 +37,7 @@ function Router() {
       <Switch>
       <Route path={"/"} component={Home} />
       <Route path={"/products"} component={Products} />
+      <Route path={"/clearance"} component={ClearanceSale} />
       <Route path={"/product/:id"} component={ProductDetail} />
       <Route path={"/cart"} component={Cart} />
       <Route path={"/checkout"} component={Checkout} />

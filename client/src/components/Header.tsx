@@ -18,7 +18,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Search, ShoppingCart, User, Menu, LogOut, Package, Shield, MessageCircle, Heart, Trophy, ClipboardList } from "lucide-react";
+import { Search, ShoppingCart, User, Menu, LogOut, Package, Shield, MessageCircle, Heart, Trophy, ClipboardList, Flame } from "lucide-react";
 import { useLocation } from "wouter";
 import { useState } from "react";
 
@@ -50,6 +50,7 @@ export default function Header() {
 
   const navLinks = [
     { label: "Products", path: "/products" },
+    { label: "Clearance", path: "/clearance", icon: Flame, highlight: true },
     { label: "Raffles", path: "/raffles" },
     { label: "Sale Events", path: "/sale-events" },
   ];
@@ -71,17 +72,28 @@ export default function Header() {
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-6">
-            {navLinks.map((link) => (
-              <button
-                key={link.path}
-                onClick={() => setLocation(link.path)}
-                className={`text-sm font-medium transition-colors hover:text-primary ${
-                  isActive(link.path) ? "text-primary" : "text-muted-foreground"
-                }`}
-              >
-                {link.label}
-              </button>
-            ))}
+            {navLinks.map((link) => {
+              const Icon = link.icon;
+              return (
+                <button
+                  key={link.path}
+                  onClick={() => setLocation(link.path)}
+                  className={`text-sm font-medium transition-all flex items-center gap-1.5 ${
+                    link.highlight
+                      ? "text-orange-600 hover:text-orange-700 font-bold"
+                      : isActive(link.path)
+                      ? "text-primary"
+                      : "text-muted-foreground hover:text-primary"
+                  }`}
+                >
+                  {Icon && <Icon className="h-4 w-4" />}
+                  {link.label}
+                  {link.highlight && (
+                    <span className="ml-1 px-1.5 py-0.5 text-xs bg-orange-100 text-orange-700 rounded font-bold">HOT</span>
+                  )}
+                </button>
+              );
+            })}
           </nav>
         </div>
 
@@ -218,19 +230,28 @@ export default function Header() {
 
                 {/* Mobile Navigation Links */}
                 <nav className="flex flex-col gap-2">
-                  {navLinks.map((link) => (
-                    <Button
-                      key={link.path}
-                      variant={isActive(link.path) ? "default" : "ghost"}
-                      className="justify-start"
-                      onClick={() => {
-                        setLocation(link.path);
-                        setMobileMenuOpen(false);
-                      }}
-                    >
-                      {link.label}
-                    </Button>
-                  ))}
+                  {navLinks.map((link) => {
+                    const Icon = link.icon;
+                    return (
+                      <Button
+                        key={link.path}
+                        variant={isActive(link.path) ? "default" : "ghost"}
+                        className={`justify-start ${
+                          link.highlight ? "bg-orange-100 text-orange-700 hover:bg-orange-200" : ""
+                        }`}
+                        onClick={() => {
+                          setLocation(link.path);
+                          setMobileMenuOpen(false);
+                        }}
+                      >
+                        {Icon && <Icon className="mr-2 h-4 w-4" />}
+                        {link.label}
+                        {link.highlight && (
+                          <span className="ml-auto px-2 py-0.5 text-xs bg-orange-600 text-white rounded font-bold">HOT</span>
+                        )}
+                      </Button>
+                    );
+                  })}
                 </nav>
 
                 {/* Mobile User Menu */}
