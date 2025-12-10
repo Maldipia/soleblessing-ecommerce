@@ -37,10 +37,20 @@ queryClient.getMutationCache().subscribe(event => {
   }
 });
 
+// Get API URL from environment variable or fallback to relative path
+const getApiUrl = () => {
+  // In production (Vercel), use Railway backend URL
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  // In development, use relative path (same server)
+  return "/api/trpc";
+};
+
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
-      url: "/api/trpc",
+      url: getApiUrl(),
       transformer: superjson,
       fetch(input, init) {
         return globalThis.fetch(input, {

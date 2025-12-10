@@ -557,3 +557,14 @@
 - [x] Create clearance section on homepage with top deals
 - [x] Show "Limited Stock" and countdown timers for clearance items
 - [x] Add sorting by discount percentage on clearance page
+
+## Production Loading Issue - URGENT
+- [x] Debug why tRPC queries stay in loading state on production site
+- [x] Identified root cause: Backend server not deployed (Vercel only has static files)
+- [x] Create Railway deployment configuration
+- [x] Configure frontend to call Railway backend URL
+- [x] Update Vercel config for static-only deployment
+- [x] Add CORS configuration for Railway + Vercel architecture
+- [ ] Deploy backend to Railway (user action required)
+- [ ] Set VITE_API_URL in Vercel environment variables (user action required)
+- [ ] Test full integration and verify products display
