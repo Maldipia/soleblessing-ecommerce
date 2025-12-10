@@ -30,7 +30,42 @@ export default function Products() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   const utils = trpc.useUtils();
-  const { data: products, isLoading } = trpc.products.list.useQuery();
+  // Use Google Sheets inventory instead of database products
+  const { data: inventoryProducts, isLoading: inventoryLoading } = trpc.inventory.list.useQuery();
+  const { data: dbProducts, isLoading: dbLoading } = trpc.products.list.useQuery();
+  
+  // Combine inventory and database products
+  const products = useMemo(() => {
+    const inventory = inventoryProducts || [];
+    const db = dbProducts || [];
+    
+    // Transform inventory to match product format
+    const inventoryTransformed = inventory.map(item => ({
+      id: parseInt(item.itemCode) || 0,
+      name: item.name,
+      description: `${item.name} - Size ${item.size} - ${item.condition}`,
+      brand: item.sku.split(/[^a-zA-Z]/)[0] || 'Unknown',
+      category: 'Sneakers',
+      basePrice: Math.round(item.srp), // Already in centavos from API
+      salePrice: item.sellingPrice > 0 ? Math.round(item.sellingPrice) : null,
+      saleEndDate: null,
+      images: JSON.stringify(item.imageUrl ? [item.imageUrl] : []),
+      sizes: JSON.stringify([item.size]),
+      sizeStock: JSON.stringify({ [item.size]: item.status === 'AVAILABLE' ? 1 : 0 }),
+      stock: item.status === 'AVAILABLE' ? 1 : 0,
+      featured: 0,
+      clearance: 0,
+      clearanceEndDate: null,
+      fitNotes: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }));
+    
+    // Combine both sources, prioritizing inventory
+    return [...inventoryTransformed, ...db];
+  }, [inventoryProducts, dbProducts]);
+  
+  const isLoading = inventoryLoading || dbLoading;
   
   const { data: wishlistItems } = trpc.wishlist.get.useQuery(undefined, {
     enabled: !!user,

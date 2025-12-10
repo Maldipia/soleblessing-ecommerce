@@ -525,3 +525,16 @@
 - [x] Verify import with COUNT queries
 - [x] Test sample queries
 - [x] Provide DATABASE_URL for Vercel deployment
+
+## Google Sheets Inventory Integration - COMPLETED (Backend Working, Frontend Debug Needed)
+- [x] Set up Google Sheets API integration to read NSB INVENTORY
+- [x] Create products sync from Google Sheets (2025 tab)
+- [x] Map columns: F (SELLING PRICE), N (SRP), S (PRODUCTS URL - corrected from O), A (ITEM CODE), B (DETAILS), C (SKU), D (SIZE), G (STATUS)
+- [x] Filter products by STATUS = "AVAILABLE"
+- [x] Display products with discount calculation (SRP vs SELLING PRICE)
+- [x] Show strikethrough original price (SRP) and highlighted sale price
+- [x] Calculate and display discount percentage
+- [x] Handle product images from PRODUCTS URL column
+- [ ] Debug frontend loading issue (API working, Products page stuck on "Loading...")
+- [ ] Create product detail pages with full information
+- [ ] Auto-sync products every 5 minutes

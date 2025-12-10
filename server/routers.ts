@@ -28,6 +28,56 @@ export const appRouter = router({
     }),
   }),
 
+  // Google Sheets Inventory
+  inventory: router({ 
+    list: publicProcedure.query(async () => {
+      const { readInventoryFromSheets, calculateDiscount, parsePrice } = await import("./googleSheets");
+      const products = await readInventoryFromSheets();
+      
+      // Transform to frontend format
+      return products.map(p => ({
+        itemCode: p.itemCode,
+        name: p.details,
+        sku: p.sku,
+        size: p.size,
+        sellingPrice: parsePrice(p.sellingPrice),
+        srp: parsePrice(p.srp),
+        discount: calculateDiscount(p.srp, p.sellingPrice),
+        status: p.status,
+        condition: p.condition,
+        imageUrl: p.productsUrl,
+        dateAdded: p.dateAdded,
+      }));
+    }),
+    getByItemCode: publicProcedure
+      .input(z.object({ itemCode: z.string() }))
+      .query(async ({ input }) => {
+        const { readInventoryFromSheets, calculateDiscount, parsePrice } = await import("./googleSheets");
+        const products = await readInventoryFromSheets();
+        const product = products.find(p => p.itemCode === input.itemCode);
+        
+        if (!product) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Product not found' });
+        }
+        
+        return {
+          itemCode: product.itemCode,
+          name: product.details,
+          sku: product.sku,
+          size: product.size,
+          sellingPrice: parsePrice(product.sellingPrice),
+          srp: parsePrice(product.srp),
+          discount: calculateDiscount(product.srp, product.sellingPrice),
+          status: product.status,
+          condition: product.condition,
+          imageUrl: product.productsUrl,
+          dateAdded: product.dateAdded,
+          supplier: product.supplier,
+          notes: product.notes,
+        };
+      }),
+  }),
+
   products: router({
     list: publicProcedure.query(async () => {
       const { getAllProducts } = await import("./db");

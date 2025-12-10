@@ -1,0 +1,40 @@
+From fafeaf857842678cb7ce96bfcd02214457ae5a29 Mon Sep 17 00:00:00 2001
+From: Manus Sandbox <sandbox@manus.ai>
+Date: Tue, 9 Dec 2025 13:41:48 -0500
+Subject: [PATCH] Fix Vercel deployment: update output directory to dist/public
+
+---
+ vercel.json | 17 ++++++-----------
+ 1 file changed, 6 insertions(+), 11 deletions(-)
+
+diff --git a/vercel.json b/vercel.json
+index 3173bec..1943365 100644
+--- a/vercel.json
++++ b/vercel.json
+@@ -1,17 +1,12 @@
+ {
+-  "version": 2,
+-  "buildCommand": "pnpm build",
+-  "devCommand": "pnpm dev",
++  "buildCommand": "pnpm install && pnpm build",
++  "outputDirectory": "dist/public",
+   "installCommand": "pnpm install",
+-  "framework": "vite",
+-  "outputDirectory": "client/dist",
++  "framework": null,
+   "rewrites": [
+     {
+-      "source": "/api/(.*)",
+-      "destination": "/server/_core/index.ts"
++      "source": "/(.*)",
++      "destination": "/"
+     }
+-  ],
+-  "env": {
+-    "NODE_ENV": "production"
+-  }
++  ]
+ }
+-- 
+2.34.1
+

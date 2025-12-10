@@ -8,7 +8,7 @@ export default function Footer() {
   return (
     <footer className="bg-muted/30 border-t mt-auto">
       <div className="container py-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
           {/* Brand & Description */}
           <div>
             <h3 className="font-bold text-lg mb-4 text-primary">{APP_TITLE}</h3>
@@ -66,6 +66,43 @@ export default function Footer() {
                 <Link href="/products?clearance=true" className="text-muted-foreground hover:text-foreground transition-colors">
                   Clearance
                 </Link>
+              </li>
+            </ul>
+          </div>
+
+          {/* Our Business Network */}
+          <div>
+            <h4 className="font-semibold mb-4">Our Network</h4>
+            <ul className="space-y-2 text-sm">
+              <li>
+                <a href="https://tyg-services.com" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors">
+                  🔧 TYG Services
+                </a>
+              </li>
+              <li>
+                <a href="https://luntian.net" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors">
+                  🏡 Luntian
+                </a>
+              </li>
+              <li>
+                <a href="https://soleblessing.com" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors">
+                  👟 Sole Blessing
+                </a>
+              </li>
+              <li>
+                <a href="https://www.ast3r.store/" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors">
+                  👗 AST3R
+                </a>
+              </li>
+              <li>
+                <a href="https://www.thegoldblessing.com/" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors">
+                  💎 The Gold Blessing
+                </a>
+              </li>
+              <li>
+                <a href="https://musthavecorner.com" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors">
+                  🛒 Must Have Corner
+                </a>
               </li>
             </ul>
           </div>
