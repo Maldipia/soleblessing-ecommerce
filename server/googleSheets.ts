@@ -1,5 +1,11 @@
 const SPREADSHEET_ID = '1WZttK5ZsPhnBz91JmBb-V4GCs-42uXjTUXz67V5sSDI';
-const SHEET_GID = '631652219'; // GID for 2025 tab (from URL: gid=631652219)
+const SHEET_GID = '631652219'; // 2025 tab
+const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
+
+// In-memory cache
+let cachedInventory: ProductRow[] | null = null;
+let lastFetchTime: number = 0;
+let isFetching = false;
 
 export interface ProductRow {
   itemCode: string;
@@ -18,14 +24,10 @@ export interface ProductRow {
 }
 
 /**
- * Read products from Google Sheets NSB INVENTORY using CSV export
- * Since the sheet is public ("Anyone with the link can view"), we can fetch it as CSV
- * 
- * Columns: A=ITEM CODE, B=DETAILS, C=SKU, D=SIZE, E=Unit cost, F=SELLING PRICE,
- *          G=STATUS, H=SUPPLIER, I=CONDITION, J=DATE ADDED, K=NOTES,
- *          N=SRP, P=ITEM CODE (dup), Q=Unit cost (dup), R=STATUS (dup), S=PRODUCTS URL
+ * Internal function to fetch fresh data from Google Sheets
+ * This is called by the cached version below
  */
-export async function readInventoryFromSheets(): Promise<ProductRow[]> {
+async function fetchInventoryFromSheets(): Promise<ProductRow[]> {
   try {
     // Use CSV export URL for public sheets
     const csvUrl = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=${SHEET_GID}`;
@@ -74,7 +76,8 @@ export async function readInventoryFromSheets(): Promise<ProductRow[]> {
       }
     }
     
-    console.log(`[GoogleSheets] Successfully read ${products.length} available products`);
+    const timestamp = new Date().toISOString();
+    console.log(`[GoogleSheets] Successfully fetched ${products.length} available products at ${timestamp}`);
     return products;
     
   } catch (error) {
@@ -134,4 +137,75 @@ export function calculateDiscount(srp: string, sellingPrice: string): number {
   
   const discount = ((originalPrice - salePrice) / originalPrice) * 100;
   return Math.round(discount);
+}
+
+/**
+ * Cached version of inventory with automatic 5-minute refresh
+ * This is the main export that should be used by the application
+ */
+export async function readInventoryFromSheets(): Promise<ProductRow[]> {
+  const now = Date.now();
+  const cacheAge = now - lastFetchTime;
+  
+  // Return cached data if it's fresh and not currently fetching
+  if (cachedInventory && cacheAge < CACHE_DURATION_MS && !isFetching) {
+    const minutesOld = Math.floor(cacheAge / 60000);
+    console.log(`[GoogleSheets] Returning cached inventory (${minutesOld}m old, ${cachedInventory.length} products)`);
+    return cachedInventory;
+  }
+  
+  // If already fetching, wait for it to complete
+  if (isFetching) {
+    console.log('[GoogleSheets] Fetch already in progress, waiting...');
+    // Wait up to 10 seconds for the fetch to complete
+    for (let i = 0; i < 20; i++) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      if (!isFetching && cachedInventory) {
+        return cachedInventory;
+      }
+    }
+    // If still fetching after 10s, return cached data or empty array
+    return cachedInventory || [];
+  }
+  
+  // Fetch fresh data
+  isFetching = true;
+  try {
+    const freshData = await fetchInventoryFromSheets();
+    cachedInventory = freshData;
+    lastFetchTime = now;
+    console.log(`[GoogleSheets] Cache updated with ${freshData.length} products`);
+    return freshData;
+  } catch (error) {
+    console.error('[GoogleSheets] Error updating cache:', error);
+    // Return stale cache if available, otherwise empty array
+    return cachedInventory || [];
+  } finally {
+    isFetching = false;
+  }
+}
+
+/**
+ * Start automatic background refresh every 5 minutes
+ * Call this once when the server starts
+ */
+export function startAutoSync() {
+  console.log('[GoogleSheets] Starting auto-sync every 5 minutes...');
+  
+  // Initial fetch
+  readInventoryFromSheets().then(() => {
+    console.log('[GoogleSheets] Initial inventory loaded');
+  });
+  
+  // Set up interval for automatic refresh
+  setInterval(async () => {
+    try {
+      console.log('[GoogleSheets] Auto-sync triggered...');
+      // Force a fresh fetch by clearing the cache timestamp
+      lastFetchTime = 0;
+      await readInventoryFromSheets();
+    } catch (error) {
+      console.error('[GoogleSheets] Auto-sync error:', error);
+    }
+  }, CACHE_DURATION_MS);
 }

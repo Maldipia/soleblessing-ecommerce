@@ -8,6 +8,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { uploadPaymentProof, uploadPaymentProofMiddleware } from "../uploadPaymentProof";
 import { serveStatic, setupVite } from "./vite";
+import { startAutoSync } from "../googleSheets";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -65,6 +66,9 @@ async function startServer() {
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
+    
+    // Start automatic Google Sheets inventory sync
+    startAutoSync();
   });
 }
 

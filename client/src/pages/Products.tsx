@@ -30,17 +30,17 @@ export default function Products() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   const utils = trpc.useUtils();
-  // Use Google Sheets inventory instead of database products
-  const { data: inventoryProducts, isLoading: inventoryLoading } = trpc.inventory.list.useQuery();
-  const { data: dbProducts, isLoading: dbLoading } = trpc.products.list.useQuery();
+  // Use Google Sheets inventory
+  const { data: inventoryProducts, isLoading, error } = trpc.inventory.list.useQuery(undefined, {
+    retry: 3,
+    retryDelay: 1000,
+  });
   
-  // Combine inventory and database products
+  // Transform inventory to match product format
   const products = useMemo(() => {
-    const inventory = inventoryProducts || [];
-    const db = dbProducts || [];
+    if (!inventoryProducts) return [];
     
-    // Transform inventory to match product format
-    const inventoryTransformed = inventory.map(item => ({
+    return inventoryProducts.map(item => ({
       id: parseInt(item.itemCode) || 0,
       name: item.name,
       description: `${item.name} - Size ${item.size} - ${item.condition}`,
@@ -60,12 +60,7 @@ export default function Products() {
       createdAt: new Date(),
       updatedAt: new Date(),
     }));
-    
-    // Combine both sources, prioritizing inventory
-    return [...inventoryTransformed, ...db];
-  }, [inventoryProducts, dbProducts]);
-  
-  const isLoading = inventoryLoading || dbLoading;
+  }, [inventoryProducts]);
   
   const { data: wishlistItems } = trpc.wishlist.get.useQuery(undefined, {
     enabled: !!user,
@@ -353,7 +348,22 @@ export default function Products() {
   );
 
   if (isLoading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading products...</div>;
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4">
+        <div className="text-lg">Loading inventory from Google Sheets...</div>
+        <div className="text-sm text-muted-foreground">This may take a moment</div>
+      </div>
+    );
+  }
+  
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4">
+        <div className="text-lg text-red-500">Error loading inventory</div>
+        <div className="text-sm text-muted-foreground">{error.message}</div>
+        <Button onClick={() => window.location.reload()}>Retry</Button>
+      </div>
+    );
   }
 
   return (

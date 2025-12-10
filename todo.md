@@ -538,3 +538,12 @@
 - [ ] Debug frontend loading issue (API working, Products page stuck on "Loading...")
 - [ ] Create product detail pages with full information
 - [ ] Auto-sync products every 5 minutes
+
+## Auto-Sync Inventory from Google Sheets - NOW BUILDING
+- [ ] Create in-memory cache for inventory data
+- [ ] Implement automatic refresh every 5 minutes
+- [ ] Add cache timestamp tracking
+- [ ] Handle cache initialization on server start
+- [ ] Add error handling for failed syncs
+- [ ] Log sync operations for monitoring
+- [ ] Test auto-sync functionality
