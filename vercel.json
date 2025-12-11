@@ -2,11 +2,19 @@
   "buildCommand": "pnpm install && pnpm run build",
   "outputDirectory": "dist/public",
   "installCommand": "pnpm install",
-  "framework": null,
   "rewrites": [
+    {
+      "source": "/api/trpc/(.*)",
+      "destination": "/api/trpc"
+    },
     {
       "source": "/(.*)",
       "destination": "/index.html"
     }
-  ]
+  ],
+  "functions": {
+    "api/**/*.ts": {
+      "runtime": "nodejs18.x"
+    }
+  }
 }
