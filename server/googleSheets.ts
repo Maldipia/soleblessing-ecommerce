@@ -112,8 +112,9 @@ function parseCSVLine(line: string): string[] {
 }
 
 /**
- * Parse price string to number
+ * Parse price string to number in centavos
  * Handles formats like "₱2,250.00" or "2250"
+ * Returns price in centavos (multiply by 100) to match frontend expectations
  */
 export function parsePrice(priceStr: string): number {
   if (!priceStr) return 0;
@@ -122,7 +123,8 @@ export function parsePrice(priceStr: string): number {
   const cleaned = priceStr.replace(/[₱,\s]/g, '');
   const parsed = parseFloat(cleaned);
   
-  return isNaN(parsed) ? 0 : parsed;
+  // Convert pesos to centavos (multiply by 100)
+  return isNaN(parsed) ? 0 : Math.round(parsed * 100);
 }
 
 /**

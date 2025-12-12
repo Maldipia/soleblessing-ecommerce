@@ -568,3 +568,16 @@
 - [ ] Deploy backend to Railway (user action required)
 - [ ] Set VITE_API_URL in Vercel environment variables (user action required)
 - [ ] Test full integration and verify products display
+
+## Price Display Bug - URGENT
+- [ ] Fix price formatting - prices showing divided by 100 (₱22.61 instead of ₱2,261)
+- [ ] Check Products.tsx for price formatting logic
+- [ ] Check ProductCard component for currency formatting
+- [ ] Verify prices are stored correctly in Google Sheets (should be in pesos, not cents)
+- [ ] Deploy fix to production
+
+## Price Display Bug - FIXED
+- [x] Fixed price formatting - prices were showing divided by 100 (₱22.61 instead of ₱2,261)
+- [x] Root cause: parsePrice() was returning pesos, but frontend expects centavos
+- [x] Solution: Modified parsePrice() to multiply by 100 (convert pesos to centavos)
+- [ ] Deploy fix to Railway and verify on production
