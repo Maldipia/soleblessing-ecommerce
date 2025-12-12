@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: soleblessing-backend
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: pnpm install && pnpm build
+    startCommand: pnpm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: GOOGLE_SHEETS_API_KEY
+        sync: false
+      - key: GOOGLE_SHEETS_SHEET_ID
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        value: https://www.soleblessingofficial.com
+      - key: OAUTH_SERVER_URL
+        value: https://api.manus.im
+      - key: VITE_OAUTH_PORTAL_URL
+        value: https://auth.manus.im
+      - key: VITE_APP_ID
+        value: placeholder
+      - key: OWNER_OPEN_ID
+        value: placeholder
+      - key: OWNER_NAME
+        value: SoleBlessing
+
+databases:
+  - name: soleblessing-db
+    databaseName: soleblessing
+    user: soleblessing
+    plan: free
