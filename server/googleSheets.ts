@@ -70,8 +70,13 @@ async function fetchInventoryFromSheets(): Promise<ProductRow[]> {
         productsUrl: row[18] || '',     // S: PRODUCTS URL (was Q, but actually S)
       };
       
-      // Filter only AVAILABLE products
-      if (product.status.toUpperCase() === 'AVAILABLE') {
+      // Filter only AVAILABLE products with images
+      // Skip if: no image URL, status is not AVAILABLE, or status is SOLD OUT
+      const hasImage = product.productsUrl && product.productsUrl.trim() !== '';
+      const isAvailable = product.status.toUpperCase() === 'AVAILABLE';
+      const isSoldOut = product.status.toUpperCase().includes('SOLD') || product.status.toUpperCase().includes('OUT');
+      
+      if (hasImage && isAvailable && !isSoldOut) {
         products.push(product);
       }
     }

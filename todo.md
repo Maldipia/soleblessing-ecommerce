@@ -581,3 +581,11 @@
 - [x] Root cause: parsePrice() was returning pesos, but frontend expects centavos
 - [x] Solution: Modified parsePrice() to multiply by 100 (convert pesos to centavos)
 - [ ] Deploy fix to Railway and verify on production
+
+## Product Filtering Logic Update - IN PROGRESS
+- [x] Identified issue: products without images showing on website
+- [x] Update Google Sheets reader to skip products with empty Column S (PRODUCTS URL)
+- [x] Update inventory router to filter out SOLD OUT products
+- [x] Verify SKU-based grouping is working correctly (already implemented)
+- [ ] Deploy and test - only products with images should appear
+- [ ] Verify product count decreases to only items with images
