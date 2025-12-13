@@ -14,6 +14,20 @@ const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
   return next({ ctx });
 });
 
+// Convert Google Drive URLs to thumbnail format
+function convertGoogleDriveUrl(url: string): string {
+  if (!url) return "";
+  
+  // Match Google Drive URLs
+  const driveMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if (driveMatch) {
+    const fileId = driveMatch[1];
+    return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
+  }
+  
+  return url;
+}
+
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
@@ -45,7 +59,7 @@ export const appRouter = router({
         discount: calculateDiscount(p.srp, p.sellingPrice),
         status: p.status,
         condition: p.condition,
-        imageUrl: p.productsUrl,
+        imageUrl: convertGoogleDriveUrl(p.productsUrl),
         dateAdded: p.dateAdded,
       }));
     }),
@@ -70,7 +84,7 @@ export const appRouter = router({
           discount: calculateDiscount(product.srp, product.sellingPrice),
           status: product.status,
           condition: product.condition,
-          imageUrl: product.productsUrl,
+          imageUrl: convertGoogleDriveUrl(product.productsUrl),
           dateAdded: product.dateAdded,
           supplier: product.supplier,
           notes: product.notes,
