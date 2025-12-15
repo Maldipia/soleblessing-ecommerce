@@ -51,6 +51,7 @@ export default function Products() {
         // Create new product entry
         grouped.set(sku, {
           id: parseInt(item.itemCode) || 0,
+          itemCode: item.itemCode,
           name: item.name,
           description: item.name,
           brand: sku.split(/[^a-zA-Z]/)[0] || 'Unknown',

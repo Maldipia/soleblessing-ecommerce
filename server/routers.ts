@@ -18,7 +18,7 @@ const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
 function convertGoogleDriveUrl(url: string): string {
   if (!url) return "";
   
-  // Match Google Drive URLs with /d/ format
+  // Match Google Drive URLs with /d/ format (file links)
   const driveMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
   if (driveMatch) {
     const fileId = driveMatch[1];
@@ -29,6 +29,13 @@ function convertGoogleDriveUrl(url: string): string {
   const idMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
   if (idMatch) {
     const fileId = idMatch[1];
+    return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
+  }
+  
+  // Match Google Drive folder URLs (folders/FILE_ID)
+  const folderMatch = url.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  if (folderMatch) {
+    const fileId = folderMatch[1];
     return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
   }
   
@@ -51,6 +58,16 @@ export const appRouter = router({
 
   // Google Sheets Inventory
   inventory: router({ 
+    // Force refresh cache
+    refresh: publicProcedure.mutation(async () => {
+      const { readInventoryFromSheets } = await import("./googleSheets");
+      // Force fresh fetch by importing the internal variables
+      const googleSheets = await import("./googleSheets");
+      // Reset cache timestamp to force refresh
+      (googleSheets as any).lastFetchTime = 0;
+      const products = await readInventoryFromSheets();
+      return { success: true, count: products.length, timestamp: new Date().toISOString() };
+    }),
     list: publicProcedure.query(async () => {
       const { readInventoryFromSheets, calculateDiscount, parsePrice } = await import("./googleSheets");
       const products = await readInventoryFromSheets();

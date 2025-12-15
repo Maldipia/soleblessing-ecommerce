@@ -690,3 +690,76 @@
   - Quantity selector
   - Add to Cart and Wishlist buttons
   - Product details (Status, Condition, Item Code)
+
+## INVESTIGATE: Broken Product Images - COMPLETE ✅
+- [x] User reports some products showing blank/white images
+- [x] Investigated all 34 products in Google Sheets
+- [x] Found 21 unique SKUs displaying on website
+- [x] Identified 1 product with broken image:
+  * CLOUD FOAM WALK (SKU: ID6488, Item Code: 7647)
+  * Issue: Using Adidas website URL instead of Google Drive URL
+  * URL: https://assets.adidas.com/images/w_600,f_auto,q_auto/...
+- [x] All other 20 products have valid Google Drive URLs
+- [x] Created diagnostic script (check-images.mts) to identify broken URLs
+- [x] User needs to replace Adidas URL with Google Drive link for CLOUD FOAM WALK
+
+## FIX: Broken Images - Google Drive Folder URLs
+- [ ] User added new products with incomplete/folder URLs
+- [ ] Products showing broken images: HQ3475, EF0812, JI4851, JQ2477, IH3071
+- [ ] Issue: Using Google Drive FOLDER links instead of FILE links
+- [ ] Wrong format: `https://drive.google.com/drive/u/1/folders/...`
+- [ ] Correct format: `https://drive.google.com/file/d/FILE_ID/view?usp=sharing`
+- [ ] Guide user on how to get correct Google Drive file URLs
+- [ ] Update diagnostic script to detect folder URLs
+- [ ] Wait for user to fix URLs in Google Sheets
+- [ ] Verify images load after sync
+
+## NEW FEATURE: Size Guide for Brands
+- [ ] Create size guide component with brand-specific sizing
+- [ ] Add Adidas size chart (US, UK, EU, CM conversions)
+- [ ] Add Nike size chart
+- [ ] Add generic/other brands size chart
+- [ ] Create modal/dialog to display size guide
+- [ ] Add "Size Guide" button to product detail pages
+- [ ] Include fit recommendations (runs small, true to size, runs large)
+- [ ] Add measurement instructions (how to measure foot)
+- [ ] Test size guide on InventoryDetail and ProductDetail pages
+- [ ] Deploy and verify on production
+
+## URGENT: All Product Images Showing Black/Empty
+- [ ] User reports all products showing black/empty images
+- [ ] User added new file links 20 minutes ago but not showing
+- [ ] Check if auto-sync has run (5-minute interval)
+- [ ] Manually clear cache and fetch fresh inventory
+- [ ] Verify Google Drive permissions on all images
+- [ ] Check if convertGoogleDriveUrl is working correctly
+- [ ] Test image URLs directly in browser
+- [ ] Identify if it's a caching, permissions, or code issue
+
+## URGENT: Auto-Sync Not Working
+- [ ] User added new image URLs 10+ minutes ago
+- [ ] Products not showing on website
+- [ ] Auto-sync should run every 5 minutes but not working
+- [ ] Check if startAutoSync() is being called on server startup
+- [ ] Check server logs for sync errors
+- [ ] Test manual sync via admin dashboard
+- [ ] Verify cache invalidation is working
+- [ ] Fix auto-sync mechanism
+
+## URGENT: Wrong Shoe Sizes Showing (20CM)
+- [ ] User reports sizes showing "20CM" which is incorrect
+- [ ] Should show proper US shoe sizes (e.g., 7, 7.5, 8, 8.5, etc.)
+- [ ] Check SIZE column in Google Sheets - what format is it?
+- [ ] Check if size parsing/display logic is wrong
+- [ ] Fix size display to show correct US sizes
+- [ ] Remove "CM" suffix if it's coming from Google Sheets
+
+## CRITICAL: Product Not Found When Clicking Products - FIXED ✅
+- [x] User clicks on products and gets "Product Not Found" error
+- [x] This was a loop - products show on listing but detail page fails
+- [x] Railway backend cache not syncing with new Google Sheets data
+- [x] Got Railway backend URL: soleblessing-ecommerce-production-94e3.up.railway.app
+- [x] Triggered inventory.refresh endpoint - fetched 49 products
+- [x] Fixed missing itemCode in grouped products (Products.tsx line 54)
+- [x] Verified products load correctly - clicking now works!
+- [x] URL format: /inventory/7632 (using itemCode)
