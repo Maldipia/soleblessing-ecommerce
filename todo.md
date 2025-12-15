@@ -888,5 +888,7 @@
 - [x] Change logic: Only mark as Kids if size has "CM" suffix OR product name contains kids indicators
 - [x] Remove size < 24 logic that incorrectly tags adult small sizes as Kids
 - [x] Kids indicators now: CM suffix, " C " or " C" in name (Children's), "KIDS", "JUNIOR", " J " or " J" (Junior)
-- [ ] Test on production
-- [ ] Deploy changes
+- [x] Test on production - VERIFIED WORKING!
+- [x] Deploy changes - Successfully deployed to www.soleblessingofficial.com
+- [x] NMD_V3 and NIZZA RF no longer have Kids badge
+- [x] Kids badge correctly shows on: SAMBA OG C, HANDBALL SPEZIAL C, SUMMERFLEX C, LIGHTBLAZE J
