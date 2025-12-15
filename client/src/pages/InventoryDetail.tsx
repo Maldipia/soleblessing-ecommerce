@@ -255,7 +255,7 @@ export default function InventoryDetail() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Condition:</span>
-                  <span className="font-semibold">{selectedProduct.condition || 'New'}</span>
+                  <span className="font-semibold">BRAND NEW</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Item Code:</span>

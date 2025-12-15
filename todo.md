@@ -798,3 +798,9 @@
 - [x] Test on production - VERIFIED WORKING!
 - [x] Deploy changes - Successfully deployed to www.soleblessingofficial.com
 - [x] Payment methods section displays correctly below product details
+
+## UPDATE: Product Condition Display
+- [x] Change condition field to always show "BRAND NEW" instead of Google Sheets condition
+- [x] Update InventoryDetail.tsx to hardcode condition as "BRAND NEW"
+- [ ] Test on production
+- [ ] Deploy changes
