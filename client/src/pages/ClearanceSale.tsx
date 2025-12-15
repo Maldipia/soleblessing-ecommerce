@@ -29,29 +29,48 @@ export default function ClearanceSale() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"discount-high" | "price-low" | "price-high" | "newest">("discount-high");
   
-  // Filter clearance products (discount >= 50%)
+  // Filter clearance products (discount >= 50%) and group by SKU
   const clearanceProducts = useMemo(() => {
     if (!inventoryProducts) return [];
     
-    return inventoryProducts
-      .filter(item => item.discount >= 50) // Only products with 50%+ discount
-      .map(item => ({
-        id: parseInt(item.itemCode) || 0,
-        name: item.name,
-        description: `${item.name} - Size ${item.size}`,
-        brand: item.sku.split(/[^a-zA-Z]/)[0] || 'Unknown',
+    // Filter clearance items (50%+ discount)
+    const clearanceItems = inventoryProducts.filter(item => item.discount >= 50);
+    
+    // Group by SKU
+    const groupedBySku = clearanceItems.reduce((acc, item) => {
+      const sku = item.sku;
+      if (!acc[sku]) {
+        acc[sku] = [];
+      }
+      acc[sku].push(item);
+      return acc;
+    }, {} as Record<string, typeof clearanceItems>);
+    
+    // Transform grouped data into product cards
+    return Object.entries(groupedBySku).map(([sku, items]) => {
+      const firstItem = items[0];
+      const allSizes = items.map(item => item.size).filter(Boolean).sort((a, b) => parseFloat(a) - parseFloat(b));
+      
+      return {
+        id: parseInt(firstItem.itemCode) || 0,
+        name: firstItem.name,
+        description: `${firstItem.name}`,
+        brand: sku.split(/[^a-zA-Z]/)[0] || 'Unknown',
         category: 'Sneakers',
-        basePrice: Math.round(item.srp),
-        salePrice: Math.round(item.sellingPrice),
-        discount: item.discount,
-        images: JSON.stringify(item.imageUrl ? [item.imageUrl] : []),
-        sizes: JSON.stringify([item.size]),
-        stock: item.status === 'AVAILABLE' ? 1 : 0,
-        itemCode: item.itemCode,
-        size: item.size,
-        imageUrl: item.imageUrl,
+        basePrice: Math.round(firstItem.srp),
+        salePrice: Math.round(firstItem.sellingPrice),
+        discount: firstItem.discount,
+        images: JSON.stringify(firstItem.imageUrl ? [firstItem.imageUrl] : []),
+        sizes: JSON.stringify(allSizes),
+        stock: items.filter(item => item.status === 'AVAILABLE').length,
+        itemCode: firstItem.itemCode,
+        size: allSizes.join(', '),
+        imageUrl: firstItem.imageUrl,
         createdAt: new Date(),
-      }));
+        sku: sku,
+        allSizes: allSizes,
+      };
+    });
   }, [inventoryProducts]);
   
   // Apply search and sort
@@ -244,7 +263,7 @@ export default function ClearanceSale() {
                     {/* Product Info */}
                     <div className="p-4">
                       <div className="text-xs text-orange-600 font-semibold mb-1">{product.brand}</div>
-                      <h3 className="font-semibold text-sm mb-2 line-clamp-2 min-h-[2.5rem]">
+                      <h3 className="font-semibold text-sm mb-2 line-clamp-2 min-h-[2.5rem] force-black-text">
                         {product.name}
                       </h3>
                       <div className="text-xs text-muted-foreground mb-3">Size: {product.size}</div>

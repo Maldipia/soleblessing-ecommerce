@@ -656,10 +656,18 @@
 - [x] Remove duplicate product cards
 - [x] Deploy and verify - WORKING (user needs to clear cache)
 
-## GRAY TEXT STILL NOT FIXED - URGENT
-- [x] Product names STILL showing in light gray
-- [x] Previous fixes (text-foreground, text-gray-900, inline style) not working
-- [x] Need to use !important CSS override
-- [x] Created .force-black-text class with color: #000000 !important
-- [x] Applied class to product name h3 element
-- [ ] Deploy and verify fix
+## CLEARANCE PAGE NEEDS GROUPING FIX
+- [x] Verified Products page HAS grouping (1 card per SKU) ✅
+- [x] Verified Clearance page DOES NOT have grouping (duplicate cards) ❌
+- [x] Apply same grouping logic to Clearance page
+- [x] Fix gray text on both pages (added force-black-text class)
+- [ ] Commit and deploy
+- [ ] Verify on live website
+
+## Missing Products Investigation - HQ1917
+- [ ] User reports HQ1917 not showing on website
+- [ ] User says only seeing few photos
+- [ ] Check Google Sheets for HQ1917 - verify Column S has image URL
+- [ ] Check if STATUS is "AVAILABLE"
+- [ ] Check Railway API to see if HQ1917 is in the response
+- [ ] Investigate why products with images aren't showing
