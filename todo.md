@@ -777,3 +777,11 @@
 - [x] Deployed to production - VERIFIED WORKING!
 - [x] Tested on www.soleblessingofficial.com/products
 - [x] Products now sort correctly from smallest to largest size
+
+## UPDATE: Payment Methods Display on Product Detail Page
+- [x] Update InventoryDetail.tsx to show payment methods section
+- [x] Add payment method icons/badges: COD, GCash, CC (Credit Card), Bank Transfer
+- [x] Match design from reference screenshot with 2x2 grid layout
+- [x] Added colored badges for each payment method
+- [ ] Test on production
+- [ ] Deploy changes

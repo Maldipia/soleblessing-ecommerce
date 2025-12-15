@@ -263,6 +263,39 @@ export default function InventoryDetail() {
                 </div>
               </CardContent>
             </Card>
+            
+            {/* Payment Methods */}
+            <Card>
+              <CardContent className="p-4">
+                <h3 className="text-sm font-semibold mb-3 text-muted-foreground">PAYMENT METHODS:</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex items-center gap-2 p-2 border rounded-lg">
+                    <div className="w-8 h-8 bg-blue-500 rounded flex items-center justify-center text-white font-bold text-xs">
+                      COD
+                    </div>
+                    <span className="text-sm font-medium">Cash on Delivery</span>
+                  </div>
+                  <div className="flex items-center gap-2 p-2 border rounded-lg">
+                    <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white font-bold text-xs">
+                      G
+                    </div>
+                    <span className="text-sm font-medium">GCash</span>
+                  </div>
+                  <div className="flex items-center gap-2 p-2 border rounded-lg">
+                    <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded flex items-center justify-center text-white font-bold text-xs">
+                      CC
+                    </div>
+                    <span className="text-sm font-medium">Credit Card</span>
+                  </div>
+                  <div className="flex items-center gap-2 p-2 border rounded-lg">
+                    <div className="w-8 h-8 bg-green-600 rounded flex items-center justify-center text-white font-bold text-xs">
+                      BT
+                    </div>
+                    <span className="text-sm font-medium">Bank Transfer</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
