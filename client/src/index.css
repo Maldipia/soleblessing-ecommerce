@@ -178,4 +178,9 @@
       max-width: 1280px; /* Standard content width */
     }
   }
+
+  /* Force black text for product names */
+  .force-black-text {
+    color: #000000 !important;
+  }
 }

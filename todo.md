@@ -648,3 +648,18 @@
 - [x] Apply inline style with color: #000000 for absolute override
 - [x] Deploy and verify fix on live website
 - [x] VERIFIED: Product names now black on www.soleblessingofficial.com
+
+## Product Display Fix - 1 SKU = 1 Card - RESOLVED
+- [x] User wants 1 card per SKU, not duplicate cards for each size
+- [x] Update grouping logic to show single card per SKU
+- [x] Display all available sizes on that single card
+- [x] Remove duplicate product cards
+- [x] Deploy and verify - WORKING (user needs to clear cache)
+
+## GRAY TEXT STILL NOT FIXED - URGENT
+- [x] Product names STILL showing in light gray
+- [x] Previous fixes (text-foreground, text-gray-900, inline style) not working
+- [x] Need to use !important CSS override
+- [x] Created .force-black-text class with color: #000000 !important
+- [x] Applied class to product name h3 element
+- [ ] Deploy and verify fix
