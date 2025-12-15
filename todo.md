@@ -900,3 +900,10 @@
 - [x] Added hasSize and hasValidPrice checks to filtering logic
 - [ ] Test on production
 - [ ] Deploy changes
+
+## FIX: Filter Out Sold Products - COMPLETED
+- [x] GALAXY 1M removed from website (was marked SOLD in Google Sheets)
+- [x] Updated backend filtering to exclude STATUS containing "SOLD", "OUT", or "MISSING"
+- [x] Also filtering out products with no sizes or ₱0 price
+- [x] Product count reduced from 43 to 40 (correct filtering)
+- [x] FORUM BONEGA and BREAKNET 2.0 also removed (no sizes available)
