@@ -871,3 +871,11 @@
 - [x] Deploy changes - Successfully deployed to www.soleblessingofficial.com
 - [x] Kids badges showing on products like CLOUD FOAM WALK, SUPERSTAR OT TECH, SAMBA OG C, etc.
 - [x] Products with both Last Pair and Kids show both badges (e.g., CLOUD FOAM WALK shows "LAST PAIR" + "KIDS")
+
+## Feature: Last Pair Homepage Section
+- [x] Create LastPairSection component
+- [x] Fetch inventory and filter for Last Pair products (single size)
+- [x] Display with urgency styling and "Grab it before it's gone" messaging
+- [x] Add to homepage between Clearance and New Arrivals sections
+- [ ] Test on production
+- [ ] Deploy changes
