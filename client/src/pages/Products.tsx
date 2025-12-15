@@ -520,7 +520,7 @@ export default function Products() {
                       </div>
                       <CardContent className="p-4">
                         <p className="text-xs text-muted-foreground mb-1">{product.brand}</p>
-                        <h3 className="font-semibold mb-2 line-clamp-2">{product.name}</h3>
+                        <h3 className="font-semibold mb-2 line-clamp-2 text-foreground">{product.name}</h3>
                         
                         {/* Available Sizes */}
                         {sizes.length > 0 && (

@@ -630,3 +630,8 @@
 - [x] VERIFIED: Product count reduced from 29 to 18 (grouped by SKU)
 - [x] VERIFIED: All products showing "Available Sizes" with size badges
 - [x] VERIFIED: Inter font applied across website
+
+## Product Name Text Color Fix - URGENT
+- [x] Change product name text from light gray to dark/black
+- [x] Ensure proper contrast ratio for readability (added text-foreground class)
+- [ ] Deploy and verify on production
