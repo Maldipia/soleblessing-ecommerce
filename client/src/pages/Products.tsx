@@ -514,6 +514,7 @@ export default function Products() {
                   const price = product.salePrice || product.basePrice;
                   const hasDiscount = !!product.salePrice;
                   const images = product.images ? JSON.parse(product.images) : [];
+                  const productSizes = product.sizes ? JSON.parse(product.sizes) : [];
 
                   return (
                     <Card
@@ -566,18 +567,18 @@ export default function Products() {
                         <h3 className="font-semibold mb-2 line-clamp-2 force-black-text">{product.name}</h3>
                         
                         {/* Available Sizes */}
-                        {sizes.length > 0 && (
+                        {productSizes.length > 0 && (
                           <div className="mb-2">
                             <p className="text-xs text-muted-foreground mb-1">Available Sizes:</p>
                             <div className="flex flex-wrap gap-1">
-                              {sizes.slice(0, 5).map((size: string) => (
+                              {productSizes.slice(0, 5).map((size: string) => (
                                 <span key={size} className="text-xs px-2 py-0.5 bg-muted rounded">
                                   {size}
                                 </span>
                               ))}
-                              {sizes.length > 5 && (
+                              {productSizes.length > 5 && (
                                 <span className="text-xs px-2 py-0.5 text-muted-foreground">
-                                  +{sizes.length - 5} more
+                                  +{productSizes.length - 5} more
                                 </span>
                               )}
                             </div>

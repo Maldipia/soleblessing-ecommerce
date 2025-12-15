@@ -813,3 +813,12 @@
 - [x] Test on production - VERIFIED WORKING!
 - [x] Deploy changes - Successfully deployed to www.soleblessingofficial.com
 - [x] Product names now display in white text for better readability on dark backgrounds
+
+## URGENT: Fix Available Sizes Display
+- [x] Product cards showing wrong sizes (generic list instead of actual available sizes)
+- [x] Each product should only show sizes that exist in Google Sheets for that specific SKU
+- [x] Fixed Products.tsx to use productSizes (from product.sizes) instead of global sizes array
+- [x] ClearanceSale.tsx already correctly showing sizes per SKU
+- [x] Now each product card shows only its actual available sizes from Google Sheets
+- [ ] Test on production
+- [ ] Deploy changes
