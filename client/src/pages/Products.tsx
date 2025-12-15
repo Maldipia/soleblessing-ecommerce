@@ -99,15 +99,21 @@ export default function Products() {
       // Last Size: Multiple sizes available for this product
       const isLastSize = availableSizesCount > 1;
       
-      // Kids: Products with sizes under 24 or with CM suffix (children's sizes)
+      // Kids: Products with CM suffix in size OR kids-specific product name indicators
+      // Note: Do NOT use size < 24 as that incorrectly tags adult small sizes
+      const productName = product.name?.toUpperCase() || '';
       const isKids = sortedSizes.some((size: string) => {
         const sizeStr = size.toString().toUpperCase();
         // Check for CM suffix (kids sizes like 20CM)
-        if (sizeStr.includes('CM')) return true;
-        // Check for numeric sizes under 24 (typically kids)
-        const numSize = parseFloat(size);
-        return !isNaN(numSize) && numSize < 24;
-      });
+        return sizeStr.includes('CM');
+      }) || 
+      // Check for kids product indicators in name (C suffix = Children's, K = Kids)
+      productName.includes(' C ') || 
+      productName.endsWith(' C') || 
+      productName.includes('KIDS') || 
+      productName.includes('JUNIOR') || 
+      productName.includes(' J ') || 
+      productName.endsWith(' J');
       
       return {
         ...product,

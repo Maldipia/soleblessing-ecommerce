@@ -882,3 +882,11 @@
 - [x] Section shows "LAST PAIR" header with urgency messaging
 - [x] 4 products displayed with orange badges, discount %, and "ONLY 1 LEFT!" urgency indicator
 - [x] "View All Last Pair Deals" button links to products page
+
+## FIX: Kids Detection Logic
+- [x] Fix Kids detection - NMD_V3 and NIZZA RF incorrectly tagged as Kids
+- [x] Change logic: Only mark as Kids if size has "CM" suffix OR product name contains kids indicators
+- [x] Remove size < 24 logic that incorrectly tags adult small sizes as Kids
+- [x] Kids indicators now: CM suffix, " C " or " C" in name (Children's), "KIDS", "JUNIOR", " J " or " J" (Junior)
+- [ ] Test on production
+- [ ] Deploy changes
