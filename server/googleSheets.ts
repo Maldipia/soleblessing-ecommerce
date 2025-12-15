@@ -70,13 +70,16 @@ async function fetchInventoryFromSheets(): Promise<ProductRow[]> {
         productsUrl: row[18] || '',     // S: PRODUCTS URL (was Q, but actually S)
       };
       
-      // Filter only AVAILABLE products with images
-      // Skip if: no image URL, status is not AVAILABLE, or status is SOLD OUT
+      // Filter only AVAILABLE products with images, valid price, and size
+      // Skip if: no image URL, status is not AVAILABLE, status is SOLD/OUT, no size, or zero price
       const hasImage = product.productsUrl && product.productsUrl.trim() !== '';
-      const isAvailable = product.status.toUpperCase() === 'AVAILABLE';
-      const isSoldOut = product.status.toUpperCase().includes('SOLD') || product.status.toUpperCase().includes('OUT');
+      const statusUpper = product.status.toUpperCase().trim();
+      const isAvailable = statusUpper === 'AVAILABLE';
+      const isSoldOut = statusUpper.includes('SOLD') || statusUpper.includes('OUT') || statusUpper.includes('MISSING');
+      const hasSize = product.size && product.size.trim() !== '';
+      const hasValidPrice = parsePrice(product.sellingPrice) > 0 || parsePrice(product.srp) > 0;
       
-      if (hasImage && isAvailable && !isSoldOut) {
+      if (hasImage && isAvailable && !isSoldOut && hasSize && hasValidPrice) {
         products.push(product);
       }
     }

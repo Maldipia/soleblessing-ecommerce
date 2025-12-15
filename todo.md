@@ -892,3 +892,11 @@
 - [x] Deploy changes - Successfully deployed to www.soleblessingofficial.com
 - [x] NMD_V3 and NIZZA RF no longer have Kids badge
 - [x] Kids badge correctly shows on: SAMBA OG C, HANDBALL SPEZIAL C, SUMMERFLEX C, LIGHTBLAZE J
+
+## FIX: Filter Out Sold Products
+- [x] GALAXY 1M showing on website even though marked as "SOLD" in Google Sheets
+- [x] Update backend filtering to exclude products where STATUS contains "SOLD", "OUT", or "MISSING"
+- [x] Also filter out products with no sizes or ₱0 price
+- [x] Added hasSize and hasValidPrice checks to filtering logic
+- [ ] Test on production
+- [ ] Deploy changes
