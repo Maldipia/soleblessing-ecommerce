@@ -224,44 +224,6 @@ export default function Home() {
 
       {/* AI Recommendations */}
       {isAuthenticated && <RecommendedProducts />}
-
-      {/* Footer */}
-      <footer className="border-t border-border py-12 bg-card/30">
-        <div className="container">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-            <div>
-              <h3 className="font-bold text-lg mb-4">{APP_TITLE}</h3>
-              <p className="text-sm text-muted-foreground">
-                Your trusted source for authentic sneakers and exclusive drops.
-              </p>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-4">Shop</h4>
-              <div className="flex flex-col gap-2 text-sm text-muted-foreground">
-                <Link href="/products" className="hover:text-primary transition-colors">Products</Link>
-                <Link href="/raffles" className="hover:text-primary transition-colors">Raffles</Link>
-                <Link href="/sale-events" className="hover:text-primary transition-colors">Sale Events</Link>
-              </div>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-4">Account</h4>
-              <div className="flex flex-col gap-2 text-sm text-muted-foreground">
-                <Link href="/profile" className="hover:text-primary transition-colors">My Profile</Link>
-                <Link href="/cart" className="hover:text-primary transition-colors">Shopping Cart</Link>
-              </div>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-4">Connect</h4>
-              <p className="text-sm text-muted-foreground">
-                Follow us on social media for the latest updates and exclusive offers.
-              </p>
-            </div>
-          </div>
-          <div className="mt-8 pt-8 border-t border-border text-center text-sm text-muted-foreground">
-            © 2024 {APP_TITLE}. All rights reserved.
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }
