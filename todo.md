@@ -805,3 +805,10 @@
 - [x] Test on production - VERIFIED WORKING!
 - [x] Deploy changes - Successfully deployed to www.soleblessingofficial.com
 - [x] Condition now displays "BRAND NEW" instead of "GOOD" for all products
+
+## UPDATE: Product Card Text Color Fix
+- [x] Fix product name text color on product cards (currently hard to read - dark text on dark background)
+- [x] Change product names to white/light color for better visibility
+- [x] Updated force-black-text class in index.css to use white color (#ffffff)
+- [ ] Test on production
+- [ ] Deploy changes

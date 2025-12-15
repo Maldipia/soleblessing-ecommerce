@@ -179,8 +179,8 @@
     }
   }
 
-  /* Force black text for product names */
+  /* Force white text for product names on dark backgrounds */
   .force-black-text {
-    color: #000000 !important;
+    color: #ffffff !important;
   }
 }
