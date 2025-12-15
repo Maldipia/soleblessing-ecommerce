@@ -928,3 +928,10 @@
 - [x] Ensure no duplicate products across tabs (using itemCode deduplication)
 - [ ] Test on production to verify all products display
 - [ ] Deploy changes
+
+## Multi-Tab Google Sheets Integration - COMPLETED
+- [x] Update backend to fetch from all 4 Google Sheets tabs (2025, 2024, ABB, MBB)
+- [x] Configure correct GIDs for each tab (2025: 631652219, 2024: 0, ABB: 1973067738, MBB: 946254902)
+- [x] Merge products from all tabs into single product list
+- [x] Filter out sold products (STATUS containing SOLD/OUT/MISSING)
+- [x] Deploy to Vercel/Railway and verify 130 products showing
