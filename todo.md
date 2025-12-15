@@ -631,8 +631,10 @@
 - [x] VERIFIED: All products showing "Available Sizes" with size badges
 - [x] VERIFIED: Inter font applied across website
 
-## Product Name Text Color Fix - COMPLETE ✅
-- [x] Change product name text from light gray to dark/black
+## Product Name Text Color Fix - IN PROGRESS
+- [x] Change product name text from light gray to dark/black (first attempt)
 - [x] Ensure proper contrast ratio for readability (added text-foreground class)
 - [x] Deploy and verify on production
-- [x] VERIFIED: Product names now dark and readable on www.soleblessingofficial.com
+- [x] User reports text still gray - need stronger fix
+- [x] Apply explicit dark color (text-gray-900)
+- [ ] Deploy and verify fix on live website
