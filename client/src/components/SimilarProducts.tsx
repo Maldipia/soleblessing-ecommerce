@@ -1,6 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
 import { useLocation } from "wouter";
+import LazyImage from "@/components/LazyImage";
 
 interface SimilarProductsProps {
   productId: number;
@@ -50,12 +51,11 @@ export default function SimilarProducts({ productId }: SimilarProductsProps) {
               className="group cursor-pointer hover:shadow-lg transition-shadow overflow-hidden"
               onClick={() => setLocation(`/product/${product.id}`)}
             >
-              <div className="relative aspect-square overflow-hidden bg-muted">
-                <img
+              <div className="relative overflow-hidden bg-muted">
+                <LazyImage
                   src={thumbnailImage}
                   alt={product.name}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  loading="lazy"
                 />
                 {hasDiscount && (
                   <div className="absolute top-2 left-2 bg-red-500 text-white px-2 py-1 rounded text-xs font-bold">

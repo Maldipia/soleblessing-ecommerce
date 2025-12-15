@@ -8,6 +8,7 @@ import { Slider } from "@/components/ui/slider";
 import { useLocation } from "wouter";
 import { Search, SlidersHorizontal, Heart } from "lucide-react";
 import CountdownTimer from "@/components/CountdownTimer";
+import LazyImage from "@/components/LazyImage";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 import {
@@ -461,11 +462,10 @@ export default function Products() {
                           />
                         </Button>
                         {images[0] && (
-                          <img
+                          <LazyImage
                             src={images[0]}
                             alt={product.name}
                             className="object-cover w-full h-full rounded-t-lg"
-                            loading="lazy"
                           />
                         )}
                         {hasDiscount && (
