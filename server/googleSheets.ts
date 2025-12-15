@@ -1,5 +1,13 @@
 const SPREADSHEET_ID = '1WZttK5ZsPhnBz91JmBb-V4GCs-42uXjTUXz67V5sSDI';
-const SHEET_GID = '631652219'; // 2025 tab
+
+// All sheet tabs to fetch from
+const SHEET_TABS = [
+  { name: '2025', gid: '631652219' },
+  { name: '2024', gid: '0' },
+  { name: 'ABB', gid: '1973067738' },
+  { name: 'MBB', gid: '946254902' },
+];
+
 const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
 
 // In-memory cache
@@ -27,15 +35,18 @@ export interface ProductRow {
  * Internal function to fetch fresh data from Google Sheets
  * This is called by the cached version below
  */
-async function fetchInventoryFromSheets(): Promise<ProductRow[]> {
+/**
+ * Fetch products from a single sheet tab
+ */
+async function fetchFromSingleTab(tabName: string, gid: string): Promise<ProductRow[]> {
   try {
-    // Use CSV export URL for public sheets
-    const csvUrl = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=${SHEET_GID}`;
+    const csvUrl = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=${gid}`;
     
     const response = await fetch(csvUrl);
     
     if (!response.ok) {
-      throw new Error(`Failed to fetch sheet: ${response.status} ${response.statusText}`);
+      console.error(`[GoogleSheets] Failed to fetch ${tabName} tab: ${response.status}`);
+      return [];
     }
     
     const csvText = await response.text();
@@ -67,11 +78,10 @@ async function fetchInventoryFromSheets(): Promise<ProductRow[]> {
         dateAdded: row[9] || '',        // J: DATE ADDED
         notes: row[10] || '',           // K: NOTES
         srp: row[13] || '',             // N: SRP (original price)
-        productsUrl: row[18] || '',     // S: PRODUCTS URL (was Q, but actually S)
+        productsUrl: row[18] || '',     // S: PRODUCTS URL
       };
       
       // Filter only AVAILABLE products with images, valid price, and size
-      // Skip if: no image URL, status is not AVAILABLE, status is SOLD/OUT, no size, or zero price
       const hasImage = product.productsUrl && product.productsUrl.trim() !== '';
       const statusUpper = product.status.toUpperCase().trim();
       const isAvailable = statusUpper === 'AVAILABLE';
@@ -84,9 +94,41 @@ async function fetchInventoryFromSheets(): Promise<ProductRow[]> {
       }
     }
     
-    const timestamp = new Date().toISOString();
-    console.log(`[GoogleSheets] Successfully fetched ${products.length} available products at ${timestamp}`);
+    console.log(`[GoogleSheets] Tab ${tabName}: ${products.length} available products`);
     return products;
+    
+  } catch (error) {
+    console.error(`[GoogleSheets] Error reading ${tabName} tab:`, error);
+    return [];
+  }
+}
+
+/**
+ * Fetch products from ALL sheet tabs and combine them
+ */
+async function fetchInventoryFromSheets(): Promise<ProductRow[]> {
+  try {
+    const allProducts: ProductRow[] = [];
+    const seenItemCodes = new Set<string>();
+    
+    // Fetch from all tabs in parallel
+    const results = await Promise.all(
+      SHEET_TABS.map(tab => fetchFromSingleTab(tab.name, tab.gid))
+    );
+    
+    // Combine results, avoiding duplicates by itemCode
+    for (const tabProducts of results) {
+      for (const product of tabProducts) {
+        if (!seenItemCodes.has(product.itemCode)) {
+          seenItemCodes.add(product.itemCode);
+          allProducts.push(product);
+        }
+      }
+    }
+    
+    const timestamp = new Date().toISOString();
+    console.log(`[GoogleSheets] Total: ${allProducts.length} unique available products from ${SHEET_TABS.length} tabs at ${timestamp}`);
+    return allProducts;
     
   } catch (error) {
     console.error('[GoogleSheets] Error reading inventory:', error);

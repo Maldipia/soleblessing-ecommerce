@@ -920,3 +920,11 @@
 - [x] Style modal to match site design (dark theme, amber accents)
 - [ ] Test on production
 - [ ] Deploy changes
+
+## Feature: Fetch Products from All Google Sheets Tabs
+- [x] Update Google Sheets service to fetch from 2025, 2024, ABB, MBB tabs
+- [x] Added correct GIDs: 2025=631652219, 2024=0, ABB=1973067738, MBB=946254902
+- [x] Combine products from all tabs into single inventory list
+- [x] Ensure no duplicate products across tabs (using itemCode deduplication)
+- [ ] Test on production to verify all products display
+- [ ] Deploy changes
