@@ -610,3 +610,20 @@
 - [x] Updated SimilarProducts.tsx to use LazyImage
 - [x] Deploy to production and verify performance improvement
 - [x] VERIFIED: Lazy loading working on www.soleblessingofficial.com
+
+## Image Compression & WebP Conversion - PAUSED
+- [x] Create image proxy API endpoint for compression and WebP conversion
+- [x] Support Google Drive image URLs
+- [x] Support direct image URLs
+- [x] Add caching headers for optimized images
+- [ ] Update LazyImage component to use image proxy
+- [ ] Test compression quality and file size reduction
+- [ ] Deploy to production and verify performance improvement
+
+## UI Improvements - IN PROGRESS
+- [x] Update font to professional typography (Inter font)
+- [x] Group products by SKU in product list
+- [x] Show all available sizes for each SKU (up to 5 displayed, +X more if >5)
+- [x] Display stock availability per size
+- [x] Update product card layout for better readability
+- [ ] Deploy and verify UI improvements

@@ -37,29 +37,61 @@ export default function Products() {
     retryDelay: 1000,
   });
   
-  // Transform inventory to match product format
+  // Transform inventory and group by SKU
   const products = useMemo(() => {
     if (!inventoryProducts) return [];
     
-    return inventoryProducts.map(item => ({
-      id: parseInt(item.itemCode) || 0,
-      name: item.name,
-      description: `${item.name} - Size ${item.size} - ${item.condition}`,
-      brand: item.sku.split(/[^a-zA-Z]/)[0] || 'Unknown',
-      category: 'Sneakers',
-      basePrice: Math.round(item.srp), // Already in centavos from API
-      salePrice: item.sellingPrice > 0 ? Math.round(item.sellingPrice) : null,
-      saleEndDate: null,
-      images: JSON.stringify(item.imageUrl ? [item.imageUrl] : []),
-      sizes: JSON.stringify([item.size]),
-      sizeStock: JSON.stringify({ [item.size]: item.status === 'AVAILABLE' ? 1 : 0 }),
-      stock: item.status === 'AVAILABLE' ? 1 : 0,
-      featured: 0,
-      clearance: 0,
-      clearanceEndDate: null,
-      fitNotes: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+    // Group products by SKU
+    const grouped = new Map<string, any>();
+    
+    inventoryProducts.forEach(item => {
+      const sku = item.sku;
+      
+      if (!grouped.has(sku)) {
+        // Create new product entry
+        grouped.set(sku, {
+          id: parseInt(item.itemCode) || 0,
+          name: item.name,
+          description: item.name,
+          brand: sku.split(/[^a-zA-Z]/)[0] || 'Unknown',
+          category: 'Sneakers',
+          basePrice: Math.round(item.srp),
+          salePrice: item.sellingPrice > 0 ? Math.round(item.sellingPrice) : null,
+          saleEndDate: null,
+          images: JSON.stringify(item.imageUrl ? [item.imageUrl] : []),
+          sizes: [item.size],
+          sizeStock: { [item.size]: item.status === 'AVAILABLE' ? 1 : 0 },
+          stock: item.status === 'AVAILABLE' ? 1 : 0,
+          featured: 0,
+          clearance: 0,
+          clearanceEndDate: null,
+          fitNotes: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          sku: sku,
+        });
+      } else {
+        // Add size to existing product
+        const existing = grouped.get(sku);
+        if (!existing.sizes.includes(item.size)) {
+          existing.sizes.push(item.size);
+        }
+        existing.sizeStock[item.size] = (existing.sizeStock[item.size] || 0) + (item.status === 'AVAILABLE' ? 1 : 0);
+        existing.stock += item.status === 'AVAILABLE' ? 1 : 0;
+        
+        // Update image if current product has one and existing doesn't
+        const existingImages = JSON.parse(existing.images);
+        if (item.imageUrl && existingImages.length === 0) {
+          existing.images = JSON.stringify([item.imageUrl]);
+        }
+      }
+    });
+    
+    // Convert map to array and stringify sizes/sizeStock for compatibility
+    return Array.from(grouped.values()).map(product => ({
+      ...product,
+      sizes: JSON.stringify(product.sizes.sort((a: string, b: string) => parseFloat(a) - parseFloat(b))),
+      sizeStock: JSON.stringify(product.sizeStock),
     }));
   }, [inventoryProducts]);
   
@@ -489,6 +521,26 @@ export default function Products() {
                       <CardContent className="p-4">
                         <p className="text-xs text-muted-foreground mb-1">{product.brand}</p>
                         <h3 className="font-semibold mb-2 line-clamp-2">{product.name}</h3>
+                        
+                        {/* Available Sizes */}
+                        {sizes.length > 0 && (
+                          <div className="mb-2">
+                            <p className="text-xs text-muted-foreground mb-1">Available Sizes:</p>
+                            <div className="flex flex-wrap gap-1">
+                              {sizes.slice(0, 5).map((size: string) => (
+                                <span key={size} className="text-xs px-2 py-0.5 bg-muted rounded">
+                                  {size}
+                                </span>
+                              ))}
+                              {sizes.length > 5 && (
+                                <span className="text-xs px-2 py-0.5 text-muted-foreground">
+                                  +{sizes.length - 5} more
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        
                         <div className="flex items-center gap-2">
                           <span className="text-lg font-bold">
                             ₱{(price / 100).toLocaleString()}

@@ -70,6 +70,9 @@ async function startServer() {
   // Review image upload endpoint
   const { uploadReviewImage, uploadReviewImageMiddleware } = await import("../uploadReviewImage");
   app.post("/api/upload-review-image", uploadReviewImageMiddleware, uploadReviewImage);
+  // Image proxy for compression and WebP conversion
+  const imageProxyRouter = (await import("../imageProxy")).default;
+  app.use("/api/image-proxy", imageProxyRouter);
   // tRPC API
   app.use(
     "/api/trpc",
