@@ -907,3 +907,16 @@
 - [x] Also filtering out products with no sizes or ₱0 price
 - [x] Product count reduced from 43 to 40 (correct filtering)
 - [x] FORUM BONEGA and BREAKNET 2.0 also removed (no sizes available)
+
+## Feature: Comprehensive Size Guide Modal
+- [x] Create SizeGuideModal component with conversion charts
+- [x] Include Men's sizes (US, UK, EU, CM)
+- [x] Include Women's sizes (US, UK, EU, CM)
+- [x] Include Kids sizes (US, UK, EU, CM)
+- [x] Add measuring instructions with step-by-step guide
+- [x] Add brand-specific fit notes (Nike, Adidas, Jordan, New Balance)
+- [x] Add size guide button to product detail page (next to Select Size)
+- [x] Add size guide button in products page filters sidebar
+- [x] Style modal to match site design (dark theme, amber accents)
+- [ ] Test on production
+- [ ] Deploy changes

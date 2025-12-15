@@ -4,7 +4,8 @@ import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { ChevronLeft, ShoppingCart, Heart, AlertCircle } from "lucide-react";
+import { ChevronLeft, ShoppingCart, Heart, AlertCircle, Ruler } from "lucide-react";
+import { SizeGuideModal } from "@/components/SizeGuideModal";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
@@ -163,9 +164,17 @@ export default function InventoryDetail() {
             
             {/* Size Selection */}
             <div>
-              <Label className="text-sm font-semibold mb-3 block">
-                Select Size
-              </Label>
+              <div className="flex items-center justify-between mb-3">
+                <Label className="text-sm font-semibold">Select Size</Label>
+                <SizeGuideModal 
+                  trigger={
+                    <button className="text-xs text-amber-500 hover:text-amber-400 flex items-center gap-1 transition-colors">
+                      <Ruler className="h-3 w-3" />
+                      Size Guide
+                    </button>
+                  }
+                />
+              </div>
               <div className="grid grid-cols-4 gap-2">
                 {allSizes.map(({ size, itemCode: sizeItemCode, status }) => {
                   const isAvailable = status === 'AVAILABLE';

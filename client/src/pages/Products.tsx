@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
 import { useLocation } from "wouter";
-import { Search, SlidersHorizontal, Heart } from "lucide-react";
+import { Search, SlidersHorizontal, Heart, Ruler } from "lucide-react";
+import { SizeGuideModal } from "@/components/SizeGuideModal";
 import CountdownTimer from "@/components/CountdownTimer";
 import LazyImage from "@/components/LazyImage";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -368,6 +369,18 @@ export default function Products() {
 
   const FilterContent = () => (
     <div className="space-y-6">
+      {/* Size Guide */}
+      <div className="mb-4">
+        <SizeGuideModal 
+          trigger={
+            <button className="w-full py-2 px-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-500 hover:bg-amber-500/20 flex items-center justify-center gap-2 transition-colors text-sm font-medium">
+              <Ruler className="h-4 w-4" />
+              Size Guide
+            </button>
+          }
+        />
+      </div>
+
       {/* Quick Filters */}
       <div>
         <h3 className="font-semibold mb-3">Quick Filters</h3>
