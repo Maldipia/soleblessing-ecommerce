@@ -476,7 +476,7 @@ export default function Products() {
                     <Card
                       key={product.id}
                       className="cursor-pointer hover:shadow-lg transition-shadow"
-                      onClick={() => setLocation(`/product/${product.id}`)}
+                      onClick={() => setLocation(`/inventory/${product.itemCode}`)}
                     >
                       <div className="relative aspect-square group">
                         <Button

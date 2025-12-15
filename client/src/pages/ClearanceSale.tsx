@@ -234,7 +234,7 @@ export default function ClearanceSale() {
                 <Card 
                   key={`${product.itemCode}-${product.size}`}
                   className="group cursor-pointer hover:shadow-xl transition-all duration-300 overflow-hidden border-2 border-orange-200 bg-white/90 backdrop-blur"
-                  onClick={() => setLocation(`/products/${product.id}`)}
+                  onClick={() => setLocation(`/inventory/${product.itemCode}`)}
                 >
                   {/* Clearance Badge */}
                   <div className="absolute top-2 left-2 z-10 bg-gradient-to-r from-red-600 to-orange-600 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg">

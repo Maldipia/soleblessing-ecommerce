@@ -656,17 +656,13 @@
 - [x] Remove duplicate product cards
 - [x] Deploy and verify - WORKING (user needs to clear cache)
 
-## CLEARANCE PAGE NEEDS GROUPING FIX - COMPLETE ✅
+## CLEARANCE PAGE NEEDS GROUPING FIX
 - [x] Verified Products page HAS grouping (1 card per SKU) ✅
 - [x] Verified Clearance page DOES NOT have grouping (duplicate cards) ❌
 - [x] Apply same grouping logic to Clearance page
 - [x] Fix gray text on both pages (added force-black-text class)
-- [x] Commit and deploy
-- [x] Verify on live website
-- [x] VERIFIED: Clearance page now shows 14 items (was 25)
-- [x] VERIFIED: STADT shows "Size: 27.5, 28, 28.5, 29.5, 30" (1 card, not 5)
-- [x] VERIFIED: RESPONSE RUNNER U shows "Size: 25, 27.5, 28.5" (1 card, not 4)
-- [x] VERIFIED: ADVANTAGE 2.0 shows "Size: 23, 23.5" (1 card, not 2)
+- [ ] Commit and deploy
+- [ ] Verify on live website
 
 ## Missing Products Investigation - HQ1917
 - [ ] User reports HQ1917 not showing on website
@@ -675,3 +671,22 @@
 - [ ] Check if STATUS is "AVAILABLE"
 - [ ] Check Railway API to see if HQ1917 is in the response
 - [ ] Investigate why products with images aren't showing
+
+## FIX: 404 Error When Clicking Products - COMPLETE ✅
+- [x] User reported 404 error when clicking product cards on Clearance page
+- [x] Root cause: ClearanceSale.tsx was linking to /products/${id} instead of proper route
+- [x] Products.tsx also had routing issue - using database IDs for Google Sheets products
+- [x] Solution: Created InventoryDetail.tsx page for Google Sheets inventory
+- [x] Updated ClearanceSale.tsx to link to /inventory/${itemCode}
+- [x] Updated Products.tsx to link to /inventory/${itemCode}
+- [x] Added /inventory/:itemCode route to App.tsx
+- [x] Pushed to GitHub and deployed to Vercel
+- [x] Tested on production - WORKING! ✅
+- [x] URL format: www.soleblessingofficial.com/inventory/7647
+- [x] Product detail page displays correctly with:
+  - Product image
+  - Pricing with discount (₱1935.00 was ₱8127.00)
+  - Size selection (shows all available sizes for SKU)
+  - Quantity selector
+  - Add to Cart and Wishlist buttons
+  - Product details (Status, Condition, Item Code)
