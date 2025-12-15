@@ -18,10 +18,17 @@ const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
 function convertGoogleDriveUrl(url: string): string {
   if (!url) return "";
   
-  // Match Google Drive URLs
+  // Match Google Drive URLs with /d/ format
   const driveMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
   if (driveMatch) {
     const fileId = driveMatch[1];
+    return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
+  }
+  
+  // Match Google Drive URLs with id= parameter (uc?export=view&id=...)
+  const idMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (idMatch) {
+    const fileId = idMatch[1];
     return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
   }
   

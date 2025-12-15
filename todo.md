@@ -631,10 +631,18 @@
 - [x] VERIFIED: All products showing "Available Sizes" with size badges
 - [x] VERIFIED: Inter font applied across website
 
-## Product Name Text Color Fix - IN PROGRESS
-- [x] Change product name text from light gray to dark/black (first attempt)
-- [x] Ensure proper contrast ratio for readability (added text-foreground class)
-- [x] Deploy and verify on production
-- [x] User reports text still gray - need stronger fix
+## CRITICAL ISSUES - IN PROGRESS
+
+### Broken Product Images
+- [x] Investigate why images stopped loading
+- [x] Check if Google Drive URLs are still valid
+- [x] Check if convertGoogleDriveUrl function is working
+- [x] Fix image loading issue - updated function to handle uc?export=view format
+- [ ] Deploy and verify images load correctly
+
+### Product Name Text Still Gray
+- [x] Change product name text from light gray to dark/black (first attempt - text-foreground)
 - [x] Apply explicit dark color (text-gray-900)
+- [x] User reports text STILL gray - need to check CSS specificity
+- [x] Apply inline style with color: #000000 for absolute override
 - [ ] Deploy and verify fix on live website
