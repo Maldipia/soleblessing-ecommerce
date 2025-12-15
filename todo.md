@@ -763,3 +763,15 @@
 - [x] Fixed missing itemCode in grouped products (Products.tsx line 54)
 - [x] Verified products load correctly - clicking now works!
 - [x] URL format: /inventory/7632 (using itemCode)
+
+## NEW FEATURE: Size Sorting Filter - COMPLETE ✅
+- [x] Add "Size: Smallest to Largest" option to sort dropdown
+- [x] Implement sorting logic to order products by their smallest available size
+- [x] Handle size formats correctly:
+  * Regular numbers: 20, 21, 22 (US adult sizes)
+  * Kids sizes: 10.5K, 4.5K (K = kids)
+  * CM measurements: 20CM, 21CM (centimeters)
+- [x] Parse and normalize sizes for accurate sorting
+- [x] Created unit tests - all 6 tests passing
+- [x] Tested with mixed formats (CM, K, regular numbers)
+- [ ] Deploy to production

@@ -222,8 +222,49 @@ export default function Products() {
       return true;
     });
 
+    // Helper function to normalize size for sorting
+    const normalizeSize = (sizeStr: string): number => {
+      if (!sizeStr) return 999; // Put empty sizes at the end
+      
+      // Remove whitespace
+      const cleaned = sizeStr.trim();
+      
+      // Handle CM sizes (20CM → 20)
+      if (cleaned.toUpperCase().includes('CM')) {
+        const num = parseFloat(cleaned.replace(/[^0-9.]/g, ''));
+        return isNaN(num) ? 999 : num;
+      }
+      
+      // Handle Kids sizes (10.5K → 10.5, treat as smaller than adult sizes)
+      if (cleaned.toUpperCase().includes('K')) {
+        const num = parseFloat(cleaned.replace(/[^0-9.]/g, ''));
+        return isNaN(num) ? 999 : num; // Kids sizes are typically smaller
+      }
+      
+      // Regular numeric sizes
+      const num = parseFloat(cleaned);
+      return isNaN(num) ? 999 : num;
+    };
+
     // Sort
     switch (sortBy) {
+      case "size-small":
+        filtered.sort((a, b) => {
+          // Get smallest size from each product
+          const getSizes = (product: any): number[] => {
+            try {
+              const sizes = JSON.parse(product.sizes);
+              return sizes.map((s: string) => normalizeSize(s));
+            } catch {
+              return [999];
+            }
+          };
+          
+          const minSizeA = Math.min(...getSizes(a));
+          const minSizeB = Math.min(...getSizes(b));
+          return minSizeA - minSizeB;
+        });
+        break;
       case "price-low":
         filtered.sort((a, b) => {
           const priceA = a.salePrice || a.basePrice;
@@ -428,6 +469,7 @@ export default function Products() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="newest">Newest</SelectItem>
+              <SelectItem value="size-small">Size: Smallest to Largest</SelectItem>
               <SelectItem value="price-low">Price: Low to High</SelectItem>
               <SelectItem value="price-high">Price: High to Low</SelectItem>
               <SelectItem value="name">Name: A to Z</SelectItem>
