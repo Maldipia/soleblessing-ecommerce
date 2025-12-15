@@ -88,12 +88,25 @@ export default function Products() {
       }
     });
     
-    // Convert map to array and stringify sizes/sizeStock for compatibility
-    return Array.from(grouped.values()).map(product => ({
-      ...product,
-      sizes: JSON.stringify(product.sizes.sort((a: string, b: string) => parseFloat(a) - parseFloat(b))),
-      sizeStock: JSON.stringify(product.sizeStock),
-    }));
+    // Convert map to array and add Last Pair/Last Size categorization
+    return Array.from(grouped.values()).map(product => {
+      const sortedSizes = product.sizes.sort((a: string, b: string) => parseFloat(a) - parseFloat(b));
+      const availableSizesCount = sortedSizes.length;
+      
+      // Last Pair: Only 1 size available for this product
+      const isLastPair = availableSizesCount === 1;
+      
+      // Last Size: Multiple sizes available for this product
+      const isLastSize = availableSizesCount > 1;
+      
+      return {
+        ...product,
+        sizes: JSON.stringify(sortedSizes),
+        sizeStock: JSON.stringify(product.sizeStock),
+        isLastPair,
+        isLastSize,
+      };
+    });
   }, [inventoryProducts]);
   
   const { data: wishlistItems } = trpc.wishlist.get.useQuery(undefined, {
@@ -145,6 +158,8 @@ export default function Products() {
   const [priceRange, setPriceRange] = useState([0, 50000]);
   const [showOnSale, setShowOnSale] = useState(false);
   const [showClearance, setShowClearance] = useState(false);
+  const [showLastPair, setShowLastPair] = useState(false);
+  const [showLastSize, setShowLastSize] = useState(false);
   const [sortBy, setSortBy] = useState("newest");
 
   // Extract unique values for filters
@@ -219,6 +234,11 @@ export default function Products() {
         return false;
       }
 
+      // Last Pair filter - only show products with 1 size available
+      if (showLastPair && !product.isLastPair) {
+        return false;
+      }
+
       return true;
     });
 
@@ -288,7 +308,7 @@ export default function Products() {
     }
 
     return filtered;
-  }, [products, searchQuery, selectedBrands, selectedCategories, selectedSizes, priceRange, showOnSale, showClearance, sortBy]);
+  }, [products, searchQuery, selectedBrands, selectedCategories, selectedSizes, priceRange, showOnSale, showClearance, showLastPair, sortBy]);
 
   const toggleBrand = (brand: string) => {
     setSelectedBrands(prev =>
@@ -316,10 +336,11 @@ export default function Products() {
     setPriceRange([0, 50000]);
     setShowOnSale(false);
     setShowClearance(false);
+    setShowLastPair(false);
   };
 
   const activeFilterCount = selectedBrands.length + selectedCategories.length + selectedSizes.length + 
-    (showOnSale ? 1 : 0) + (showClearance ? 1 : 0);
+    (showOnSale ? 1 : 0) + (showClearance ? 1 : 0) + (showLastPair ? 1 : 0);
 
   const FilterContent = () => (
     <div className="space-y-6">
@@ -340,6 +361,13 @@ export default function Products() {
               onCheckedChange={(checked) => setShowClearance(checked as boolean)}
             />
             <span className="text-sm">Clearance</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <Checkbox
+              checked={showLastPair}
+              onCheckedChange={(checked) => setShowLastPair(checked as boolean)}
+            />
+            <span className="text-sm">Last Pair</span>
           </label>
         </div>
       </div>
@@ -559,6 +587,12 @@ export default function Products() {
                         {product.clearance === 1 && (
                           <span className="absolute top-2 left-2 bg-yellow-500 text-black text-xs px-2 py-1 rounded font-bold">
                             CLEARANCE
+                          </span>
+                        )}
+                        {/* Last Pair badge - only 1 size available */}
+                        {product.isLastPair && (
+                          <span className="absolute bottom-2 left-2 bg-orange-500 text-white text-xs px-2 py-1 rounded font-bold shadow-lg">
+                            LAST PAIR
                           </span>
                         )}
                       </div>

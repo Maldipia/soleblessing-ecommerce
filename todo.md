@@ -841,3 +841,20 @@
   - Homepage now shows only one footer instead of two
 - [x] Deploy and verify all fixes - VERIFIED WORKING!
 - [x] Homepage now displays single footer with all sections properly organized
+
+## URGENT: Fix Product Count Display
+- [ ] Products page only showing 37 products instead of all available
+- [ ] Check Google Sheets for total available products
+- [ ] Check backend inventory.list procedure for any filters
+- [ ] Check googleSheets.ts for filtering logic
+- [ ] Fix any issues limiting product display
+- [ ] Deploy and verify all products show
+
+## Feature: Last Pair Marketing Badge
+- [x] Add "Last Pair" category - products with only 1 size available
+- [x] Added isLastPair property to product grouping logic
+- [x] Added orange "LAST PAIR" badge on product cards
+- [x] Added "Last Pair" filter checkbox in Quick Filters
+- [x] Updated filter logic to show only Last Pair products when enabled
+- [ ] Test on production
+- [ ] Deploy changes
