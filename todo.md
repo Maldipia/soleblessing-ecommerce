@@ -861,3 +861,11 @@
 - [x] 38 products now showing (was 37 before)
 - [x] Last Pair badges showing on products with single size (PUREBOOST 22, CLOUD FOAM WALK, etc.)
 - [x] Last Pair filter checkbox working in Quick Filters sidebar
+
+## Feature: Kids Category
+- [x] Add Kids category for children's sneakers (sizes under 24 or with CM suffix)
+- [x] Add isKids property to product grouping logic
+- [x] Add pink "KIDS" badge on product cards
+- [x] Add "Kids" filter checkbox in Quick Filters
+- [ ] Test on production
+- [ ] Deploy changes

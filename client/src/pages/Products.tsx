@@ -99,12 +99,23 @@ export default function Products() {
       // Last Size: Multiple sizes available for this product
       const isLastSize = availableSizesCount > 1;
       
+      // Kids: Products with sizes under 24 or with CM suffix (children's sizes)
+      const isKids = sortedSizes.some((size: string) => {
+        const sizeStr = size.toString().toUpperCase();
+        // Check for CM suffix (kids sizes like 20CM)
+        if (sizeStr.includes('CM')) return true;
+        // Check for numeric sizes under 24 (typically kids)
+        const numSize = parseFloat(size);
+        return !isNaN(numSize) && numSize < 24;
+      });
+      
       return {
         ...product,
         sizes: JSON.stringify(sortedSizes),
         sizeStock: JSON.stringify(product.sizeStock),
         isLastPair,
         isLastSize,
+        isKids,
       };
     });
   }, [inventoryProducts]);
@@ -160,6 +171,7 @@ export default function Products() {
   const [showClearance, setShowClearance] = useState(false);
   const [showLastPair, setShowLastPair] = useState(false);
   const [showLastSize, setShowLastSize] = useState(false);
+  const [showKids, setShowKids] = useState(false);
   const [sortBy, setSortBy] = useState("newest");
 
   // Extract unique values for filters
@@ -239,6 +251,11 @@ export default function Products() {
         return false;
       }
 
+      // Kids filter - only show products with kids sizes
+      if (showKids && !product.isKids) {
+        return false;
+      }
+
       return true;
     });
 
@@ -308,7 +325,7 @@ export default function Products() {
     }
 
     return filtered;
-  }, [products, searchQuery, selectedBrands, selectedCategories, selectedSizes, priceRange, showOnSale, showClearance, showLastPair, sortBy]);
+  }, [products, searchQuery, selectedBrands, selectedCategories, selectedSizes, priceRange, showOnSale, showClearance, showLastPair, showKids, sortBy]);
 
   const toggleBrand = (brand: string) => {
     setSelectedBrands(prev =>
@@ -337,10 +354,11 @@ export default function Products() {
     setShowOnSale(false);
     setShowClearance(false);
     setShowLastPair(false);
+    setShowKids(false);
   };
 
   const activeFilterCount = selectedBrands.length + selectedCategories.length + selectedSizes.length + 
-    (showOnSale ? 1 : 0) + (showClearance ? 1 : 0) + (showLastPair ? 1 : 0);
+    (showOnSale ? 1 : 0) + (showClearance ? 1 : 0) + (showLastPair ? 1 : 0) + (showKids ? 1 : 0);
 
   const FilterContent = () => (
     <div className="space-y-6">
@@ -368,6 +386,13 @@ export default function Products() {
               onCheckedChange={(checked) => setShowLastPair(checked as boolean)}
             />
             <span className="text-sm">Last Pair</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <Checkbox
+              checked={showKids}
+              onCheckedChange={(checked) => setShowKids(checked as boolean)}
+            />
+            <span className="text-sm">Kids</span>
           </label>
         </div>
       </div>
@@ -593,6 +618,17 @@ export default function Products() {
                         {product.isLastPair && (
                           <span className="absolute bottom-2 left-2 bg-orange-500 text-white text-xs px-2 py-1 rounded font-bold shadow-lg">
                             LAST PAIR
+                          </span>
+                        )}
+                        {/* Kids badge - children's sizes */}
+                        {product.isKids && !product.isLastPair && (
+                          <span className="absolute bottom-2 left-2 bg-pink-500 text-white text-xs px-2 py-1 rounded font-bold shadow-lg">
+                            KIDS
+                          </span>
+                        )}
+                        {product.isKids && product.isLastPair && (
+                          <span className="absolute bottom-2 left-24 bg-pink-500 text-white text-xs px-2 py-1 rounded font-bold shadow-lg">
+                            KIDS
                           </span>
                         )}
                       </div>
