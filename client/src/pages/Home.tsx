@@ -262,12 +262,6 @@ export default function Home() {
           </div>
         </div>
       </footer>
-
-      {/* New Arrivals */}
-      <NewArrivals />
-      
-      {/* AI Recommendations */}
-      {user && <RecommendedProducts />}
     </div>
   );
 }
