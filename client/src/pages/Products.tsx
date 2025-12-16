@@ -132,22 +132,23 @@ export default function Products() {
       const productName = product.name?.toUpperCase() || '';
       
       // Check if ALL sizes are kids sizes (under 21cm)
+      // If ANY size is 21 or above, it's NOT a kids product
       const allSizesAreKids = sortedSizes.length > 0 && sortedSizes.every((size: string) => {
         const num = parseFloat(size);
-        // Kids sizes are under 21cm
-        // 21cm+ are adult sizes
-        return !isNaN(num) && num < 21;
+        if (isNaN(num)) return false; // Non-numeric sizes are not kids
+        // Kids sizes are ONLY under 21cm
+        // 21cm+ are adult sizes - if ANY size is 21+, product is NOT kids
+        return num < 21;
       });
       
       // Check for kids product indicators in name (J suffix = Junior, C = Children's)
+      // But ONLY if the name ends with J or C (not just contains)
       const hasKidsNameIndicator = 
-        productName.includes(' J') || // J suffix like SUPERSTAR J, STAN SMITH J
-        productName.includes(' C ') || 
-        productName.endsWith(' C') || 
+        productName.endsWith(' J') || // J suffix like SUPERSTAR J, STAN SMITH J
+        productName.endsWith(' C') || // C suffix for Children's
         productName.includes('KIDS') || 
         productName.includes('JUNIOR') ||
-        productName.includes(' CF ') || // CF = Children's Fit
-        productName.endsWith(' CF');
+        productName.endsWith(' CF'); // CF = Children's Fit
       
       const isKids = allSizesAreKids || hasKidsNameIndicator;
       
