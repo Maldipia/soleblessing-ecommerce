@@ -38,6 +38,26 @@ export default function Products() {
     retryDelay: 1000,
   });
   
+  // Normalize size format to remove duplicates (27.5 CM, 27.5CM, 27.50 → 27.5)
+  const normalizeSize = (size: string): string => {
+    if (!size) return '';
+    
+    // Remove whitespace and convert to uppercase for comparison
+    let normalized = size.toString().trim();
+    
+    // Remove "CM" suffix (case insensitive) and any spaces
+    normalized = normalized.replace(/\s*CM\s*/gi, '').trim();
+    
+    // Parse as number to remove trailing zeros (27.50 → 27.5)
+    const num = parseFloat(normalized);
+    if (!isNaN(num)) {
+      return num.toString();
+    }
+    
+    // For non-numeric sizes (like 10.5K), just return cleaned version
+    return normalized;
+  };
+
   // Transform inventory and group by SKU
   const products = useMemo(() => {
     if (!inventoryProducts) return [];
@@ -47,6 +67,7 @@ export default function Products() {
     
     inventoryProducts.forEach(item => {
       const sku = item.sku;
+      const normalizedSize = normalizeSize(item.size);
       
       if (!grouped.has(sku)) {
         // Create new product entry
@@ -61,8 +82,9 @@ export default function Products() {
           salePrice: item.sellingPrice > 0 ? Math.round(item.sellingPrice) : null,
           saleEndDate: null,
           images: JSON.stringify(item.imageUrl ? [item.imageUrl] : []),
-          sizes: [item.size],
-          sizeStock: { [item.size]: item.status === 'AVAILABLE' ? 1 : 0 },
+          sizes: normalizedSize ? [normalizedSize] : [],
+          rawSizes: [item.size], // Keep original for kids detection
+          sizeStock: { [normalizedSize]: item.status === 'AVAILABLE' ? 1 : 0 },
           stock: item.status === 'AVAILABLE' ? 1 : 0,
           featured: 0,
           clearance: 0,
@@ -73,12 +95,16 @@ export default function Products() {
           sku: sku,
         });
       } else {
-        // Add size to existing product
+        // Add size to existing product (only if not already present after normalization)
         const existing = grouped.get(sku);
-        if (!existing.sizes.includes(item.size)) {
-          existing.sizes.push(item.size);
+        if (normalizedSize && !existing.sizes.includes(normalizedSize)) {
+          existing.sizes.push(normalizedSize);
         }
-        existing.sizeStock[item.size] = (existing.sizeStock[item.size] || 0) + (item.status === 'AVAILABLE' ? 1 : 0);
+        // Keep raw sizes for kids detection
+        if (!existing.rawSizes.includes(item.size)) {
+          existing.rawSizes.push(item.size);
+        }
+        existing.sizeStock[normalizedSize] = (existing.sizeStock[normalizedSize] || 0) + (item.status === 'AVAILABLE' ? 1 : 0);
         existing.stock += item.status === 'AVAILABLE' ? 1 : 0;
         
         // Update image if current product has one and existing doesn't
@@ -100,12 +126,13 @@ export default function Products() {
       // Last Size: Multiple sizes available for this product
       const isLastSize = availableSizesCount > 1;
       
-      // Kids: Products with CM suffix in size OR kids-specific product name indicators
+      // Kids: Products with CM suffix in ORIGINAL size OR kids-specific product name indicators
       // Note: Do NOT use size < 24 as that incorrectly tags adult small sizes
+      // Use rawSizes (original format) to detect CM suffix since normalized sizes remove it
       const productName = product.name?.toUpperCase() || '';
-      const isKids = sortedSizes.some((size: string) => {
+      const isKids = (product.rawSizes || []).some((size: string) => {
         const sizeStr = size.toString().toUpperCase();
-        // Check for CM suffix (kids sizes like 20CM)
+        // Check for CM suffix (kids sizes like 20CM, 27.5 CM)
         return sizeStr.includes('CM');
       }) || 
       // Check for kids product indicators in name (C suffix = Children's, K = Kids)

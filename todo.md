@@ -935,3 +935,8 @@
 - [x] Merge products from all tabs into single product list
 - [x] Filter out sold products (STATUS containing SOLD/OUT/MISSING)
 - [x] Deploy to Vercel/Railway and verify 130 products showing
+
+## Size Normalization Fix - IN PROGRESS
+- [ ] Normalize size formats to remove duplicates (27.5 CM, 27.5CM, 27.50 → 27.5)
+- [ ] Remove "CM" suffix variations and standardize format
+- [ ] Display only unique sizes per product
