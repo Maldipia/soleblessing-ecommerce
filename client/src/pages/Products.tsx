@@ -126,22 +126,30 @@ export default function Products() {
       // Last Size: Multiple sizes available for this product
       const isLastSize = availableSizesCount > 1;
       
-      // Kids: Products with CM suffix in ORIGINAL size OR kids-specific product name indicators
-      // Note: Do NOT use size < 24 as that incorrectly tags adult small sizes
-      // Use rawSizes (original format) to detect CM suffix since normalized sizes remove it
+      // Kids: Products where ALL sizes are under 21cm (kids threshold)
+      // OR products with kids-specific name indicators (J suffix = Junior)
+      // Note: 21cm and above are adult sizes
       const productName = product.name?.toUpperCase() || '';
-      const isKids = (product.rawSizes || []).some((size: string) => {
-        const sizeStr = size.toString().toUpperCase();
-        // Check for CM suffix (kids sizes like 20CM, 27.5 CM)
-        return sizeStr.includes('CM');
-      }) || 
-      // Check for kids product indicators in name (C suffix = Children's, K = Kids)
-      productName.includes(' C ') || 
-      productName.endsWith(' C') || 
-      productName.includes('KIDS') || 
-      productName.includes('JUNIOR') || 
-      productName.includes(' J ') || 
-      productName.endsWith(' J');
+      
+      // Check if ALL sizes are kids sizes (under 21cm)
+      const allSizesAreKids = sortedSizes.length > 0 && sortedSizes.every((size: string) => {
+        const num = parseFloat(size);
+        // Kids sizes are under 21cm
+        // 21cm+ are adult sizes
+        return !isNaN(num) && num < 21;
+      });
+      
+      // Check for kids product indicators in name (J suffix = Junior, C = Children's)
+      const hasKidsNameIndicator = 
+        productName.includes(' J') || // J suffix like SUPERSTAR J, STAN SMITH J
+        productName.includes(' C ') || 
+        productName.endsWith(' C') || 
+        productName.includes('KIDS') || 
+        productName.includes('JUNIOR') ||
+        productName.includes(' CF ') || // CF = Children's Fit
+        productName.endsWith(' CF');
+      
+      const isKids = allSizesAreKids || hasKidsNameIndicator;
       
       return {
         ...product,

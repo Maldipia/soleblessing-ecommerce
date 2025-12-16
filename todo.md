@@ -937,6 +937,10 @@
 - [x] Deploy to Vercel/Railway and verify 130 products showing
 
 ## Size Normalization Fix - IN PROGRESS
-- [ ] Normalize size formats to remove duplicates (27.5 CM, 27.5CM, 27.50 → 27.5)
-- [ ] Remove "CM" suffix variations and standardize format
-- [ ] Display only unique sizes per product
+- [x] Normalize size formats to remove duplicates (27.5 CM, 27.5CM, 27.50 → 27.5)
+- [x] Remove "CM" suffix variations and standardize format
+- [x] Display only unique sizes per product
+
+## Kids Detection Fix - IN PROGRESS
+- [ ] Fix kids detection: use size threshold (under 24cm = kids) instead of CM suffix
+- [ ] Adult sizes 28.5cm, 29cm etc should NOT be tagged as kids
