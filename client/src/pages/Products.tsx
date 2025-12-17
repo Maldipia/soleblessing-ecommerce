@@ -126,19 +126,19 @@ export default function Products() {
       // Last Size: Multiple sizes available for this product
       const isLastSize = availableSizesCount > 1;
       
-      // Kids: Products where ALL sizes are 21cm or below (kids threshold)
+      // Kids: Products where ALL sizes are BELOW 21cm (kids threshold)
       // OR products with kids-specific name indicators (J suffix = Junior)
-      // Note: Above 21cm are adult sizes
+      // Note: 21cm and above are adult sizes
       const productName = product.name?.toUpperCase() || '';
       
-      // Check if ALL sizes are kids sizes (21cm or below)
-      // If ANY size is above 21, it's NOT a kids product
+      // Check if ALL sizes are kids sizes (BELOW 21cm)
+      // If ANY size is 21 or above, it's NOT a kids product
       const allSizesAreKids = sortedSizes.length > 0 && sortedSizes.every((size: string) => {
         const num = parseFloat(size);
         if (isNaN(num)) return false; // Non-numeric sizes are not kids
-        // Kids sizes are 21cm and below
-        // Above 21cm are adult sizes - if ANY size is above 21, product is NOT kids
-        return num <= 21;
+        // Kids sizes are BELOW 21cm (20.5, 20, 19.5, etc.)
+        // 21cm and above are adult sizes
+        return num < 21;
       });
       
       // Check for kids product indicators in name (J suffix = Junior, C = Children's)
