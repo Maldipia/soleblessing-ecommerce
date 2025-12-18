@@ -419,13 +419,7 @@ export default function Products() {
             />
             <span className="text-sm">Last Pair</span>
           </label>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <Checkbox
-              checked={showKids}
-              onCheckedChange={(checked) => setShowKids(checked as boolean)}
-            />
-            <span className="text-sm">Kids</span>
-          </label>
+          {/* Kids filter - REMOVED */}
         </div>
       </div>
 
@@ -652,17 +646,7 @@ export default function Products() {
                             LAST PAIR
                           </span>
                         )}
-                        {/* Kids badge - children's sizes */}
-                        {product.isKids && !product.isLastPair && (
-                          <span className="absolute bottom-2 left-2 bg-pink-500 text-white text-xs px-2 py-1 rounded font-bold shadow-lg">
-                            KIDS
-                          </span>
-                        )}
-                        {product.isKids && product.isLastPair && (
-                          <span className="absolute bottom-2 left-24 bg-pink-500 text-white text-xs px-2 py-1 rounded font-bold shadow-lg">
-                            KIDS
-                          </span>
-                        )}
+                        {/* Kids badge - REMOVED */}
                       </div>
                       <CardContent className="p-4">
                         <p className="text-xs text-muted-foreground mb-1">{product.brand}</p>
