@@ -18,7 +18,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Search, ShoppingCart, User, Menu, LogOut, Package, Shield, MessageCircle, Heart, Trophy, ClipboardList, Flame } from "lucide-react";
+import { Search, ShoppingCart, User, Menu, LogOut, Package, Shield, MessageCircle, Heart, Trophy, ClipboardList, Flame, Sparkles } from "lucide-react";
 import { useLocation } from "wouter";
 import { useState } from "react";
 
@@ -51,6 +51,7 @@ export default function Header() {
   const navLinks = [
     { label: "Products", path: "/products" },
     { label: "Clearance", path: "/clearance", icon: Flame, highlight: true },
+    { label: "Shoe Cleaner", path: "/shoe-cleaner", icon: Sparkles, special: true },
     { label: "Raffles", path: "/raffles" },
     { label: "Sale Events", path: "/sale-events" },
   ];
@@ -81,15 +82,20 @@ export default function Header() {
                   className={`text-sm font-medium transition-all flex items-center gap-1.5 ${
                     link.highlight
                       ? "text-orange-600 hover:text-orange-700 font-bold"
+                      : link.special
+                      ? "text-yellow-600 hover:text-yellow-700 font-semibold"
                       : isActive(link.path)
                       ? "text-primary"
                       : "text-muted-foreground hover:text-primary"
                   }`}
                 >
-                  {Icon && <Icon className="h-4 w-4" />}
+                  {Icon && <Icon className={`h-4 w-4 ${link.special ? "text-yellow-500" : ""}`} />}
                   {link.label}
                   {link.highlight && (
                     <span className="ml-1 px-1.5 py-0.5 text-xs bg-orange-100 text-orange-700 rounded font-bold">HOT</span>
+                  )}
+                  {link.special && (
+                    <span className="ml-1 px-1.5 py-0.5 text-xs bg-yellow-100 text-yellow-700 rounded font-bold">NEW</span>
                   )}
                 </button>
               );
@@ -237,7 +243,8 @@ export default function Header() {
                         key={link.path}
                         variant={isActive(link.path) ? "default" : "ghost"}
                         className={`justify-start ${
-                          link.highlight ? "bg-orange-100 text-orange-700 hover:bg-orange-200" : ""
+                          link.highlight ? "bg-orange-100 text-orange-700 hover:bg-orange-200" : 
+                          link.special ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-200" : ""
                         }`}
                         onClick={() => {
                           setLocation(link.path);
@@ -248,6 +255,9 @@ export default function Header() {
                         {link.label}
                         {link.highlight && (
                           <span className="ml-auto px-2 py-0.5 text-xs bg-orange-600 text-white rounded font-bold">HOT</span>
+                        )}
+                        {link.special && (
+                          <span className="ml-auto px-2 py-0.5 text-xs bg-yellow-600 text-white rounded font-bold">NEW</span>
                         )}
                       </Button>
                     );

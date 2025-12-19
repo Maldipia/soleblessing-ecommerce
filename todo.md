@@ -944,3 +944,9 @@
 ## Kids Detection Fix - IN PROGRESS
 - [ ] Fix kids detection: use size threshold (under 24cm = kids) instead of CM suffix
 - [ ] Adult sizes 28.5cm, 29cm etc should NOT be tagged as kids
+
+## Shoe Cleaner Landing Page - COMPLETE
+- [x] Access Google Drive folder for shoe cleaner assets
+- [x] Create new landing page for shoe cleaner product
+- [x] Add images and product information
+- [x] Add route to navigation
