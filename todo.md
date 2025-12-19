@@ -960,3 +960,10 @@
 - [x] Download product images from Google Drive
 - [x] Upload images to S3 storage
 - [x] Update landing page with actual product photos
+
+## Shoe Cleaner Page Update - COMPLETE
+- [x] Update content to match packaging exactly
+- [x] Add phone number (0967) 400 0040
+- [x] Update kit inclusions: Shoe Cleaner Solution, 10ml Shoe Deodorizer, Wooden Brush, Microfiber Cloth, Magic Sponge
+- [x] Add "REVIVE your shoes, step with PRIDE" tagline
+- [x] Match Shopify page design elements

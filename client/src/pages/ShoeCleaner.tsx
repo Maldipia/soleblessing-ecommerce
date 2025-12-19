@@ -32,9 +32,10 @@ export default function ShoeCleaner() {
   ];
 
   const kitContents = [
-    { icon: SprayCan, name: "Premium Cleaner", desc: "100ml foaming formula" },
-    { icon: Brush, name: "Premium Brush", desc: "Soft bristles for all materials" },
-    { icon: Shirt, name: "Microfiber Towel", desc: "Lint-free drying cloth" },
+    { icon: SprayCan, name: "Shoe Cleaner Solution", desc: "Premium foaming formula" },
+    { icon: SprayCan, name: "10ml Shoe Deodorizer", desc: "Fresh scent spray" },
+    { icon: Brush, name: "Wooden Brush", desc: "Soft bristles for all materials" },
+    { icon: Shirt, name: "Microfiber Cloth", desc: "Lint-free drying cloth" },
     { icon: Package, name: "Magic Sponge", desc: "For stubborn stains" },
   ];
 
@@ -78,11 +79,11 @@ export default function ShoeCleaner() {
                 🔥 Best Seller in Philippines
               </Badge>
               <h1 className="text-4xl md:text-6xl font-bold text-white leading-tight">
-                Revive Your Shoes.
-                <span className="text-orange-500"> Revive Your Confidence.</span>
+                REVIVE Your Shoes.
+                <span className="text-orange-500"> Step with PRIDE.</span>
               </h1>
               <p className="text-xl text-zinc-400 max-w-lg">
-                The national white-shoe cleaner trusted by Filipinos. Affordable, effective, and safe for all materials.
+                SOLEBLESSING Shoe Cleaner by your side. Made with non-toxic eco-friendly organic formula that can be used on all types of materials.
               </p>
               <div className="flex flex-wrap gap-4">
                 <Button 
@@ -366,6 +367,9 @@ export default function ShoeCleaner() {
             <img src={APP_LOGO} alt="SoleBlessing" className="h-8 w-8" />
             <span className="text-xl font-bold text-white">SoleBlessing</span>
           </Link>
+          <p className="text-zinc-400 text-sm mb-2">
+            www.soleblessingofficial.com | (0967) 400 0040
+          </p>
           <p className="text-zinc-500 text-sm">
             © 2025 SoleBlessing. The National White-Shoe Cleaner.
           </p>
