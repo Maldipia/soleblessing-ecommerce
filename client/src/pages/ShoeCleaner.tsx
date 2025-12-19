@@ -119,7 +119,7 @@ export default function ShoeCleaner() {
             <div className="relative">
               <div className="absolute -inset-4 bg-gradient-to-r from-orange-500/20 to-yellow-500/20 rounded-3xl blur-3xl" />
               <img 
-                src="https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?w=600&h=600&fit=crop" 
+                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663209569700/mRBOimITgtbKDVee.jpg" 
                 alt="Clean White Sneakers"
                 className="relative rounded-2xl shadow-2xl w-full max-w-md mx-auto"
               />
@@ -176,7 +176,7 @@ export default function ShoeCleaner() {
             <Card className="bg-gradient-to-br from-zinc-800 to-zinc-900 border-zinc-700 overflow-hidden group hover:border-orange-500/50 transition-all">
               <div className="relative h-64 bg-gradient-to-br from-orange-500/10 to-transparent flex items-center justify-center">
                 <img 
-                  src="https://images.unsplash.com/photo-1600269452121-4f2416e55c28?w=300&h=300&fit=crop" 
+                  src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663209569700/yAENPyxWqtPDQbUy.jpg" 
                   alt="Solo Cleaner"
                   className="h-48 object-contain group-hover:scale-105 transition-transform"
                 />
@@ -226,7 +226,7 @@ export default function ShoeCleaner() {
               </div>
               <div className="relative h-64 bg-gradient-to-br from-orange-500/20 to-transparent flex items-center justify-center mt-8">
                 <img 
-                  src="https://images.unsplash.com/photo-1460353581641-37baddab0fa2?w=300&h=300&fit=crop" 
+                  src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663209569700/OJrvyvLgbrtIurQx.jpg" 
                   alt="Complete Kit"
                   className="h-48 object-contain group-hover:scale-105 transition-transform"
                 />

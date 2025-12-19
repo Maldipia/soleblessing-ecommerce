@@ -950,3 +950,13 @@
 - [x] Create new landing page for shoe cleaner product
 - [x] Add images and product information
 - [x] Add route to navigation
+
+## Shoe Cleaner Product Photos - IN PROGRESS
+- [ ] Download product images from Google Drive
+- [ ] Upload images to S3 storage
+- [ ] Update landing page with actual product photos
+
+## Shoe Cleaner Product Photos - COMPLETE
+- [x] Download product images from Google Drive
+- [x] Upload images to S3 storage
+- [x] Update landing page with actual product photos
