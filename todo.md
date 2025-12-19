@@ -967,3 +967,9 @@
 - [x] Update kit inclusions: Shoe Cleaner Solution, 10ml Shoe Deodorizer, Wooden Brush, Microfiber Cloth, Magic Sponge
 - [x] Add "REVIVE your shoes, step with PRIDE" tagline
 - [x] Match Shopify page design elements
+
+## Deploy to Vercel - IN PROGRESS
+- [ ] Push latest code to GitHub
+- [ ] Deploy to Vercel
+- [ ] Configure domain soleblessingofficial.com
+- [ ] Verify shoe cleaner page is accessible
