@@ -11,7 +11,8 @@ import {
   Package,
   Brush,
   SprayCan,
-  Shirt
+  Shirt,
+  Gift
 } from "lucide-react";
 import { Link } from "wouter";
 import { APP_LOGO } from "@/const";
@@ -68,6 +69,22 @@ export default function ShoeCleaner() {
           </Button>
         </div>
       </header>
+
+      {/* WIN PRIZES Floating Box */}
+      <a 
+        href="https://docs.google.com/forms/d/e/1FAIpQLSezCi3VE9PACy7Trg96Myj17hbYB_KR4LiW54HwUG618ntA2g/viewform" 
+        target="_blank" 
+        rel="noopener noreferrer"
+        className="fixed bottom-24 right-4 z-50 bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-4 py-3 rounded-xl shadow-lg hover:scale-105 transition-transform cursor-pointer animate-bounce"
+      >
+        <div className="flex items-center gap-2">
+          <Gift className="w-5 h-5" />
+          <div className="text-sm font-bold">
+            CLICK & WIN<br/>
+            <span className="text-xs font-normal">exciting PRIZES!</span>
+          </div>
+        </div>
+      </a>
 
       {/* Hero Section */}
       <section className="relative py-20 overflow-hidden">

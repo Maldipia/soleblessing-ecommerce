@@ -973,3 +973,7 @@
 - [ ] Deploy to Vercel
 - [ ] Configure domain soleblessingofficial.com
 - [ ] Verify shoe cleaner page is accessible
+
+## WIN PRIZES Box - IN PROGRESS
+- [ ] Add clickable "CLICK and WIN exciting PRIZES" box
+- [ ] Link to Google Form: https://docs.google.com/forms/d/e/1FAIpQLSezCi3VE9PACy7Trg96Myj17hbYB_KR4LiW54HwUG618ntA2g/viewform
