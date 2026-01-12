@@ -176,50 +176,50 @@ export default function UploadPayment() {
     }
   };
 
-  // Success state
+  // Success state - Black and Orange theme
   if (result?.success) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 py-12 px-4">
+      <div className="min-h-screen bg-black py-12 px-4">
         <div className="max-w-md mx-auto">
-          <Card className="shadow-xl border-green-200">
+          <Card className="shadow-xl bg-zinc-900 border-orange-500/30">
             <CardHeader className="text-center pb-2">
-              <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-                <CheckCircle className="w-10 h-10 text-green-600" />
+              <div className="mx-auto w-16 h-16 bg-orange-500/20 rounded-full flex items-center justify-center mb-4">
+                <CheckCircle className="w-10 h-10 text-orange-500" />
               </div>
-              <CardTitle className="text-2xl text-green-800">Upload Successful!</CardTitle>
-              <CardDescription className="text-green-600">
+              <CardTitle className="text-2xl text-orange-500">Upload Successful!</CardTitle>
+              <CardDescription className="text-gray-400">
                 Your payment proof has been submitted
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="bg-green-50 rounded-lg p-4 space-y-2">
+              <div className="bg-zinc-800 rounded-lg p-4 space-y-2 border border-orange-500/20">
                 {result.proofId && (
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Proof ID:</span>
-                    <span className="font-mono font-semibold text-green-800">{result.proofId}</span>
+                    <span className="text-gray-400">Proof ID:</span>
+                    <span className="font-mono font-semibold text-orange-400">{result.proofId}</span>
                   </div>
                 )}
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Order ID:</span>
-                  <span className="font-semibold">{result.orderId}</span>
+                  <span className="text-gray-400">Order ID:</span>
+                  <span className="font-semibold text-white">{result.orderId}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Customer:</span>
-                  <span className="font-semibold">{result.customerName}</span>
+                  <span className="text-gray-400">Customer:</span>
+                  <span className="font-semibold text-white">{result.customerName}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Amount:</span>
-                  <span className="font-semibold text-green-700">{result.amount}</span>
+                  <span className="text-gray-400">Amount:</span>
+                  <span className="font-semibold text-orange-400">{result.amount}</span>
                 </div>
                 {result.submittedAt && (
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Submitted:</span>
-                    <span className="font-semibold">{result.submittedAt}</span>
+                    <span className="text-gray-400">Submitted:</span>
+                    <span className="font-semibold text-white">{result.submittedAt}</span>
                   </div>
                 )}
               </div>
               
-              <p className="text-sm text-gray-600 text-center">
+              <p className="text-sm text-gray-400 text-center">
                 We will verify your payment and process your order shortly. 
                 You will receive a confirmation once verified.
               </p>
@@ -228,12 +228,12 @@ export default function UploadPayment() {
                 <Button 
                   onClick={resetForm} 
                   variant="outline" 
-                  className="flex-1"
+                  className="flex-1 border-orange-500/50 text-orange-400 hover:bg-orange-500/10"
                 >
                   Upload Another
                 </Button>
                 <Link href="/" className="flex-1">
-                  <Button className="w-full bg-green-600 hover:bg-green-700">
+                  <Button className="w-full bg-orange-500 hover:bg-orange-600 text-black font-semibold">
                     Back to Home
                   </Button>
                 </Link>
@@ -245,16 +245,17 @@ export default function UploadPayment() {
     );
   }
 
+  // Main form - Black and Orange theme
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 py-12 px-4">
+    <div className="min-h-screen bg-black py-12 px-4">
       <div className="max-w-md mx-auto">
-        <Card className="shadow-xl">
+        <Card className="shadow-xl bg-zinc-900 border-orange-500/30">
           <CardHeader className="text-center">
-            <div className="mx-auto w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center mb-3">
-              <Upload className="w-7 h-7 text-blue-600" />
+            <div className="mx-auto w-14 h-14 bg-orange-500/20 rounded-full flex items-center justify-center mb-3">
+              <Upload className="w-7 h-7 text-orange-500" />
             </div>
-            <CardTitle className="text-2xl">Payment Proof Upload</CardTitle>
-            <CardDescription>
+            <CardTitle className="text-2xl text-white">Payment Proof Upload</CardTitle>
+            <CardDescription className="text-gray-400">
               Upload your payment screenshot for order verification
             </CardDescription>
           </CardHeader>
@@ -262,31 +263,33 @@ export default function UploadPayment() {
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Order ID */}
               <div className="space-y-2">
-                <Label htmlFor="orderId">Order ID *</Label>
+                <Label htmlFor="orderId" className="text-white">Order ID *</Label>
                 <Input
                   id="orderId"
                   placeholder="e.g., SB-001 or your order reference"
                   value={orderId}
                   onChange={(e) => setOrderId(e.target.value)}
                   disabled={isUploading}
+                  className="bg-zinc-800 border-zinc-700 text-white placeholder:text-gray-500 focus:border-orange-500 focus:ring-orange-500"
                 />
               </div>
               
               {/* Customer Name */}
               <div className="space-y-2">
-                <Label htmlFor="customerName">Your Name *</Label>
+                <Label htmlFor="customerName" className="text-white">Your Name *</Label>
                 <Input
                   id="customerName"
                   placeholder="Full name as shown in payment"
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
                   disabled={isUploading}
+                  className="bg-zinc-800 border-zinc-700 text-white placeholder:text-gray-500 focus:border-orange-500 focus:ring-orange-500"
                 />
               </div>
               
               {/* Amount */}
               <div className="space-y-2">
-                <Label htmlFor="amount">Amount Paid (₱) *</Label>
+                <Label htmlFor="amount" className="text-white">Amount Paid (₱) *</Label>
                 <Input
                   id="amount"
                   type="number"
@@ -296,12 +299,13 @@ export default function UploadPayment() {
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   disabled={isUploading}
+                  className="bg-zinc-800 border-zinc-700 text-white placeholder:text-gray-500 focus:border-orange-500 focus:ring-orange-500"
                 />
               </div>
               
               {/* Notes */}
               <div className="space-y-2">
-                <Label htmlFor="notes">Notes (Optional)</Label>
+                <Label htmlFor="notes" className="text-white">Notes (Optional)</Label>
                 <Textarea
                   id="notes"
                   placeholder="Any additional information about your payment"
@@ -309,13 +313,14 @@ export default function UploadPayment() {
                   onChange={(e) => setNotes(e.target.value)}
                   disabled={isUploading}
                   rows={2}
+                  className="bg-zinc-800 border-zinc-700 text-white placeholder:text-gray-500 focus:border-orange-500 focus:ring-orange-500"
                 />
               </div>
               
               {/* File Upload */}
               <div className="space-y-2">
-                <Label>Payment Screenshot *</Label>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition-colors">
+                <Label className="text-white">Payment Screenshot *</Label>
+                <div className="border-2 border-dashed border-zinc-700 rounded-lg p-4 text-center hover:border-orange-500/50 transition-colors bg-zinc-800/50">
                   {preview ? (
                     <div className="relative">
                       <img 
@@ -326,20 +331,20 @@ export default function UploadPayment() {
                       <button
                         type="button"
                         onClick={clearFile}
-                        className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1 transform translate-x-1/2 -translate-y-1/2 hover:bg-red-600"
+                        className="absolute top-0 right-0 bg-orange-500 text-black rounded-full p-1 transform translate-x-1/2 -translate-y-1/2 hover:bg-orange-600"
                         disabled={isUploading}
                       >
                         <X className="w-4 h-4" />
                       </button>
-                      <p className="mt-2 text-sm text-gray-600">{file?.name}</p>
+                      <p className="mt-2 text-sm text-gray-400">{file?.name}</p>
                     </div>
                   ) : (
                     <label className="cursor-pointer block">
-                      <FileImage className="w-10 h-10 mx-auto text-gray-400 mb-2" />
-                      <span className="text-sm text-gray-600">
+                      <FileImage className="w-10 h-10 mx-auto text-gray-500 mb-2" />
+                      <span className="text-sm text-gray-400">
                         Click to select or drag & drop
                       </span>
-                      <p className="text-xs text-gray-400 mt-1">
+                      <p className="text-xs text-gray-500 mt-1">
                         JPG, PNG, WebP, HEIC (max 5MB)
                       </p>
                       <input
@@ -357,7 +362,7 @@ export default function UploadPayment() {
               
               {/* Error Message */}
               {error && (
-                <div className="flex items-center gap-2 text-red-600 bg-red-50 p-3 rounded-lg">
+                <div className="flex items-center gap-2 text-orange-400 bg-orange-500/10 p-3 rounded-lg border border-orange-500/30">
                   <AlertCircle className="w-5 h-5 flex-shrink-0" />
                   <span className="text-sm">{error}</span>
                 </div>
@@ -366,7 +371,7 @@ export default function UploadPayment() {
               {/* Submit Button */}
               <Button 
                 type="submit" 
-                className="w-full bg-blue-600 hover:bg-blue-700"
+                className="w-full bg-orange-500 hover:bg-orange-600 text-black font-semibold"
                 disabled={isUploading}
               >
                 {isUploading ? (
@@ -384,14 +389,14 @@ export default function UploadPayment() {
             </form>
             
             {/* Help Text */}
-            <div className="mt-6 pt-4 border-t border-gray-200">
+            <div className="mt-6 pt-4 border-t border-zinc-700">
               <p className="text-xs text-gray-500 text-center">
                 Need help? Contact us at{" "}
-                <a href="tel:09674000040" className="text-blue-600 hover:underline">
+                <a href="tel:09674000040" className="text-orange-400 hover:underline">
                   (0967) 400-0040
                 </a>
                 {" "}or visit{" "}
-                <a href="https://www.soleblessingofficial.com" className="text-blue-600 hover:underline">
+                <a href="https://www.soleblessingofficial.com" className="text-orange-400 hover:underline">
                   www.soleblessingofficial.com
                 </a>
               </p>
