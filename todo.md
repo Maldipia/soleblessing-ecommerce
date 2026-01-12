@@ -969,8 +969,8 @@
 - [x] Match Shopify page design elements
 
 ## Payment Proof Upload System
-- [ ] Create payment proof upload page at /upload-payment
-- [ ] Connect to Google Apps Script backend for file uploads
-- [ ] Form fields: Order ID, Customer Name, Amount, Notes, File upload
-- [ ] Display upload confirmation with proof ID
-- [ ] Add navigation link to upload page
+- [x] Create payment proof upload page at /upload-payment
+- [x] Connect to Google Apps Script backend for file uploads
+- [x] Form fields: Order ID, Customer Name, Amount, Notes, File upload
+- [x] Display upload confirmation with proof ID
+- [ ] Add navigation link to upload page (optional - can be linked from checkout)
