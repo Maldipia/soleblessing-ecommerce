@@ -967,3 +967,10 @@
 - [x] Update kit inclusions: Shoe Cleaner Solution, 10ml Shoe Deodorizer, Wooden Brush, Microfiber Cloth, Magic Sponge
 - [x] Add "REVIVE your shoes, step with PRIDE" tagline
 - [x] Match Shopify page design elements
+
+## Payment Proof Upload System
+- [ ] Create payment proof upload page at /upload-payment
+- [ ] Connect to Google Apps Script backend for file uploads
+- [ ] Form fields: Order ID, Customer Name, Amount, Notes, File upload
+- [ ] Display upload confirmation with proof ID
+- [ ] Add navigation link to upload page
