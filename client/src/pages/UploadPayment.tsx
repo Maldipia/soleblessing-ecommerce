@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Upload, CheckCircle, AlertCircle, Loader2, FileImage, X } from "lucide-react";
 import { Link } from "wouter";
 
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyeocKfhb7RQeRvl8h16jEzNWxToGnrmTBrMDBtdWTqOrJoyNtiBVBLFLAeKk0N9ZK4yQ/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwha-_yAysVRVspY0z1XYcD3lz1ow1Z4704M-Eu0Moq4hXjeL6uB4bLiVEr3Fyw5uKPcg/exec";
 
 interface UploadResult {
   success: boolean;
