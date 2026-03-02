@@ -14,33 +14,7 @@ const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
   return next({ ctx });
 });
 
-// Convert Google Drive URLs to thumbnail format
-function convertGoogleDriveUrl(url: string): string {
-  if (!url) return "";
-  
-  // Match Google Drive URLs with /d/ format (file links)
-  const driveMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-  if (driveMatch) {
-    const fileId = driveMatch[1];
-    return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
-  }
-  
-  // Match Google Drive URLs with id= parameter (uc?export=view&id=...)
-  const idMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-  if (idMatch) {
-    const fileId = idMatch[1];
-    return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
-  }
-  
-  // Match Google Drive folder URLs (folders/FILE_ID)
-  const folderMatch = url.match(/\/folders\/([a-zA-Z0-9_-]+)/);
-  if (folderMatch) {
-    const fileId = folderMatch[1];
-    return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
-  }
-  
-  return url;
-}
+// convertGoogleDriveUrl is now exported from googleSheets.ts and imported inline
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -69,7 +43,7 @@ export const appRouter = router({
       return { success: true, count: products.length, timestamp: new Date().toISOString() };
     }),
     list: publicProcedure.query(async () => {
-      const { readInventoryFromSheets, calculateDiscount, parsePrice } = await import("./googleSheets");
+      const { readInventoryFromSheets, calculateDiscount, parsePrice, convertGoogleDriveUrl } = await import("./googleSheets");
       const products = await readInventoryFromSheets();
       
       // Transform to frontend format
@@ -90,7 +64,7 @@ export const appRouter = router({
     getByItemCode: publicProcedure
       .input(z.object({ itemCode: z.string() }))
       .query(async ({ input }) => {
-        const { readInventoryFromSheets, calculateDiscount, parsePrice } = await import("./googleSheets");
+        const { readInventoryFromSheets, calculateDiscount, parsePrice, convertGoogleDriveUrl } = await import("./googleSheets");
         const products = await readInventoryFromSheets();
         const product = products.find(p => p.itemCode === input.itemCode);
         
