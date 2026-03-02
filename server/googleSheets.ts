@@ -32,9 +32,27 @@ export interface ProductRow {
 }
 
 /**
- * Internal function to fetch fresh data from Google Sheets
- * This is called by the cached version below
+ * Convert Google Drive share URLs to direct thumbnail URLs
  */
+export function convertGoogleDriveUrl(url: string): string {
+  if (!url || url.trim() === '') return '';
+
+  // Format: https://drive.google.com/file/d/FILE_ID/view
+  const viewMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if (viewMatch) {
+    return `https://drive.google.com/thumbnail?id=${viewMatch[1]}&sz=w800`;
+  }
+
+  // Format: https://drive.google.com/open?id=FILE_ID or uc?id=FILE_ID
+  const idMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (idMatch) {
+    return `https://drive.google.com/thumbnail?id=${idMatch[1]}&sz=w800`;
+  }
+
+  // Return as-is for non-Drive URLs (e.g. adidas CDN, etc.)
+  return url;
+}
+
 /**
  * Fetch products from a single sheet tab
  */
@@ -52,8 +70,9 @@ async function fetchFromSingleTab(tabName: string, gid: string): Promise<Product
     const csvText = await response.text();
     const lines = csvText.split('\n');
     
-    // Skip header row (first line)
-    const dataLines = lines.slice(1);
+    // Skip 2 header rows:
+    // Row 0 = blank row, Row 1 = column names. Data starts at row 2.
+    const dataLines = lines.slice(2);
     
     const products: ProductRow[] = [];
     
