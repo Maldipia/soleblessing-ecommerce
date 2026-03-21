@@ -77,8 +77,9 @@ export default function UploadPayment() {
         .sb-inner{position:relative;z-index:1;max-width:860px;margin:0 auto;}
         .sb-header{text-align:center;margin-bottom:44px;animation:sbFadeUp .7s ease both;}
         .sb-brand-logos{display:flex;justify-content:center;gap:14px;flex-wrap:wrap;margin-bottom:28px;}
-        .sb-brand-logo{width:60px;height:60px;border-radius:50%;background:#0e2228;border:1.5px solid #1e3840;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:600;color:#7a9e85;letter-spacing:.1em;text-transform:uppercase;text-align:center;line-height:1.35;padding:8px;transition:border-color .2s,color .2s;}
-        .sb-brand-logo:hover{border-color:rgba(201,168,76,.25);color:#c9a84c;}
+        .sb-brand-logo{width:68px;height:68px;border-radius:50%;background:#0e2228;border:1.5px solid #1e3840;display:flex;align-items:center;justify-content:center;overflow:hidden;transition:border-color .25s,transform .2s,box-shadow .2s;cursor:default;}
+        .sb-brand-logo:hover{border-color:rgba(201,168,76,.4);transform:translateY(-2px);box-shadow:0 6px 20px rgba(201,168,76,.15);}
+        .sb-brand-logo img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
         .sb-eyebrow{font-family:'Cormorant Garamond',serif;font-size:12px;letter-spacing:.4em;text-transform:uppercase;color:#c9a84c;margin-bottom:6px;}
         .sb-title{font-family:'Cormorant Garamond',serif;font-size:42px;font-weight:600;line-height:1;margin-bottom:10px;}
         .sb-sub{font-size:13px;color:#7a9e85;}
@@ -192,8 +193,17 @@ export default function UploadPayment() {
 
           <div className="sb-header">
             <div className="sb-brand-logos">
-              {[["GOLD","BLESSING"],["SOLE","BLESSING"],["LUNTIAN","LOG CABIN"],["MUST HAVE","CORNER"]].map((b,i)=>(
-                <div key={i} className="sb-brand-logo">{b.map((w,j)=><span key={j}>{w}<br/></span>)}</div>
+              {[
+                {src:"/logo-goldblessing.png",  alt:"Gold Blessing"},
+                {src:"/logo-soleblessing.png",  alt:"Sole Blessing"},
+                {src:"/logo-luntian.png",        alt:"Luntian Log Cabin"},
+                {src:"/logo-mhc.png",            alt:"Must Have Corner"},
+                {src:"/logo-aster.png",          alt:"Aster"},
+                {src:"/logo-tyg.png",            alt:"TYG Services"},
+              ].map((b,i)=>(
+                <div key={i} className="sb-brand-logo" title={b.alt}>
+                  <img src={b.src} alt={b.alt}/>
+                </div>
               ))}
             </div>
             <div className="sb-eyebrow">TYG Services</div>
