@@ -15,6 +15,7 @@ export default function UploadPayment() {
   const [customerName, setCustomerName] = useState("");
   const [amount, setAmount]         = useState("");
   const [refNo, setRefNo]           = useState("");
+  const [lightbox, setLightbox]     = useState<{src:string;label:string}|null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   function copyText(text: string, btn: HTMLButtonElement) {
@@ -171,6 +172,19 @@ export default function UploadPayment() {
         @keyframes sbScaleIn{from{opacity:0;transform:scale(.87)}to{opacity:1;transform:scale(1)}}
         @keyframes sbPopIn{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
         @keyframes sbShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-5px)}80%{transform:translateX(4px)}}
+        .sb-qr-clickable{cursor:pointer;transition:transform .2s,border-color .2s;}
+        .sb-qr-clickable:hover{transform:translateY(-3px);border-color:rgba(201,168,76,.4);}
+        .sb-qr-ph-img{position:relative;overflow:hidden;border-radius:8px;}
+        .sb-qr-zoom-hint{position:absolute;bottom:0;left:0;right:0;background:rgba(11,26,31,.75);color:#c9a84c;font-size:10px;font-weight:600;letter-spacing:.08em;text-align:center;padding:5px;opacity:0;transition:opacity .2s;}
+        .sb-qr-clickable:hover .sb-qr-zoom-hint{opacity:1;}
+        .sb-qr-lightbox{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;display:flex;align-items:center;justify-content:center;animation:sbFadeIn .2s ease;backdrop-filter:blur(12px);}
+        .sb-qr-lightbox-inner{background:#0e2228;border:1px solid rgba(201,168,76,.3);border-radius:16px;padding:20px;max-width:90vw;max-height:90vh;display:flex;flex-direction:column;align-items:center;gap:12px;animation:sbScaleIn .25s cubic-bezier(.175,.885,.32,1.275) both;}
+        .sb-qr-lightbox-header{width:100%;display:flex;justify-content:space-between;align-items:center;}
+        .sb-qr-lightbox-label{font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:600;color:#c9a84c;letter-spacing:.06em;}
+        .sb-qr-lightbox-close{background:rgba(201,168,76,.12);border:1px solid rgba(201,168,76,.25);color:#c9a84c;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .2s;}
+        .sb-qr-lightbox-close:hover{background:rgba(201,168,76,.25);}
+        .sb-qr-lightbox-img{width:min(70vw,380px);height:min(70vw,380px);object-fit:contain;border-radius:12px;background:#fff;padding:12px;}
+        .sb-qr-lightbox-hint{font-size:11px;color:#4a7055;letter-spacing:.08em;}
       `}</style>
 
       <div className="sb-wrap">
@@ -242,27 +256,22 @@ export default function UploadPayment() {
 
                 <div className={`sb-tab-section${activeTab==="qr"?" active":""}`}>
                   <div className="sb-qr-grid">
-                    <div className="sb-qr-card">
-                      <div className="sb-qr-label" style={{color:"#4d90d6"}}>BDO</div>
-                      <div className="sb-qr-ph"><img src="/qr-bdo.png" alt="BDO QR Code"/></div>
-                      <div className="sb-qr-name">BDOSB</div>
-                      <div className="sb-qr-acct">••••2617</div>
-                      <div className="sb-instapay">InstaPay</div>
-                    </div>
-                    <div className="sb-qr-card">
-                      <div className="sb-qr-label" style={{color:"#e05a6b"}}>BPI</div>
-                      <div className="sb-qr-ph"><img src="/qr-bpi.png" alt="BPI QR Code"/></div>
-                      <div className="sb-qr-name">BPISB</div>
-                      <div className="sb-qr-acct">•••••628</div>
-                      <div className="sb-instapay">InstaPay</div>
-                    </div>
-                    <div className="sb-qr-card">
-                      <div className="sb-qr-label" style={{color:"#4d90d6"}}>GCash</div>
-                      <div className="sb-qr-ph"><img src="/qr-gcash.png" alt="GCash QR Code"/></div>
-                      <div className="sb-qr-name">LE****N P.</div>
-                      <div className="sb-qr-acct">0966 ••••</div>
-                      <div className="sb-instapay">InstaPay</div>
-                    </div>
+                    {[
+                      {src:"/qr-bdo.png",  label:"BDO",   color:"#4d90d6", name:"BDOSB",     acct:"••••2617"},
+                      {src:"/qr-bpi.png",  label:"BPI",   color:"#e05a6b", name:"BPISB",     acct:"•••••628"},
+                      {src:"/qr-gcash.png",label:"GCash", color:"#4d90d6", name:"LE****N P.", acct:"0966 ••••"},
+                    ].map((q,i)=>(
+                      <div key={i} className="sb-qr-card sb-qr-clickable" onClick={()=>setLightbox({src:q.src,label:q.label})} title="Tap to enlarge">
+                        <div className="sb-qr-label" style={{color:q.color}}>{q.label}</div>
+                        <div className="sb-qr-ph sb-qr-ph-img">
+                          <img src={q.src} alt={`${q.label} QR Code`}/>
+                          <div className="sb-qr-zoom-hint">🔍 Tap to enlarge</div>
+                        </div>
+                        <div className="sb-qr-name">{q.name}</div>
+                        <div className="sb-qr-acct">{q.acct}</div>
+                        <div className="sb-instapay">InstaPay</div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -360,6 +369,20 @@ export default function UploadPayment() {
             <p className="sb-success-msg">Your proof has been submitted. We'll verify and update your order shortly.</p>
             <div className="sb-success-ref">Submission Reference<span>{refId}</span></div>
             <button className="sb-success-close" onClick={resetForm}>Submit Another</button>
+          </div>
+        </div>
+      )}
+
+      {/* QR Lightbox */}
+      {lightbox && (
+        <div className="sb-qr-lightbox" onClick={()=>setLightbox(null)}>
+          <div className="sb-qr-lightbox-inner" onClick={e=>e.stopPropagation()}>
+            <div className="sb-qr-lightbox-header">
+              <span className="sb-qr-lightbox-label">{lightbox.label} — Scan to Pay</span>
+              <button className="sb-qr-lightbox-close" onClick={()=>setLightbox(null)}>✕</button>
+            </div>
+            <img src={lightbox.src} alt={`${lightbox.label} QR`} className="sb-qr-lightbox-img"/>
+            <p className="sb-qr-lightbox-hint">Tap outside to close</p>
           </div>
         </div>
       )}
