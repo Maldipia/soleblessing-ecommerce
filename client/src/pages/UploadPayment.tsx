@@ -242,19 +242,27 @@ export default function UploadPayment() {
 
                 <div className={`sb-tab-section${activeTab==="qr"?" active":""}`}>
                   <div className="sb-qr-grid">
-                    {[
-                      {lbl:"BDO",color:"#4d90d6",name:"BDOSB",acct:"••••2617"},
-                      {lbl:"BPI",color:"#e05a6b",name:"BPISB",acct:"•••••628"},
-                      {lbl:"GCash",color:"#4d90d6",name:"LE****N P.",acct:"0966 ••••"},
-                    ].map((q,i)=>(
-                      <div key={i} className="sb-qr-card">
-                        <div className="sb-qr-label" style={{color:q.color}}>{q.lbl}</div>
-                        <div className="sb-qr-ph">Place {q.lbl}<br/>QR here</div>
-                        <div className="sb-qr-name">{q.name}</div>
-                        <div className="sb-qr-acct">{q.acct}</div>
-                        <div className="sb-instapay">InstaPay</div>
-                      </div>
-                    ))}
+                    <div className="sb-qr-card">
+                      <div className="sb-qr-label" style={{color:"#4d90d6"}}>BDO</div>
+                      <div className="sb-qr-ph"><img src="/qr-bdo.png" alt="BDO QR Code"/></div>
+                      <div className="sb-qr-name">BDOSB</div>
+                      <div className="sb-qr-acct">••••2617</div>
+                      <div className="sb-instapay">InstaPay</div>
+                    </div>
+                    <div className="sb-qr-card">
+                      <div className="sb-qr-label" style={{color:"#e05a6b"}}>BPI</div>
+                      <div className="sb-qr-ph"><img src="/qr-bpi.png" alt="BPI QR Code"/></div>
+                      <div className="sb-qr-name">BPISB</div>
+                      <div className="sb-qr-acct">•••••628</div>
+                      <div className="sb-instapay">InstaPay</div>
+                    </div>
+                    <div className="sb-qr-card">
+                      <div className="sb-qr-label" style={{color:"#4d90d6"}}>GCash</div>
+                      <div className="sb-qr-ph"><img src="/qr-gcash.png" alt="GCash QR Code"/></div>
+                      <div className="sb-qr-name">LE****N P.</div>
+                      <div className="sb-qr-acct">0966 ••••</div>
+                      <div className="sb-instapay">InstaPay</div>
+                    </div>
                   </div>
                 </div>
               </div>
