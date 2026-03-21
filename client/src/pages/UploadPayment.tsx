@@ -186,6 +186,8 @@ export default function UploadPayment() {
         .sb-qr-lightbox-close:hover{background:rgba(201,168,76,.25);}
         .sb-qr-lightbox-img{width:min(70vw,380px);height:min(70vw,380px);object-fit:contain;border-radius:12px;background:#fff;padding:12px;}
         .sb-qr-lightbox-hint{font-size:11px;color:#4a7055;letter-spacing:.08em;}
+        .sb-folder-link{display:block;margin:0 0 14px 0;padding:10px 16px;background:rgba(201,168,76,.1);border:1px solid rgba(201,168,76,.3);border-radius:8px;color:#c9a84c;text-decoration:none;font-size:12px;font-weight:600;letter-spacing:.06em;text-align:center;transition:background .2s,transform .15s;}
+        .sb-folder-link:hover{background:rgba(201,168,76,.2);transform:translateY(-1px);}
       `}</style>
 
       <div className="sb-wrap">
@@ -376,8 +378,16 @@ export default function UploadPayment() {
           <div className="sb-success-card">
             <div className="sb-success-check">✓</div>
             <h2 className="sb-success-title">Payment Received</h2>
-            <p className="sb-success-msg">Your proof has been submitted. We'll verify and update your order shortly.</p>
+            <p className="sb-success-msg">Your proof has been submitted successfully. We'll verify and update your order shortly.</p>
             <div className="sb-success-ref">Submission Reference<span>{refId}</span></div>
+            <a
+              href="https://drive.google.com/drive/folders/1MMLgawQE5KKQQqufa2Leoka5zdXV6qIY"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="sb-folder-link"
+            >
+              📁 View Payment Screenshots Folder
+            </a>
             <button className="sb-success-close" onClick={resetForm}>Submit Another</button>
           </div>
         </div>
