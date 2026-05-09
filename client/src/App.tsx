@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch } from "wouter";
+import { Route, Switch, useLocation } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
@@ -34,40 +34,43 @@ import Footer from "./components/Footer";
 import ChatWidget from "./components/ChatWidget";
 
 function Router() {
+  const [location] = useLocation();
+  const isAdmin = location.startsWith("/admin");
+
   return (
     <>
-      <Header />
+      {!isAdmin && <Header />}
       <Switch>
-      <Route path={"/"} component={Home} />
-      <Route path={"/products"} component={Products} />
-      <Route path={"/clearance"} component={ClearanceSale} />
-      <Route path={"/shoe-cleaner"} component={ShoeCleaner} />
-      <Route path={"/upload-payment"} component={UploadPayment} />
-      <Route path={"/product/:id"} component={ProductDetail} />
-      <Route path={"/inventory/:itemCode"} component={InventoryDetail} />
-      <Route path={"/cart"} component={Cart} />
-      <Route path={"/checkout"} component={Checkout} />
-      <Route path={"/raffles"} component={Raffles} />
-      <Route path={"/sale-events"} component={SaleEvents} />
-      <Route path={"/profile"} component={Profile} />
-      <Route path={"/wishlist"} component={Wishlist} />
-      <Route path={"/loyalty"} component={LoyaltyProgram} />
-      <Route path={"/order/:id"} component={OrderDetail} />
-      <Route path={"/admin"} component={AdminDashboard} />
-      <Route path={"/admin/products"} component={AdminProducts} />
-      <Route path={"/admin/inquiries"} component={AdminInquiries} />
-      <Route path={"/admin/raffles"} component={AdminRaffles} />
-      <Route path={"/admin/chat"} component={AdminChat} />
-      <Route path={"/admin/orders"} component={AdminOrders} />
-      <Route path={"/shipping-policy"} component={ShippingPolicy} />
-      <Route path={"/returns-policy"} component={ReturnsPolicy} />
-      <Route path={"/privacy-policy"} component={PrivacyPolicy} />
-      <Route path={"/terms-of-service"} component={TermsOfService} />
-      <Route path={"/404"} component={NotFound} />
-      <Route component={NotFound} />
+        <Route path={"/"} component={Home} />
+        <Route path={"/products"} component={Products} />
+        <Route path={"/clearance"} component={ClearanceSale} />
+        <Route path={"/shoe-cleaner"} component={ShoeCleaner} />
+        <Route path={"/upload-payment"} component={UploadPayment} />
+        <Route path={"/product/:id"} component={ProductDetail} />
+        <Route path={"/inventory/:itemCode"} component={InventoryDetail} />
+        <Route path={"/cart"} component={Cart} />
+        <Route path={"/checkout"} component={Checkout} />
+        <Route path={"/raffles"} component={Raffles} />
+        <Route path={"/sale-events"} component={SaleEvents} />
+        <Route path={"/profile"} component={Profile} />
+        <Route path={"/wishlist"} component={Wishlist} />
+        <Route path={"/loyalty"} component={LoyaltyProgram} />
+        <Route path={"/order/:id"} component={OrderDetail} />
+        <Route path={"/admin"} component={AdminDashboard} />
+        <Route path={"/admin/products"} component={AdminProducts} />
+        <Route path={"/admin/inquiries"} component={AdminInquiries} />
+        <Route path={"/admin/raffles"} component={AdminRaffles} />
+        <Route path={"/admin/chat"} component={AdminChat} />
+        <Route path={"/admin/orders"} component={AdminOrders} />
+        <Route path={"/shipping-policy"} component={ShippingPolicy} />
+        <Route path={"/returns-policy"} component={ReturnsPolicy} />
+        <Route path={"/privacy-policy"} component={PrivacyPolicy} />
+        <Route path={"/terms-of-service"} component={TermsOfService} />
+        <Route path={"/404"} component={NotFound} />
+        <Route component={NotFound} />
       </Switch>
-      <Footer />
-      <ChatWidget />
+      {!isAdmin && <Footer />}
+      {!isAdmin && <ChatWidget />}
     </>
   );
 }
@@ -75,7 +78,7 @@ function Router() {
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider defaultTheme="dark">
+      <ThemeProvider defaultTheme="light">
         <TooltipProvider>
           <Toaster />
           <Router />
