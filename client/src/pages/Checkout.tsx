@@ -1,332 +1,265 @@
-import { useAuth } from "@/_core/hooks/useAuth";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { trpc } from "@/lib/trpc";
-import { useState } from "react";
+import { useCart } from "@/contexts/CartContext";
 import { useLocation } from "wouter";
-import { toast } from "sonner";
-import { Upload, CreditCard, Banknote } from "lucide-react";
+import { useState } from "react";
+import { sb } from "@/lib/supabase";
+import { CheckCircle, ChevronRight } from "lucide-react";
+
+const fmt = (c: number) => `₱${(c / 100).toLocaleString("en-PH")}`;
+
+const PAYMENT_METHODS = [
+  { id: "gcash",    label: "GCash",         detail: "0917-XXX-XXXX" },
+  { id: "maya",     label: "Maya",          detail: "0917-XXX-XXXX" },
+  { id: "cod",      label: "Cash on Delivery", detail: "Pay when item arrives" },
+  { id: "bdo",      label: "BDO Transfer",  detail: "Account: XXXX-XXXX" },
+  { id: "bpi",      label: "BPI Transfer",  detail: "Account: XXXX-XXXX" },
+];
+
+function genOrderNumber() {
+  const d = new Date();
+  const ymd = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`;
+  const rand = Math.floor(Math.random() * 9000 + 1000);
+  return `SB-${ymd}-${rand}`;
+}
 
 export default function Checkout() {
-  const { user, loading: authLoading } = useAuth();
+  const { items, total, clearCart } = useCart();
   const [, setLocation] = useLocation();
-  const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
-  const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  
-  const [formData, setFormData] = useState({
-    customerName: user?.name || "",
-    customerEmail: user?.email || "",
-    contactNumber: "",
-    shippingAddress: "",
-    notes: "",
+  const shipping = total >= 300000 ? 0 : 15000;
+  const grandTotal = total + shipping;
+
+  const [step, setStep] = useState<"info" | "payment" | "confirm">("info");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  const [form, setForm] = useState({
+    customerName: "", customerEmail: "", contactNumber: "",
+    shippingAddress: "", notes: "", paymentMethod: "gcash",
   });
 
-  const { data: cartItems, isLoading: cartLoading } = trpc.cart.get.useQuery(undefined, {
-    enabled: !!user,
-  });
+  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
-  const createOrderMutation = trpc.orders.create.useMutation({
-    onSuccess: (order) => {
-      toast.success("Order placed successfully! Please wait for payment verification.");
-      setLocation(`/orders/${order.id}`);
-    },
-    onError: (error) => {
-      toast.error(`Order failed: ${error.message}`);
-    },
-  });
-
-  if (authLoading || cartLoading) {
-    return <div className="container py-8">Loading...</div>;
-  }
-
-  if (!user) {
-    setLocation("/");
+  if (items.length === 0) {
+    setLocation("/products");
     return null;
   }
 
-  if (!cartItems || cartItems.length === 0) {
-    return (
-      <div className="container py-16 text-center">
-        <h2 className="text-2xl font-bold mb-4">Your cart is empty</h2>
-        <Button onClick={() => setLocation("/products")}>Continue Shopping</Button>
-      </div>
-    );
-  }
-
-  const subtotal = cartItems.reduce((sum: number, item: any) => {
-    if (!item.product) return sum;
-    const price = item.product.salePrice || item.product.basePrice;
-    return sum + (price * item.quantity);
-  }, 0);
-
-  const shippingFee = 15000; // ₱150 flat rate
-  const total = subtotal + shippingFee;
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error("File size must be less than 5MB");
-        return;
-      }
-      if (!file.type.startsWith("image/")) {
-        toast.error("Please upload an image file");
-        return;
-      }
-      setPaymentProofFile(file);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!paymentProofFile) {
-      toast.error("Please upload payment proof");
-      return;
-    }
-
-    setUploading(true);
-    
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    setError("");
     try {
-      const formDataUpload = new FormData();
-      formDataUpload.append("file", paymentProofFile);
-      
-      const uploadResponse = await fetch("/api/upload-payment-proof", {
-        method: "POST",
-        body: formDataUpload,
+      const orderNumber = genOrderNumber();
+      const orderItems = items.map(i => ({
+        id: i.id, sku: i.sku, name: i.name, brand: i.brand,
+        size: i.size, price: i.price, qty: i.qty,
+        imageUrl: i.imageUrl || "",
+      }));
+
+      await sb.insert("sb_orders", {
+        order_number: orderNumber,
+        customer_name: form.customerName,
+        customer_email: form.customerEmail || null,
+        contact_number: form.contactNumber,
+        shipping_address: form.shippingAddress,
+        items: orderItems,
+        subtotal: total,
+        shipping_fee: shipping,
+        total: grandTotal,
+        payment_method: form.paymentMethod,
+        notes: form.notes || null,
+        status: "pending",
       });
-      
-      if (!uploadResponse.ok) {
-        throw new Error("Failed to upload payment proof");
-      }
-      
-      const { url: paymentProofUrl } = await uploadResponse.json();
-      
-      await createOrderMutation.mutateAsync({
-        ...formData,
-        paymentMethod,
-        paymentProofUrl,
-        items: cartItems.map((item: any) => ({
-          productId: item.productId,
-          size: item.size,
-          quantity: item.quantity,
-        })),
-      });
-    } catch (error) {
-      toast.error("Failed to place order. Please try again.");
-      console.error(error);
+
+      clearCart();
+      // Store order number for confirmation page
+      sessionStorage.setItem("sb_last_order", JSON.stringify({
+        orderNumber, total: grandTotal, paymentMethod: form.paymentMethod,
+        customerName: form.customerName, items: orderItems,
+      }));
+      setLocation("/order-confirm");
+    } catch (e: any) {
+      setError("Failed to place order. Please try again.");
     } finally {
-      setUploading(false);
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className="container py-8">
-      <h1 className="text-3xl font-bold mb-8">Checkout</h1>
-      
-      <div className="grid md:grid-cols-3 gap-8">
-        <div className="md:col-span-2">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Contact Information</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="customerName">Full Name *</Label>
-                  <Input
-                    id="customerName"
-                    value={formData.customerName}
-                    onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="customerEmail">Email *</Label>
-                  <Input
-                    id="customerEmail"
-                    type="email"
-                    value={formData.customerEmail}
-                    onChange={(e) => setFormData({ ...formData, customerEmail: e.target.value })}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="contactNumber">Contact Number *</Label>
-                  <Input
-                    id="contactNumber"
-                    placeholder="+63 967 40 000 40"
-                    value={formData.contactNumber}
-                    onChange={(e) => setFormData({ ...formData, contactNumber: e.target.value })}
-                    required
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Shipping Address</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Label htmlFor="shippingAddress">Complete Address *</Label>
-                <Textarea
-                  id="shippingAddress"
-                  placeholder="Street, Barangay, City, Province, Postal Code"
-                  value={formData.shippingAddress}
-                  onChange={(e) => setFormData({ ...formData, shippingAddress: e.target.value })}
-                  required
-                  rows={4}
-                />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Payment Method</CardTitle>
-                <CardDescription>
-                  Pay via bank transfer or GCash, then upload your payment proof
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod}>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="bank_transfer" id="bank_transfer" />
-                    <Label htmlFor="bank_transfer" className="flex items-center gap-2 cursor-pointer">
-                      <Banknote className="h-5 w-5" />
-                      Bank Transfer (BDO, BPI, UnionBank)
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="gcash" id="gcash" />
-                    <Label htmlFor="gcash" className="flex items-center gap-2 cursor-pointer">
-                      <CreditCard className="h-5 w-5" />
-                      GCash
-                    </Label>
-                  </div>
-                </RadioGroup>
-
-                <div className="bg-muted p-4 rounded-lg space-y-2">
-                  <p className="font-semibold">Payment Instructions:</p>
-                  {paymentMethod === "bank_transfer" && (
-                    <div className="text-sm space-y-1">
-                      <p><strong>BDO:</strong> 1234-5678-9012</p>
-                      <p><strong>BPI:</strong> 9876-5432-1098</p>
-                      <p><strong>Account Name:</strong> SoleBlessing Store</p>
-                    </div>
-                  )}
-                  {paymentMethod === "gcash" && (
-                    <div className="text-sm space-y-1">
-                      <p><strong>GCash Number:</strong> +63 967 40 000 40</p>
-                      <p><strong>Account Name:</strong> SoleBlessing Store</p>
-                    </div>
-                  )}
-                  <p className="text-sm text-muted-foreground mt-2">
-                    After payment, upload a screenshot of your payment confirmation below.
-                  </p>
-                </div>
-
-                <div>
-                  <Label htmlFor="paymentProof">Upload Payment Proof *</Label>
-                  <div className="mt-2">
-                    <label
-                      htmlFor="paymentProof"
-                      className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted"
-                    >
-                      {paymentProofFile ? (
-                        <div className="flex flex-col items-center">
-                          <Upload className="h-8 w-8 mb-2 text-primary" />
-                          <p className="text-sm font-medium">{paymentProofFile.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {(paymentProofFile.size / 1024 / 1024).toFixed(2)} MB
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="flex flex-col items-center">
-                          <Upload className="h-8 w-8 mb-2 text-muted-foreground" />
-                          <p className="text-sm text-muted-foreground">
-                            Click to upload payment screenshot
-                          </p>
-                          <p className="text-xs text-muted-foreground">PNG, JPG up to 5MB</p>
-                        </div>
-                      )}
-                    </label>
-                    <input
-                      id="paymentProof"
-                      type="file"
-                      accept="image/*"
-                      onChange={handleFileChange}
-                      className="hidden"
-                      required
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Order Notes (Optional)</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Textarea
-                  placeholder="Any special instructions or requests?"
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  rows={3}
-                />
-              </CardContent>
-            </Card>
-
-            <Button type="submit" size="lg" className="w-full" disabled={uploading || createOrderMutation.isPending}>
-              {uploading || createOrderMutation.isPending ? "Placing Order..." : "Place Order"}
-            </Button>
-          </form>
+    <div className="min-h-screen bg-[#F7F4EF]">
+      <div className="max-w-4xl mx-auto px-6 md:px-10 py-10">
+        <div className="mb-8">
+          <p className="text-[10px] font-bold tracking-[.18em] uppercase text-[#C9A84C] mb-1">Checkout</p>
+          <h1 className="text-4xl font-black text-[#0d2430] tracking-tight">Complete Your Order</h1>
         </div>
 
-        <div>
-          <Card className="sticky top-4">
-            <CardHeader>
-              <CardTitle>Order Summary</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {cartItems.map((item: any) => {
-                if (!item.product) return null;
-                const price = item.product.salePrice || item.product.basePrice;
-                return (
-                  <div key={item.id} className="flex justify-between text-sm">
-                    <div>
-                      <p className="font-medium">{item.product.name}</p>
-                      <p className="text-muted-foreground">
-                        Size {item.size} × {item.quantity}
-                      </p>
-                    </div>
-                    <p className="font-medium">₱{((price * item.quantity) / 100).toLocaleString()}</p>
+        {/* Steps */}
+        <div className="flex items-center gap-2 mb-8">
+          {["info","payment","confirm"].map((s, i) => (
+            <div key={s} className="flex items-center gap-2">
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+                step === s ? "bg-[#0d2430] text-white" :
+                ["info","payment","confirm"].indexOf(step) > i ? "bg-[#C9A84C] text-[#050f12]" :
+                "bg-gray-200 text-gray-500"
+              }`}>{i + 1}</div>
+              <span className="text-xs font-medium text-gray-500 capitalize hidden sm:block">{s === "info" ? "Your Info" : s === "payment" ? "Payment" : "Review"}</span>
+              {i < 2 && <ChevronRight className="h-3.5 w-3.5 text-gray-300" />}
+            </div>
+          ))}
+        </div>
+
+        <div className="grid md:grid-cols-3 gap-8">
+          <div className="md:col-span-2">
+
+            {/* STEP 1: INFO */}
+            {step === "info" && (
+              <div className="bg-white border border-gray-100 p-6 space-y-5">
+                <h2 className="text-sm font-bold uppercase tracking-wider text-[#0d2430]">Delivery Information</h2>
+                {[
+                  { label: "Full Name *", key: "customerName", placeholder: "Juan dela Cruz", type: "text" },
+                  { label: "Contact Number *", key: "contactNumber", placeholder: "09XX-XXX-XXXX", type: "tel" },
+                  { label: "Email (optional)", key: "customerEmail", placeholder: "email@example.com", type: "email" },
+                ].map(f => (
+                  <div key={f.key}>
+                    <label className="text-xs font-semibold text-gray-500 block mb-1.5">{f.label}</label>
+                    <input type={f.type} value={(form as any)[f.key]} onChange={e => set(f.key, e.target.value)}
+                      placeholder={f.placeholder}
+                      className="w-full border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-[#0d2430] transition-colors rounded" />
                   </div>
-                );
-              })}
-              
-              <div className="border-t pt-4 space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Subtotal</span>
-                  <span>₱{(subtotal / 100).toLocaleString()}</span>
+                ))}
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 block mb-1.5">Complete Shipping Address *</label>
+                  <textarea value={form.shippingAddress} onChange={e => set("shippingAddress", e.target.value)}
+                    placeholder="House/Unit No., Street, Barangay, City, Province, ZIP"
+                    rows={3}
+                    className="w-full border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-[#0d2430] transition-colors rounded resize-none" />
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span>Shipping</span>
-                  <span>₱{(shippingFee / 100).toLocaleString()}</span>
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 block mb-1.5">Order Notes (optional)</label>
+                  <textarea value={form.notes} onChange={e => set("notes", e.target.value)}
+                    placeholder="Special instructions, preferred delivery time, etc."
+                    rows={2}
+                    className="w-full border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-[#0d2430] transition-colors rounded resize-none" />
                 </div>
-                <div className="flex justify-between font-bold text-lg border-t pt-2">
-                  <span>Total</span>
-                  <span>₱{(total / 100).toLocaleString()}</span>
+                <button
+                  onClick={() => {
+                    if (!form.customerName || !form.contactNumber || !form.shippingAddress) {
+                      setError("Please fill in all required fields."); return;
+                    }
+                    setError(""); setStep("payment");
+                  }}
+                  className="w-full bg-[#0d2430] text-white py-3.5 text-sm font-bold tracking-[.1em] uppercase hover:bg-[#122d3a] transition-colors">
+                  Continue to Payment →
+                </button>
+                {error && <p className="text-red-500 text-xs text-center">{error}</p>}
+              </div>
+            )}
+
+            {/* STEP 2: PAYMENT */}
+            {step === "payment" && (
+              <div className="bg-white border border-gray-100 p-6 space-y-5">
+                <h2 className="text-sm font-bold uppercase tracking-wider text-[#0d2430]">Select Payment Method</h2>
+                <div className="space-y-2">
+                  {PAYMENT_METHODS.map(pm => (
+                    <label key={pm.id}
+                      className={`flex items-center gap-4 p-4 border rounded cursor-pointer transition-all ${
+                        form.paymentMethod === pm.id
+                          ? "border-[#0d2430] bg-[#0d2430]/[.03]"
+                          : "border-gray-200 hover:border-gray-300"
+                      }`}>
+                      <input type="radio" name="payment" value={pm.id}
+                        checked={form.paymentMethod === pm.id}
+                        onChange={() => set("paymentMethod", pm.id)}
+                        className="accent-[#0d2430]" />
+                      <div>
+                        <div className="text-sm font-semibold text-[#0d2430]">{pm.label}</div>
+                        <div className="text-[11px] text-gray-400">{pm.detail}</div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+                {form.paymentMethod !== "cod" && (
+                  <div className="bg-amber-50 border border-amber-200 rounded p-4">
+                    <p className="text-xs text-amber-800 font-medium leading-relaxed">
+                      After placing your order, you'll be directed to upload your payment proof (screenshot of GCash/Maya/bank transfer).
+                    </p>
+                  </div>
+                )}
+                <div className="flex gap-3">
+                  <button onClick={() => setStep("info")}
+                    className="flex-1 border border-gray-200 text-[#0d2430] py-3 text-sm font-semibold hover:bg-gray-50 transition-colors">
+                    ← Back
+                  </button>
+                  <button onClick={() => { setError(""); setStep("confirm"); }}
+                    className="flex-1 bg-[#0d2430] text-white py-3 text-sm font-bold tracking-[.1em] uppercase hover:bg-[#122d3a] transition-colors">
+                    Review Order →
+                  </button>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            )}
+
+            {/* STEP 3: CONFIRM */}
+            {step === "confirm" && (
+              <div className="bg-white border border-gray-100 p-6 space-y-5">
+                <h2 className="text-sm font-bold uppercase tracking-wider text-[#0d2430]">Review Your Order</h2>
+                <div className="bg-[#F7F4EF] rounded p-4 space-y-2 text-sm">
+                  <div className="flex justify-between"><span className="text-gray-500">Name</span><span className="font-semibold">{form.customerName}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Contact</span><span className="font-semibold">{form.contactNumber}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Payment</span><span className="font-semibold capitalize">{form.paymentMethod.replace("_"," ")}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Address</span><span className="font-semibold text-right max-w-[60%]">{form.shippingAddress}</span></div>
+                </div>
+                <div className="border-t border-gray-100 pt-4 space-y-2">
+                  {items.map(i => (
+                    <div key={`${i.id}-${i.size}`} className="flex justify-between text-sm">
+                      <span className="text-gray-600">{i.name} <span className="text-gray-400">× {i.qty} (Size {i.size})</span></span>
+                      <span className="font-semibold">{fmt(i.price * i.qty)}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between text-sm text-gray-500 pt-2 border-t border-gray-50">
+                    <span>Shipping</span><span>{shipping === 0 ? "FREE" : fmt(shipping)}</span>
+                  </div>
+                  <div className="flex justify-between text-base font-black text-[#0d2430] pt-2 border-t border-gray-200">
+                    <span>Total</span><span>{fmt(grandTotal)}</span>
+                  </div>
+                </div>
+                {error && <p className="text-red-500 text-xs">{error}</p>}
+                <div className="flex gap-3">
+                  <button onClick={() => setStep("payment")}
+                    className="flex-1 border border-gray-200 text-[#0d2430] py-3 text-sm font-semibold hover:bg-gray-50 transition-colors">
+                    ← Back
+                  </button>
+                  <button onClick={handleSubmit} disabled={submitting}
+                    className="flex-1 bg-[#C9A84C] text-[#050f12] py-3 text-sm font-black tracking-[.1em] uppercase hover:opacity-90 transition-opacity disabled:opacity-50">
+                    {submitting ? "Placing Order…" : "Place Order ✓"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Order Summary sidebar */}
+          <div>
+            <div className="bg-white border border-gray-100 p-5 sticky top-24">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#0d2430] mb-4">Order Summary</h3>
+              <div className="space-y-3 mb-4">
+                {items.map(i => (
+                  <div key={`${i.id}-${i.size}`} className="flex gap-3">
+                    <div className="w-12 h-12 bg-[#EDE9E3] flex-shrink-0 overflow-hidden">
+                      {i.imageUrl ? <img src={i.imageUrl} alt={i.name} className="w-full h-full object-cover" /> : <span className="text-xl flex items-center justify-center h-full w-full opacity-30">👟</span>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-[#0d2430] truncate">{i.name}</p>
+                      <p className="text-[10px] text-gray-400">Size {i.size} · qty {i.qty}</p>
+                      <p className="text-xs font-bold text-[#0d2430]">{fmt(i.price * i.qty)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="border-t border-gray-100 pt-3 space-y-1.5">
+                <div className="flex justify-between text-xs text-gray-500"><span>Subtotal</span><span>{fmt(total)}</span></div>
+                <div className="flex justify-between text-xs text-gray-500"><span>Shipping</span><span>{shipping===0?"FREE":fmt(shipping)}</span></div>
+                <div className="flex justify-between text-sm font-black text-[#0d2430] pt-1 border-t border-gray-100"><span>Total</span><span>{fmt(grandTotal)}</span></div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
