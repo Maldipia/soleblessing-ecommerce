@@ -1200,6 +1200,35 @@ Recommend 4 product IDs that are most similar in brand, style, or category. Retu
         return { success: true };
       }),
   }),
+
+  // ─── SIMPLE ADMIN AUTH (no Manus) ───────────────────────────────────────
+  adminAuth: router({
+    check: publicProcedure.query(({ ctx }) => {
+      const cookie = ctx.req.cookies?.['sb_admin'];
+      const pwd = process.env.ADMIN_PASSWORD || '';
+      return { isAdmin: !!pwd && cookie === pwd };
+    }),
+    login: publicProcedure
+      .input(z.object({ password: z.string() }))
+      .mutation(({ input, ctx }) => {
+        const pwd = process.env.ADMIN_PASSWORD || '';
+        if (!pwd || input.password !== pwd) {
+          throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Wrong password' });
+        }
+        ctx.res.cookie('sb_admin', pwd, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          maxAge: 1000 * 60 * 60 * 24 * 30, // 30 days
+        });
+        return { success: true };
+      }),
+    logout: publicProcedure.mutation(({ ctx }) => {
+      ctx.res.clearCookie('sb_admin');
+      return { success: true };
+    }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;
+
