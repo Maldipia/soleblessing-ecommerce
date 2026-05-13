@@ -291,6 +291,9 @@ export default function AdminDashboard() {
   const [loginError, setLoginError] = useState("");
   const [productModal, setProductModal] = useState<{open:boolean;product?:any}>({open:false});
   const [qrModal, setQrModal] = useState<{open:boolean;itemCode:string;name:string}|null>(null);
+  const [editingRow, setEditingRow] = useState<string|null>(null);
+  const [editValues, setEditValues] = useState<Record<string,any>>({});
+  const [savingRow, setSavingRow] = useState<string|null>(null);
   const [sbProducts, setSbProducts] = useState<any[]>([]);
   const [sbOrders, setSbOrders] = useState<any[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
@@ -387,6 +390,34 @@ export default function AdminDashboard() {
     };
   },[inventory,inventoryGrouped,sbOrders]);
 
+  const startEdit = (p:any) => { setEditingRow(p.itemCode); setEditValues({name:p.name,sku:p.sku,size:p.size,srp:Math.round((p.srp||0)/100),selling_price:Math.round((p.sellingPrice||0)/100),stock:p.stock??1}); };
+  const cancelEdit = () => { setEditingRow(null); setEditValues({}); };
+  const saveEdit = async (itemCode:string) => {
+    setSavingRow(itemCode);
+    try {
+      const payload = {item_code:itemCode,name:editValues.name,sku:editValues.sku,size:editValues.size,
+        srp:Math.round(Number(editValues.srp)*100),selling_price:Math.round(Number(editValues.selling_price)*100),
+        stock:Number(editValues.stock),updated_at:new Date().toISOString()};
+      const sbKey = import.meta.env.VITE_SUPABASE_ANON_KEY||'';
+      const sbUrl = 'https://akualfrqzaierqsfcnkp.supabase.co/rest/v1/sb_inventory';
+      const hdrs = {'apikey':sbKey,'Authorization':`Bearer ${sbKey}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'};
+      await fetch(sbUrl,{method:'POST',headers:hdrs,body:JSON.stringify(payload)});
+      toast.success('Saved!');
+      setEditingRow(null); setEditValues({});
+      const {refreshInventory} = await import('@/hooks/useInventory');
+      await refreshInventory(); refetchInv();
+    } catch(e:any){toast.error('Save failed');}
+    finally{setSavingRow(null);}
+  };
+  const resetEdit = async (itemCode:string) => {
+    if(!confirm('Reset to Google Sheets data?')) return;
+    const sbKey = import.meta.env.VITE_SUPABASE_ANON_KEY||'';
+    await fetch(`https://akualfrqzaierqsfcnkp.supabase.co/rest/v1/sb_inventory?item_code=eq.${itemCode}`,
+      {method:'DELETE',headers:{'apikey':sbKey,'Authorization':`Bearer ${sbKey}`}});
+    toast.success('Reset to Sheets');
+    const {refreshInventory} = await import('@/hooks/useInventory');
+    await refreshInventory(); refetchInv();
+  };
   const deleteProduct = async (id:string) => {
     if(!confirm("Delete this product?")) return;
     await sb.delete("sb_products",`id=eq.${id}`);
@@ -639,55 +670,86 @@ export default function AdminDashboard() {
                 {invLoading ? (
                   <div className="py-12 text-center"><div className="flex gap-2 justify-center">{[0,1,2].map(i=><div key={i} className="w-2 h-2 bg-[#C9A84C] rounded-full animate-bounce" style={{animationDelay:`${i*.15}s`}}/>)}</div></div>
                 ) : (
+                  <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead><tr className="bg-[#F7F4EF] text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100">
-                      <th className="text-left px-5 py-3 w-14"/>
-                      <th className="text-left px-4 py-3">Product</th>
-                      <th className="text-left px-4 py-3 w-24">SKU</th>
-                      <th className="text-left px-4 py-3 w-20">Size</th>
-                      <th className="text-right px-4 py-3 w-28">Price</th>
-                      <th className="text-center px-4 py-3 w-20">Stock</th>
-                      <th className="text-center px-4 py-3 w-12">QR</th>
+                      <th className="w-14 px-4 py-3"/>
+                      <th className="text-left px-3 py-3">Product</th>
+                      <th className="text-left px-3 py-3 w-28">SKU</th>
+                      <th className="text-left px-3 py-3 w-24">Size</th>
+                      <th className="text-right px-3 py-3 w-28">SRP</th>
+                      <th className="text-right px-3 py-3 w-28">Sale Price</th>
+                      <th className="text-center px-3 py-3 w-16">Stock</th>
+                      <th className="text-center px-3 py-3 w-10">QR</th>
+                      <th className="px-3 py-3 w-28"/>
                     </tr></thead>
                     <tbody className="divide-y divide-gray-50">
                       {filteredInv.length===0 ? (
-                        <tr><td colSpan={7} className="text-center py-12 text-sm text-gray-400">No products found</td></tr>
-                      ) : filteredInv.map(p=>(
-                        <tr key={p.itemCode} className="hover:bg-gray-50/50 transition-colors">
-                          <td className="px-5 py-2.5">
-                            <div className="w-11 h-11 bg-[#EDE9E3] rounded-lg overflow-hidden">
-                              {p.imageUrl ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover"/> : <span className="w-full h-full flex items-center justify-center text-base opacity-20">👟</span>}
+                        <tr><td colSpan={9} className="text-center py-12 text-sm text-gray-400">No products found</td></tr>
+                      ) : filteredInv.map((p:any)=>{
+                        const isEditing = editingRow===p.itemCode;
+                        const isSaving = savingRow===p.itemCode;
+                        const inp = "w-full border border-[#C9A84C] rounded-lg px-2 py-1 text-xs outline-none font-mono bg-white";
+                        return(
+                        <tr key={p.itemCode} className={`transition-colors ${isEditing?"bg-[#fffbeb]":"hover:bg-gray-50/50"} ${p.edited?"border-l-2 border-[#C9A84C]":""}`}>
+                          <td className="px-4 py-2">
+                            <div className="w-11 h-11 bg-[#EDE9E3] rounded-lg overflow-hidden flex-shrink-0">
+                              {p.imageUrl?<img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover"/>:<span className="w-full h-full flex items-center justify-center text-lg opacity-20">👟</span>}
                             </div>
                           </td>
-                          <td className="px-4 py-2.5">
-                            <p className="text-sm font-semibold text-[#0d2430] leading-tight">{p.name}</p>
-                            <p className="text-[10px] text-gray-400 font-mono mt-0.5">{p.itemCode}</p>
+                          <td className="px-3 py-2">
+                            {isEditing
+                              ?<input className={inp} value={editValues.name||""} onChange={e=>setEditValues(v=>({...v,name:e.target.value}))}/>
+                              :<div><p className="text-xs font-bold text-[#0d2430]">{p.name}</p><p className="text-[10px] text-gray-400 font-mono">{p.itemCode}</p></div>}
                           </td>
-                          <td className="px-4 py-2.5 font-mono text-[11px] text-gray-500">{p.sku}</td>
-                          <td className="px-4 py-2.5">
-                            <span className="text-[11px] bg-[#EDE9E3] text-[#0d2430] px-2 py-1 rounded font-bold">{p.size}</span>
+                          <td className="px-3 py-2">
+                            {isEditing
+                              ?<input className={inp} value={editValues.sku||""} onChange={e=>setEditValues(v=>({...v,sku:e.target.value}))}/>
+                              :<span className="text-[11px] font-mono text-gray-500">{p.sku}</span>}
                           </td>
-                          <td className="px-4 py-2.5 text-right">
-                            {p.sellingPrice>0 ? (
-                              <div>
-                                <span className="text-sm font-black text-[#0d2430]">{fmt(p.sellingPrice)}</span>
-                                {p.srp>0&&p.srp>p.sellingPrice&&<span className="text-[10px] text-gray-400 line-through ml-1">{fmt(p.srp)}</span>}
-                              </div>
-                            ) : <span className="text-xs text-gray-400">{fmt(p.srp||0)}</span>}
+                          <td className="px-3 py-2">
+                            {isEditing
+                              ?<input className={inp} value={editValues.size||""} onChange={e=>setEditValues(v=>({...v,size:e.target.value}))}/>
+                              :<span className="text-[11px] bg-[#EDE9E3] text-[#0d2430] px-2 py-1 rounded font-bold">{p.size}</span>}
                           </td>
-                          <td className="px-4 py-2.5 text-center">
-                            <span className={`text-xs font-bold ${p.totalStock===0?"text-red-500":p.totalStock<=2?"text-amber-500":"text-green-600"}`}>{p.totalStock}</span>
+                          <td className="px-3 py-2 text-right">
+                            {isEditing
+                              ?<input className={inp+" text-right"} type="number" value={editValues.srp||""} onChange={e=>setEditValues(v=>({...v,srp:e.target.value}))}/>
+                              :<span className="text-[11px] text-gray-400 line-through">{p.srp>0?fmt(p.srp):"-"}</span>}
                           </td>
-                          <td className="px-4 py-2.5 text-center">
-                            <button onClick={()=>setQrModal({open:true,itemCode:p.itemCode,name:p.name})}
-                              className="w-8 h-8 flex items-center justify-center bg-gray-100 text-gray-500 rounded-lg hover:bg-[#050f12] hover:text-white transition-all mx-auto">
-                              <QrCode className="h-4 w-4"/>
-                            </button>
+                          <td className="px-3 py-2 text-right">
+                            {isEditing
+                              ?<input className={inp+" text-right"} type="number" value={editValues.selling_price||""} onChange={e=>setEditValues(v=>({...v,selling_price:e.target.value}))}/>
+                              :<div className="flex items-center justify-end gap-1"><span className="text-sm font-black text-[#0d2430]">{fmt(p.sellingPrice)}</span>{p.discount>0&&<span className="text-[9px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded">-{p.discount}%</span>}</div>}
                           </td>
-                        </tr>
-                      ))}
+                          <td className="px-3 py-2 text-center">
+                            {isEditing
+                              ?<input className={inp+" text-center"} type="number" min="0" value={editValues.stock??1} onChange={e=>setEditValues(v=>({...v,stock:e.target.value}))}/>
+                              :<span className={`text-xs font-bold ${(p.stock||1)===0?"text-red-500":(p.stock||1)<=2?"text-amber-500":"text-green-600"}`}>{p.stock??1}</span>}
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            <button onClick={()=>setQrModal({open:true,itemCode:p.itemCode,name:p.name})} className="w-7 h-7 flex items-center justify-center bg-gray-100 text-gray-500 rounded-lg hover:bg-[#050f12] hover:text-white transition-all mx-auto"><QrCode className="h-3.5 w-3.5"/></button>
+                          </td>
+                          <td className="px-3 py-2">
+                            {isEditing
+                              ?<div className="flex items-center gap-1.5">
+                                  <button onClick={()=>saveEdit(p.itemCode)} disabled={isSaving} className="flex items-center gap-1 bg-[#0d2430] text-white px-3 py-1.5 text-[10px] font-bold rounded-lg disabled:opacity-50">
+                                    {isSaving?"Saving…":<><Save className="h-3 w-3"/>Save</>}
+                                  </button>
+                                  <button onClick={cancelEdit} className="text-gray-400 hover:text-red-400"><X className="h-4 w-4"/></button>
+                                </div>
+                              :<div className="flex items-center gap-1">
+                                  <button onClick={()=>startEdit(p)} className="flex items-center gap-1 border border-gray-200 text-gray-500 px-2.5 py-1.5 text-[10px] font-semibold rounded-lg hover:bg-[#0d2430] hover:text-white hover:border-[#0d2430] transition-all">
+                                    <Edit2 className="h-3 w-3"/>Edit
+                                  </button>
+                                  {p.edited&&<button onClick={()=>resetEdit(p.itemCode)} title="Reset to Sheets" className="text-gray-300 hover:text-red-400"><RefreshCw className="h-3 w-3"/></button>}
+                                </div>}
+                          </td>
+                        </tr>);
+                      })}
                     </tbody>
                   </table>
+                  </div>
                 )}
               </div>
 
