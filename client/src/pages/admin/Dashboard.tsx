@@ -679,6 +679,7 @@ export default function AdminDashboard() {
                       <th className="text-left px-3 py-3 w-24">Size</th>
                       <th className="text-right px-3 py-3 w-28">SRP</th>
                       <th className="text-right px-3 py-3 w-28">Sale Price</th>
+                      <th className="text-right px-3 py-3 w-24 text-amber-600">Unit Cost</th>
                       <th className="text-center px-3 py-3 w-16">Stock</th>
                       <th className="text-center px-3 py-3 w-10">QR</th>
                       <th className="px-3 py-3 w-28"/>
@@ -721,6 +722,12 @@ export default function AdminDashboard() {
                             {isEditing
                               ?<input className={inp+" text-right"} type="number" value={editValues.selling_price||""} onChange={e=>setEditValues(v=>({...v,selling_price:e.target.value}))}/>
                               :<div className="flex items-center justify-end gap-1"><span className="text-sm font-black text-[#0d2430]">{fmt(p.sellingPrice)}</span>{p.discount>0&&<span className="text-[9px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded">-{p.discount}%</span>}</div>}
+                          </td>
+                          {/* Unit Cost — admin only, never shown on website */}
+                          <td className="px-3 py-2 text-right">
+                            {isEditing
+                              ?<input className={inp+" text-right"} type="number" min="0" value={editValues.unit_cost??''} onChange={e=>setEditValues(v=>({...v,unit_cost:e.target.value}))} placeholder="Cost"/>
+                              :<span className="text-[11px] text-gray-400">{p.unitCost>0?("₱"+(p.unitCost/100).toLocaleString("en-PH")):"-"}</span>}
                           </td>
                           <td className="px-3 py-2 text-center">
                             {isEditing
