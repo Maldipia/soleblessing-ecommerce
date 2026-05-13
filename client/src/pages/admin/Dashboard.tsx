@@ -681,6 +681,7 @@ export default function AdminDashboard() {
                     <thead><tr className="bg-[#F7F4EF] text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100">
                       <th className="w-14 px-4 py-3"/>
                       <th className="text-left px-3 py-3">Product</th>
+                      <th className="text-left px-3 py-3 w-24">Brand</th>
                       <th className="text-left px-3 py-3 w-28">SKU</th>
                       <th className="text-left px-3 py-3 w-24">Size</th>
                       <th className="text-right px-3 py-3 w-28">SRP</th>
@@ -708,6 +709,21 @@ export default function AdminDashboard() {
                             {isEditing
                               ?<input className={inp} value={editValues.name||""} onChange={e=>setEditValues(v=>({...v,name:e.target.value}))}/>
                               :<div><p className="text-xs font-bold text-[#0d2430]">{p.name}</p><p className="text-[10px] text-gray-400 font-mono">{p.itemCode}</p></div>}
+                          </td>
+                          <td className="px-3 py-2">
+                            {(() => {
+                              const brand = (p as any).brand || "";
+                              const colors: Record<string,string> = {
+                                "Nike":       "bg-black text-white",
+                                "Jordan":     "bg-red-600 text-white",
+                                "Adidas":     "bg-blue-600 text-white",
+                                "VEJA":       "bg-green-600 text-white",
+                                "On Running": "bg-gray-700 text-white",
+                              };
+                              return brand
+                                ? <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${colors[brand]||"bg-gray-200 text-gray-700"}`}>{brand}</span>
+                                : <span className="text-gray-300 text-[10px]">—</span>;
+                            })()}
                           </td>
                           <td className="px-3 py-2">
                             {isEditing
