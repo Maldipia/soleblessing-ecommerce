@@ -1,4 +1,5 @@
 import { trpc } from "@/lib/trpc";
+import { useInventory } from "@/hooks/useInventory";
 import { useParams, useLocation } from "wouter";
 import { useState, useMemo } from "react";
 import { ChevronLeft, ShoppingCart, Heart, AlertCircle, Ruler, QrCode, Shirt, Check } from "lucide-react";
@@ -14,7 +15,7 @@ export default function InventoryDetail() {
   const { addItem } = useCart();
   const itemCode = params.itemCode || "";
 
-  const { data: inventoryProducts, isLoading } = trpc.inventory.list.useQuery();
+  const { data: inventoryProducts, isLoading } = useInventory();
   const [selectedSize, setSelectedSize] = useState<string>("");
   const [fittingRequested, setFittingRequested] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
