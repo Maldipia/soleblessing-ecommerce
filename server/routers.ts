@@ -1201,7 +1201,7 @@ Recommend 4 product IDs that are most similar in brand, style, or category. Retu
       }),
   }),
 
-  // ─── SIMPLE ADMIN AUTH (no Manus) ───────────────────────────────────────
+  // ─── SIMPLE ADMIN AUTH (no SoleBlessing) ───────────────────────────────────────
   adminAuth: router({
     check: publicProcedure.query(({ ctx }) => {
       const cookie = ctx.req.cookies?.['sb_admin'];
