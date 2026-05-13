@@ -1,207 +1,116 @@
-import { useState } from "react";
-import { trpc } from "@/lib/trpc";
+import { useEffect, useState } from "react";
+import { sb } from "@/lib/supabase";
 import { StarRating } from "./StarRating";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { ThumbsUp } from "lucide-react";
-import { toast } from "sonner";
-import { formatDistanceToNow } from "date-fns";
-import ImageLightbox from "./ImageLightbox";
+import { ThumbsUp, MessageSquare } from "lucide-react";
 
 interface ReviewListProps {
-  productId: number;
+  sku: string;
 }
 
-export function ReviewList({ productId }: ReviewListProps) {
-  const [page, setPage] = useState(1);
-  const [lightboxImages, setLightboxImages] = useState<string[]>([]);
-  const [lightboxIndex, setLightboxIndex] = useState(0);
-  const [showLightbox, setShowLightbox] = useState(false);
+type Review = {
+  id: string;
+  customer_name: string;
+  rating: number;
+  comment: string;
+  size_purchased: string | null;
+  helpful_count: number;
+  created_at: string;
+};
 
-  const { data, isLoading } = trpc.reviews.list.useQuery({
-    productId,
-    page,
-    limit: 10,
-  });
+const fmtDate = (d: string) => new Date(d).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
 
-  const voteReview = trpc.reviews.vote.useMutation({
-    onSuccess: () => {
-      toast.success("Thank you for your feedback!");
-    },
-    onError: (error) => {
-      toast.error(error.message || "Failed to submit vote");
-    },
-  });
+export function ReviewList({ sku }: ReviewListProps) {
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [helpedIds, setHelpedIds] = useState<Set<string>>(new Set());
 
-  const handleVote = (reviewId: number, helpful: boolean) => {
-    voteReview.mutate({ reviewId, helpful });
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const data = await sb.select("sb_reviews", `sku=eq.${sku}&status=eq.published&order=created_at.desc&limit=20`);
+        setReviews(Array.isArray(data) ? data : []);
+      } catch { setReviews([]); }
+      finally { setLoading(false); }
+    })();
+  }, [sku]);
+
+  const markHelpful = async (reviewId: string) => {
+    if (helpedIds.has(reviewId)) return;
+    try {
+      const review = reviews.find(r => r.id === reviewId);
+      if (!review) return;
+      await sb.update("sb_reviews", `id=eq.${reviewId}`, {
+        helpful_count: review.helpful_count + 1,
+      });
+      setReviews(prev => prev.map(r => r.id === reviewId ? { ...r, helpful_count: r.helpful_count + 1 } : r));
+      setHelpedIds(prev => new Set([...prev, reviewId]));
+    } catch {}
   };
 
-  const openLightbox = (images: string[], index: number) => {
-    setLightboxImages(images);
-    setLightboxIndex(index);
-    setShowLightbox(true);
-  };
+  if (loading) return (
+    <div className="py-8 text-center">
+      <div className="flex gap-2 justify-center">{[0,1,2].map(i=><div key={i} className="w-2 h-2 bg-[#C9A84C] rounded-full animate-bounce" style={{animationDelay:`${i*.15}s`}}/>)}</div>
+    </div>
+  );
 
-  if (isLoading) {
-    return (
-      <div className="space-y-4">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="border rounded-lg p-6 animate-pulse">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 bg-gray-200 rounded-full" />
-              <div className="flex-1 space-y-3">
-                <div className="h-4 bg-gray-200 rounded w-1/4" />
-                <div className="h-4 bg-gray-200 rounded w-1/2" />
-                <div className="h-20 bg-gray-200 rounded" />
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }
+  if (reviews.length === 0) return (
+    <div className="py-8 text-center">
+      <MessageSquare className="h-8 w-8 text-gray-200 mx-auto mb-2" />
+      <p className="text-sm text-gray-400">No reviews yet — be the first!</p>
+    </div>
+  );
 
-  if (!data || data.reviews.length === 0) {
-    return (
-      <div className="text-center py-12 border rounded-lg">
-        <p className="text-muted-foreground">
-          No reviews yet. Be the first to review this product!
-        </p>
-      </div>
-    );
-  }
-
-  const totalPages = Math.ceil(data.total / 10);
+  const avgRating = reviews.reduce((s, r) => s + r.rating, 0) / reviews.length;
+  const dist = [5,4,3,2,1].map(n => ({ stars: n, count: reviews.filter(r => r.rating === n).length }));
 
   return (
-    <div className="space-y-6">
-      {/* Reviews List */}
-      <div className="space-y-6">
-        {data.reviews.map((review) => (
-          <div key={review.id} className="border rounded-lg p-6">
-            <div className="flex items-start gap-4">
-              {/* User Avatar */}
-              <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center text-primary font-semibold">
-                {review.userName?.charAt(0).toUpperCase() || "U"}
+    <div className="space-y-5">
+      {/* Summary */}
+      <div className="flex items-center gap-6 bg-[#F7F4EF] rounded-xl p-5">
+        <div className="text-center">
+          <div className="text-4xl font-black text-[#0d2430]">{avgRating.toFixed(1)}</div>
+          <StarRating rating={Math.round(avgRating)} />
+          <p className="text-[10px] text-gray-400 mt-1">{reviews.length} review{reviews.length !== 1 ? "s" : ""}</p>
+        </div>
+        <div className="flex-1 space-y-1.5">
+          {dist.map(d => (
+            <div key={d.stars} className="flex items-center gap-2">
+              <span className="text-[10px] text-gray-500 w-4">{d.stars}</span>
+              <span className="text-[10px] text-yellow-400">★</span>
+              <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                <div className="h-full bg-[#C9A84C] rounded-full"
+                  style={{ width: `${reviews.length ? (d.count / reviews.length) * 100 : 0}%` }} />
               </div>
-
-              <div className="flex-1 space-y-3">
-                {/* Header */}
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold">
-                        {review.userName || "Anonymous"}
-                      </span>
-                      {review.verifiedPurchase === 1 && (
-                        <Badge variant="secondary" className="text-xs">
-                          Verified Purchase
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <StarRating rating={review.rating} readonly size="sm" />
-                      {review.size && (
-                        <span className="text-sm text-muted-foreground">
-                          • Size: {review.size}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <span className="text-sm text-muted-foreground">
-                    {formatDistanceToNow(new Date(review.createdAt), {
-                      addSuffix: true,
-                    })}
-                  </span>
-                </div>
-
-                {/* Review Title */}
-                {review.title && (
-                  <h4 className="font-semibold text-lg">{review.title}</h4>
-                )}
-
-                {/* Review Comment */}
-                {review.comment && (
-                  <p className="text-muted-foreground leading-relaxed">
-                    {review.comment}
-                  </p>
-                )}
-
-                {/* Review Images */}
-                {review.images && review.images.length > 0 && (
-                  <div className="flex gap-2 flex-wrap">
-                    {review.images.map((image, index) => (
-                      <button
-                        key={index}
-                        onClick={() => openLightbox(review.images, index)}
-                        className="w-24 h-24 rounded-lg overflow-hidden border hover:opacity-80 transition-opacity"
-                      >
-                        <img
-                          src={image}
-                          alt={`Review ${index + 1}`}
-                          className="w-full h-full object-cover"
-                          loading="lazy"
-                        />
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {/* Helpful Vote */}
-                <div className="flex items-center gap-4 pt-2">
-                  <span className="text-sm text-muted-foreground">
-                    Was this review helpful?
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleVote(review.id, true)}
-                    disabled={voteReview.isPending}
-                    className="gap-2"
-                  >
-                    <ThumbsUp className="w-4 h-4" />
-                    Helpful ({review.helpfulCount})
-                  </Button>
-                </div>
-              </div>
+              <span className="text-[10px] text-gray-400 w-4">{d.count}</span>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex justify-center gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setPage(page - 1)}
-            disabled={page === 1}
-          >
-            Previous
-          </Button>
-          <span className="flex items-center px-4">
-            Page {page} of {totalPages}
-          </span>
-          <Button
-            variant="outline"
-            onClick={() => setPage(page + 1)}
-            disabled={page === totalPages}
-          >
-            Next
-          </Button>
+      {/* Reviews list */}
+      {reviews.map(r => (
+        <div key={r.id} className="border-b border-gray-100 pb-5 last:border-0">
+          <div className="flex items-start justify-between mb-2">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-[#0d2430]">{r.customer_name}</span>
+                {r.size_purchased && (
+                  <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Size {r.size_purchased}</span>
+                )}
+              </div>
+              <StarRating rating={r.rating} size="sm" />
+            </div>
+            <span className="text-[10px] text-gray-400">{fmtDate(r.created_at)}</span>
+          </div>
+          <p className="text-sm text-gray-600 leading-relaxed mb-3">{r.comment}</p>
+          <button onClick={() => markHelpful(r.id)} disabled={helpedIds.has(r.id)}
+            className={`flex items-center gap-1.5 text-[11px] transition-colors ${helpedIds.has(r.id) ? "text-[#C9A84C]" : "text-gray-400 hover:text-gray-600"}`}>
+            <ThumbsUp className="h-3 w-3" />
+            Helpful {r.helpful_count > 0 ? `(${r.helpful_count})` : ""}
+          </button>
         </div>
-      )}
-
-      {/* Image Lightbox */}
-      {showLightbox && (
-        <ImageLightbox
-          images={lightboxImages}
-          currentIndex={lightboxIndex}
-          onClose={() => setShowLightbox(false)}
-          onNavigate={setLightboxIndex}
-        />
-      )}
+      ))}
     </div>
   );
 }
