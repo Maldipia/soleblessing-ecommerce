@@ -5,6 +5,9 @@ import { ChevronLeft, ShoppingCart, Heart, AlertCircle, Ruler, QrCode, Shirt, Ch
 import { SizeGuideModal } from "@/components/SizeGuideModal";
 import { toast } from "sonner";
 import { useCart } from "@/contexts/CartContext";
+import { ReviewList } from "@/components/ReviewList";
+import { ReviewForm } from "@/components/ReviewForm";
+import { useState as useReviewState } from "react";
 
 export default function InventoryDetail() {
   const params = useParams();
@@ -218,6 +221,22 @@ export default function InventoryDetail() {
           </div>
         </div>
       </div>
+
+      {/* Reviews Section */}
+      {product && (
+        <div className="max-w-[1300px] mx-auto px-6 md:px-10 py-10 border-t border-gray-100">
+          <div className="grid md:grid-cols-2 gap-10">
+            <div>
+              <h2 className="text-xl font-black text-[#0d2430] mb-5 uppercase tracking-wide">Customer Reviews</h2>
+              <ReviewList sku={product.sku} />
+            </div>
+            <div>
+              <h2 className="text-xl font-black text-[#0d2430] mb-5 uppercase tracking-wide">Write a Review</h2>
+              <ReviewForm sku={product.sku} itemCode={product.itemCode} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
