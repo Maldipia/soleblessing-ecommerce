@@ -15,7 +15,7 @@ function ProductCard({ p, onClick }: { p: any; onClick: () => void }) {
       <div className="relative aspect-square bg-[#EDE9E3] overflow-hidden">
         {p.imageUrl
           ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy"/>
-          : <div className="w-full h-full flex items-center justify-center text-4xl opacity-20">\u{1F45F}</div>}
+          : <div className="w-full h-full flex items-center justify-center text-4xl opacity-20">👟</div>}
         {p.discount > 0 && <span className="absolute top-2 left-2 bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full">-{p.discount}%</span>}
       </div>
       <div className="p-3">
