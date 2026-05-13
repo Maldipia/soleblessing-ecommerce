@@ -66,6 +66,7 @@ export default async function handler(req, res) {
       const details     = (row[1]  || '').trim();
       const sku         = (row[2]  || '').trim();
       const size        = (row[3]  || '').trim();
+      const unitCost    = parsePrice(row[4]  || '');  // col E — admin only, never in response
       const srp         = parsePrice(row[13] || '');
       const sellingPrice = parsePrice(row[5]  || '');
       const status      = (row[6]  || '').toUpperCase().trim();
@@ -82,6 +83,7 @@ export default async function handler(req, res) {
 
       // Apply Supabase overrides if they exist
       const ov = overrides.get(itemCode) || {};
+      const finalUnitCost = ov.unit_cost != null ? ov.unit_cost : unitCost; // admin-only
       const finalSrp = ov.srp != null ? ov.srp : srp;
       const finalSelling = ov.selling_price != null ? ov.selling_price : sellingPrice;
       const finalSku = ov.sku || sku;
