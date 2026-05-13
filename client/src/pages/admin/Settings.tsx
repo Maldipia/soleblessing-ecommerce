@@ -62,11 +62,15 @@ export default function AdminSettings() {
   const loadSettings = async () => {
     try {
       const rows = await sb.select("sb_settings", "select=key,value");
+      // value column is text — parse JSON strings before setting state
+      const parse = (v: any) => { try { return typeof v === "string" ? JSON.parse(v) : v; } catch { return null; } };
       rows.forEach((r: any) => {
-        if (r.key === "brand")           setBrand(r.value);
-        if (r.key === "payment_methods") setPayments(r.value);
-        if (r.key === "shipping")        setShipping(r.value);
-        if (r.key === "socials")         setSocials(r.value);
+        const v = parse(r.value);
+        if (!v) return;
+        if (r.key === "brand")           setBrand(v);
+        if (r.key === "payment_methods") { if (Array.isArray(v)) setPayments(v); }
+        if (r.key === "shipping")        setShipping(v);
+        if (r.key === "socials")         setSocials(v);
       });
     } catch(e) { console.error("Settings load error:", e); }
   };
@@ -75,7 +79,7 @@ export default function AdminSettings() {
     setSaving(true);
     try {
       await sb.update("sb_settings", `key=eq.${key}`, {
-        value,
+        value: JSON.stringify(value),
         updated_at: new Date().toISOString(),
       });
       setSaved(true);
