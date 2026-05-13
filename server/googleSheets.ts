@@ -1,10 +1,8 @@
 const SPREADSHEET_ID = '1WZttK5ZsPhnBz91JmBb-V4GCs-42uXjTUXz67V5sSDI';
 
+// Only 2025 tab — items with image URL + size are already filtered below
 const SHEET_TABS = [
   { name: '2025', gid: '631652219' },
-  { name: '2024', gid: '0' },
-  { name: 'ABB',  gid: '1973067738' },
-  { name: 'MBB',  gid: '946254902' },
 ];
 
 const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
@@ -172,12 +170,12 @@ async function fetchFromSingleTab(tabName: string, gid: string, imgCache: Map<st
 
       const hasImage      = driveUrl.trim() !== '' || imgCache.has(itemCode);
       const statusUpper   = product.status.toUpperCase().trim();
-      const isAvailable   = statusUpper === 'AVAILABLE';
-      const isSoldOut     = statusUpper.includes('SOLD') || statusUpper.includes('OUT') || statusUpper.includes('MISSING');
+      const isSoldOut     = statusUpper.includes('SOLD') || statusUpper === 'MISSING';
       const hasSize       = product.size.trim() !== '';
       const hasValidPrice = parsePrice(product.sellingPrice) > 0 || parsePrice(product.srp) > 0;
 
-      if (hasImage && isAvailable && !isSoldOut && hasSize && hasValidPrice) {
+      // Include: has image URL + has size + not sold/missing
+      if (hasImage && hasSize && !isSoldOut && hasValidPrice) {
         products.push(product);
       }
     }
