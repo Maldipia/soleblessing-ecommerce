@@ -676,9 +676,9 @@ export default function AdminDashboard() {
                 {invLoading ? (
                   <div className="py-12 text-center"><div className="flex gap-2 justify-center">{[0,1,2].map(i=><div key={i} className="w-2 h-2 bg-[#C9A84C] rounded-full animate-bounce" style={{animationDelay:`${i*.15}s`}}/>)}</div></div>
                 ) : (
-                  <div className="overflow-x-auto">
+                  <div className="overflow-auto" style={{maxHeight:"calc(100vh - 280px)"}}>
                   <table className="w-full text-sm">
-                    <thead className="sticky top-0 z-10"><tr className="bg-[#F7F4EF] text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100">
+                    <thead className="sticky top-0 z-10 shadow-sm"><tr className="bg-[#F7F4EF] text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100">
                       <th className="w-14 px-4 py-3"/>
                       <th className="text-left px-3 py-3">Product</th>
                       <th className="text-left px-3 py-3 w-24">Brand</th>
@@ -800,7 +800,7 @@ export default function AdminDashboard() {
                   </div>
                 ) : (
                   <table className="w-full">
-                    <thead className="sticky top-0 z-10"><tr className="bg-[#F7F4EF] text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100">
+                    <thead className="sticky top-0 z-10 shadow-sm"><tr className="bg-[#F7F4EF] text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100">
                       <th className="text-left px-5 py-3 w-12"/>
                       <th className="text-left px-3 py-3 w-28">SKU</th>
                       <th className="text-left px-3 py-3">Product</th>
