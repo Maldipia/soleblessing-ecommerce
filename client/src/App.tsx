@@ -5,6 +5,7 @@ import { Route, Switch, useLocation } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { CartProvider } from "./contexts/CartContext";
+import { WishlistProvider } from "./pages/Wishlist";
 import Home from "./pages/Home";
 import Products from "./pages/Products";
 import ProductDetail from "./pages/ProductDetail";
@@ -83,10 +84,12 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light">
         <CartProvider>
+          <WishlistProvider>
           <TooltipProvider>
             <Toaster />
             <Router />
           </TooltipProvider>
+          </WishlistProvider>
         </CartProvider>
       </ThemeProvider>
     </ErrorBoundary>
