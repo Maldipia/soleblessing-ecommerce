@@ -222,6 +222,8 @@ export default function AdminDashboard() {
   const [sbOrders, setSbOrders] = useState<any[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [orderFilter, setOrderFilter] = useState("all");
+  const [productCategory, setProductCategory] = useState("All");
+  const [expandedSizeId, setExpandedSizeId] = useState<string|null>(null);
 
   const {data:inventory,isLoading:invLoading,refetch:refetchInv} = trpc.inventory.list.useQuery(undefined,{enabled:isAdmin});
   const syncMutation = trpc.inventory.refresh.useMutation({
@@ -242,6 +244,13 @@ export default function AdminDashboard() {
 
   useEffect(()=>{if(isAdmin){loadProducts();loadOrders();}}, [isAdmin]);
 
+  // Close size dropdown on outside click
+  useEffect(()=>{
+    const handler = ()=>setExpandedSizeId(null);
+    document.addEventListener("click", handler);
+    return ()=>document.removeEventListener("click", handler);
+  },[]);
+
   const inventoryGrouped = useMemo(()=>{
     if(!inventory) return [];
     const map = new Map<string,any>();
@@ -256,6 +265,16 @@ export default function AdminDashboard() {
     !search?inventoryGrouped:inventoryGrouped.filter(p=>
       p.name?.toLowerCase().includes(search.toLowerCase())||p.sku?.toLowerCase().includes(search.toLowerCase())),
     [inventoryGrouped,search]);
+
+  const filteredProducts = useMemo(()=>
+    sbProducts.filter((p:any)=>{
+      const matchCat = productCategory==="All" || p.category===productCategory;
+      const matchSearch = !search ||
+        p.name?.toLowerCase().includes(search.toLowerCase()) ||
+        p.sku?.toLowerCase().includes(search.toLowerCase());
+      return matchCat && matchSearch;
+    }),
+    [sbProducts, productCategory, search]);
 
   const filteredOrders = useMemo(()=>
     orderFilter==="all"?sbOrders:sbOrders.filter(o=>o.status===orderFilter),
@@ -524,52 +543,166 @@ export default function AdminDashboard() {
           {/* ── PRODUCTS (Supabase) ── */}
           {section==="products"&&(
             <div>
-              <div className="flex items-center justify-between mb-6">
-                <p className="text-xs text-gray-400">Products stored in Supabase — editable without touching Google Sheets.</p>
-                <button onClick={loadProducts} className="flex items-center gap-2 border border-gray-200 bg-white text-[#0d2430] px-3 py-2 text-xs font-semibold rounded-lg hover:bg-gray-50">
-                  <RefreshCw className={`h-3.5 w-3.5 ${loadingProducts?"animate-spin":""}`}/> Refresh
+              {/* Search + category filters */}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="relative flex-1 max-w-sm">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400"/>
+                  <input placeholder="Search SKU, name…"
+                    value={search} onChange={e=>setSearch(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2.5 text-sm bg-white border border-gray-200 rounded-xl outline-none focus:border-[#0d2430]"/>
+                </div>
+                <span className="text-xs text-gray-400">{filteredProducts.length} products</span>
+                <button onClick={()=>setProductModal({open:true})}
+                  className="flex items-center gap-2 bg-[#C9A84C] text-[#050f12] px-4 py-2 text-xs font-bold rounded-xl hover:opacity-90 ml-auto">
+                  <Plus className="h-3.5 w-3.5"/> Add Product
+                </button>
+                <button onClick={loadProducts}
+                  className="flex items-center gap-2 border border-gray-200 bg-white text-[#0d2430] px-3 py-2 text-xs font-semibold rounded-xl hover:bg-gray-50">
+                  <RefreshCw className={`h-3.5 w-3.5 ${loadingProducts?"animate-spin":""}`}/>
                 </button>
               </div>
-              <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {sbProducts.map(p=>(
-                  <div key={p.id} className="bg-white border border-gray-100 rounded-xl overflow-hidden hover:shadow-md transition-shadow">
-                    <div className="aspect-square bg-[#EDE9E3] flex items-center justify-center relative overflow-hidden">
-                      {p.images?.[0]?<img src={p.images[0]} alt={p.name} className="w-full h-full object-cover"/>:<span className="text-5xl opacity-20">👟</span>}
-                      <div className="absolute top-2 left-2 flex flex-col gap-1">
-                        {p.featured&&<span className="bg-[#C9A84C] text-[#050f12] text-[9px] font-bold px-2 py-0.5">Featured</span>}
-                        {p.status!=="active"&&<span className="bg-gray-800 text-white text-[9px] font-bold px-2 py-0.5 capitalize">{p.status}</span>}
-                        {p.sale_price&&<span className="bg-red-500 text-white text-[9px] font-bold px-2 py-0.5">Sale</span>}
-                      </div>
-                      <div className="absolute top-2 right-2 flex gap-1">
-                        <button onClick={()=>setProductModal({open:true,product:p})} className="w-7 h-7 bg-white/90 rounded flex items-center justify-center hover:bg-white shadow">
-                          <Edit2 className="h-3.5 w-3.5 text-gray-600"/>
-                        </button>
-                        <button onClick={()=>deleteProduct(p.id)} className="w-7 h-7 bg-white/90 rounded flex items-center justify-center hover:bg-red-50 shadow">
-                          <Trash2 className="h-3.5 w-3.5 text-red-400"/>
-                        </button>
-                      </div>
-                    </div>
-                    <div className="p-4">
-                      <p className="text-[9px] font-bold tracking-[.1em] uppercase text-[#C9A84C] mb-0.5">{p.brand} · {p.category}</p>
-                      <p className="text-sm font-semibold text-[#0d2430] leading-tight mb-2">{p.name}</p>
-                      <div className="flex items-baseline gap-2">
-                        {p.sale_price
-                          ?<><span className="text-base font-black text-red-500">{fmt(p.sale_price)}</span><span className="text-xs text-gray-400 line-through">{fmt(p.price)}</span></>
-                          :<span className="text-base font-black text-[#0d2430]">{fmt(p.price)}</span>}
-                      </div>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${p.stock>0?"bg-green-100 text-green-700":"bg-red-100 text-red-600"}`}>
-                        {p.stock>0?`${p.stock} in stock`:"Out of stock"}
-                      </span>
-                    </div>
+
+              {/* Category pills */}
+              <div className="flex gap-2 flex-wrap mb-5">
+                {["All",...Array.from(new Set(sbProducts.map((p:any)=>p.category).filter(Boolean)))].map(cat=>{
+                  const count = cat==="All" ? sbProducts.length : sbProducts.filter((p:any)=>p.category===cat).length;
+                  const active = productCategory===cat;
+                  return(
+                    <button key={cat} onClick={()=>setProductCategory(cat)}
+                      className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${
+                        active?"bg-[#0d2430] text-white border-[#0d2430]":"bg-white text-gray-600 border-gray-200 hover:border-gray-400"
+                      }`}>
+                      {cat}
+                      <span className={`text-[10px] font-black ${active?"text-[#C9A84C]":"text-gray-400"}`}>{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Products table */}
+              <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
+                {loadingProducts ? (
+                  <div className="py-16 text-center"><div className="flex gap-2 justify-center">{[0,1,2].map(i=><div key={i} className="w-2 h-2 bg-[#C9A84C] rounded-full animate-bounce" style={{animationDelay:`${i*.15}s`}}/>)}</div></div>
+                ) : filteredProducts.length === 0 ? (
+                  <div className="py-20 text-center">
+                    <Package className="h-10 w-10 text-gray-200 mx-auto mb-3"/>
+                    <p className="text-sm text-gray-400 mb-4">No products yet</p>
+                    <button onClick={()=>setProductModal({open:true})} className="bg-[#0d2430] text-white px-5 py-2.5 text-xs font-bold rounded-xl hover:bg-[#122d3a]">Add First Product</button>
                   </div>
-                ))}
-                <div onClick={()=>setProductModal({open:true})}
-                  className="bg-white border-2 border-dashed border-gray-200 rounded-xl flex items-center justify-center cursor-pointer hover:border-[#C9A84C] transition-all min-h-[280px] group">
-                  <div className="text-center">
-                    <Plus className="h-8 w-8 text-gray-300 group-hover:text-[#C9A84C] mx-auto mb-2 transition-colors"/>
-                    <p className="text-sm font-semibold text-gray-400 group-hover:text-[#C9A84C] transition-colors">Add New Product</p>
-                  </div>
-                </div>
+                ) : (
+                  <table className="w-full">
+                    <thead><tr className="bg-[#F7F4EF] text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100">
+                      <th className="text-left px-5 py-3 w-12"/>
+                      <th className="text-left px-3 py-3 w-28">SKU</th>
+                      <th className="text-left px-3 py-3">Product</th>
+                      <th className="text-left px-3 py-3 w-32">Sizes</th>
+                      <th className="text-right px-3 py-3 w-28">Price</th>
+                      <th className="text-right px-3 py-3 w-36">Sale Price</th>
+                      <th className="text-center px-3 py-3 w-20">Stock</th>
+                      <th className="text-center px-3 py-3 w-16">Status</th>
+                      <th className="px-3 py-3 w-20"/>
+                    </tr></thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {filteredProducts.map((p:any)=>{
+                        const discount = p.sale_price && p.price ? Math.round((1-p.sale_price/p.price)*100) : 0;
+                        const sizeEntries = p.sizes ? Object.entries(p.sizes) : [];
+                        const sizeLabel = sizeEntries.length===1
+                          ? `${sizeEntries[0][0]}:${sizeEntries[0][1]}`
+                          : sizeEntries.length > 0
+                            ? `${sizeEntries.length} sizes`
+                            : "—";
+                        const totalQty = sizeEntries.reduce((sum:number,[,qty]:any)=>sum+Number(qty),0) || p.stock || 0;
+                        const isLow = totalQty > 0 && totalQty <= 3;
+                        return(
+                          <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
+                            {/* Image */}
+                            <td className="px-5 py-3">
+                              <div className="w-12 h-12 bg-[#EDE9E3] rounded-lg overflow-hidden flex-shrink-0">
+                                {p.images?.[0]
+                                  ? <img src={p.images[0]} alt={p.name} className="w-full h-full object-cover"/>
+                                  : <span className="w-full h-full flex items-center justify-center text-lg opacity-20">👟</span>}
+                              </div>
+                            </td>
+                            {/* SKU */}
+                            <td className="px-3 py-3">
+                              <span className="text-[11px] font-mono text-gray-400">{p.sku || "—"}</span>
+                            </td>
+                            {/* Name + category */}
+                            <td className="px-3 py-3">
+                              <p className="text-sm font-semibold text-[#0d2430] leading-tight">{p.name}</p>
+                              <p className="text-[10px] text-gray-400 mt-0.5">{p.category}</p>
+                            </td>
+                            {/* Size pill */}
+                            <td className="px-3 py-3">
+                              <div className="relative">
+                                <button
+                                  onClick={()=>setExpandedSizeId(expandedSizeId===p.id?null:p.id)}
+                                  className="flex items-center gap-1.5 border border-[#C9A84C] text-[#0d2430] text-[11px] font-bold px-2.5 py-1 rounded hover:bg-[#C9A84C]/10 transition-colors">
+                                  <span>{sizeLabel}</span>
+                                  <svg className={`w-3 h-3 text-gray-400 transition-transform ${expandedSizeId===p.id?"rotate-180":""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
+                                </button>
+                                {expandedSizeId===p.id && sizeEntries.length > 0 && (
+                                  <div className="absolute top-8 left-0 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-3 min-w-[140px]">
+                                    <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-2">Sizes</p>
+                                    {sizeEntries.map(([sz,qty]:any)=>(
+                                      <div key={sz} className="flex justify-between items-center py-1 text-xs">
+                                        <span className="font-semibold text-[#0d2430]">{sz}</span>
+                                        <span className={`font-bold ${Number(qty)===0?"text-red-400":"text-green-600"}`}>{qty} units</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            {/* Price */}
+                            <td className="px-3 py-3 text-right">
+                              <span className={`text-sm ${p.sale_price?"text-gray-400 line-through text-[11px]":"font-bold text-[#0d2430]"}`}>
+                                ₱{(p.price/100).toLocaleString("en-PH",{minimumFractionDigits:2})}
+                              </span>
+                            </td>
+                            {/* Sale price + discount */}
+                            <td className="px-3 py-3 text-right">
+                              {p.sale_price ? (
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <span className="text-sm font-bold text-red-500">₱{(p.sale_price/100).toLocaleString("en-PH",{minimumFractionDigits:2})}</span>
+                                  {discount>0&&<span className="text-[10px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded">-{discount}%</span>}
+                                </div>
+                              ) : (
+                                <span className="text-[11px] text-gray-300">+ sale</span>
+                              )}
+                            </td>
+                            {/* Stock */}
+                            <td className="px-3 py-3 text-center">
+                              <span className={`text-xs font-bold ${totalQty===0?"text-red-500":isLow?"text-amber-500":"text-green-600"}`}>
+                                {totalQty} units
+                              </span>
+                            </td>
+                            {/* Status */}
+                            <td className="px-3 py-3 text-center">
+                              <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
+                                p.status==="active"?"bg-[#0d2430] text-white":
+                                p.status==="draft"?"bg-gray-100 text-gray-500":"bg-red-100 text-red-500"
+                              }`}>{p.status}</span>
+                            </td>
+                            {/* Actions */}
+                            <td className="px-3 py-3">
+                              <div className="flex items-center gap-1.5 justify-end">
+                                <button onClick={()=>setProductModal({open:true,product:p})}
+                                  className="w-7 h-7 flex items-center justify-center bg-gray-100 text-gray-500 rounded-lg hover:bg-[#0d2430] hover:text-white transition-all">
+                                  <Edit2 className="h-3.5 w-3.5"/>
+                                </button>
+                                <button onClick={()=>deleteProduct(p.id)}
+                                  className="w-7 h-7 flex items-center justify-center bg-gray-100 text-gray-400 rounded-lg hover:bg-red-100 hover:text-red-500 transition-all">
+                                  <Trash2 className="h-3.5 w-3.5"/>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </div>
           )}
