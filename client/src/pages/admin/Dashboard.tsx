@@ -2,12 +2,12 @@ import { trpc } from "@/lib/trpc";
 import { sb } from "@/lib/supabase";
 import { useLocation } from "wouter";
 import { useState, useMemo, useEffect } from "react";
-import { Download } from "lucide-react";
 import {
   LayoutDashboard, Package, ShoppingCart, BarChart3,
   Shield, ChevronRight, Lock, LogOut, Zap, ExternalLink,
   Search, RefreshCw, AlertTriangle, TrendingUp, Plus,
-  Edit2, Trash2, X, Save, Eye, Settings, Tag
+  Edit2, Trash2, X, Save, Eye, Settings, Tag,
+  Download, QrCode, Copy,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
