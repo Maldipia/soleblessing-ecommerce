@@ -1,11 +1,11 @@
 
 const SPREADSHEET_ID = '1WZttK5ZsPhnBz91JmBb-V4GCs-42uXjTUXz67V5sSDI';
 const GID_2025 = '631652219';
+const SUPABASE_URL = 'https://akualfrqzaierqsfcnkp.supabase.co';
+const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || '';
 
 function parseCSVLine(line) {
-  const result = [];
-  let current = '';
-  let inQuotes = false;
+  const result = []; let current = ''; let inQuotes = false;
   for (const ch of line) {
     if (ch === '"') { inQuotes = !inQuotes; }
     else if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
@@ -14,39 +14,46 @@ function parseCSVLine(line) {
   result.push(current.trim());
   return result;
 }
-
 function parsePrice(str) {
   if (!str) return 0;
   const n = parseFloat(str.replace(/[₱,\s]/g, ''));
   return isNaN(n) ? 0 : Math.round(n * 100);
 }
-
 function convertDriveUrl(url) {
   if (!url || !url.trim()) return '';
   const m = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
   if (m) return `https://drive.google.com/thumbnail?id=${m[1]}&sz=w400`;
   const m2 = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
   if (m2) return `https://drive.google.com/thumbnail?id=${m2[1]}&sz=w400`;
-  return url; // CDN URLs returned as-is
+  return url;
 }
 
 export default async function handler(req, res) {
-  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
+  res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
 
   try {
-    const csvUrl = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=${GID_2025}`;
-    const response = await fetch(csvUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0' }
-    });
+    // Fetch Google Sheets CSV + Supabase overrides in parallel
+    const [csvRes, sbRes] = await Promise.allSettled([
+      fetch(`https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=${GID_2025}`,
+        { headers: { 'User-Agent': 'Mozilla/5.0' } }),
+      SUPABASE_KEY ? fetch(`${SUPABASE_URL}/rest/v1/sb_inventory?select=*`,
+        { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }) : Promise.resolve(null),
+    ]);
 
-    if (!response.ok) {
-      return res.status(502).json({ error: `Sheet fetch failed: ${response.status}` });
+    if (csvRes.status !== 'fulfilled' || !csvRes.value.ok) {
+      return res.status(502).json({ error: 'Sheet fetch failed' });
     }
 
-    const csvText = await response.text();
-    const lines = csvText.split('\n').slice(2); // skip 2 header rows
+    // Build Supabase overrides map keyed by item_code
+    const overrides = new Map();
+    if (sbRes.status === 'fulfilled' && sbRes.value && sbRes.value.ok) {
+      const rows = await sbRes.value.json();
+      if (Array.isArray(rows)) rows.forEach(r => overrides.set(r.item_code, r));
+    }
+
+    const csvText = await csvRes.value.text();
+    const lines = csvText.split('\n').slice(2);
     const products = [];
     const seen = new Set();
 
@@ -59,43 +66,52 @@ export default async function handler(req, res) {
       const details     = (row[1]  || '').trim();
       const sku         = (row[2]  || '').trim();
       const size        = (row[3]  || '').trim();
-      const sellingPrice = row[5]  || '';
-      const srp         = row[13] || '';
+      const srp         = parsePrice(row[13] || '');
+      const sellingPrice = parsePrice(row[5]  || '');
       const status      = (row[6]  || '').toUpperCase().trim();
       const driveUrl    = (row[18] || '').trim();
 
       if (!itemCode || !details) continue;
-      if (!driveUrl) continue;           // must have image URL
-      if (!size) continue;               // must have size
+      if (!driveUrl) continue;
+      if (!size) continue;
       const isSoldOut = status.includes('SOLD') || status === 'MISSING';
       if (isSoldOut) continue;
-      const price = parsePrice(sellingPrice) || parsePrice(srp);
+      const price = sellingPrice || srp;
       if (!price) continue;
-
       if (seen.has(itemCode)) continue;
       seen.add(itemCode);
 
+      // Apply Supabase overrides if they exist
+      const ov = overrides.get(itemCode) || {};
+      const finalSrp = ov.srp != null ? ov.srp : srp;
+      const finalSelling = ov.selling_price != null ? ov.selling_price : sellingPrice;
+      const finalSku = ov.sku || sku;
+      const finalSize = ov.size || size;
+      const finalName = ov.name || details;
+      const finalStock = ov.stock != null ? ov.stock : 1;
+      const hasSbOverride = overrides.has(itemCode);
+
       products.push({
         itemCode,
-        name: details,
-        sku,
-        size,
-        sellingPrice: parsePrice(sellingPrice),
-        srp: parsePrice(srp),
-        status,
+        name: finalName,
+        sku: finalSku,
+        size: finalSize,
+        sellingPrice: finalSelling,
+        srp: finalSrp,
+        status: ov.status?.toUpperCase() || status,
         imageUrl: convertDriveUrl(driveUrl),
         productsUrl: driveUrl,
+        stock: finalStock,
         discount: (() => {
-          const s = parsePrice(srp);
-          const p = parsePrice(sellingPrice);
+          const s = finalSrp, p = finalSelling;
           if (!s || !p || p >= s) return 0;
           return Math.round(((s - p) / s) * 100);
         })(),
+        edited: hasSbOverride,
       });
     }
 
-    res.status(200).json({ products, count: products.length, tab: '2025', cached: false });
-
+    res.status(200).json({ products, count: products.length, tab: '2025' });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
