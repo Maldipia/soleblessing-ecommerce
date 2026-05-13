@@ -1,4 +1,5 @@
 import { trpc } from "@/lib/trpc";
+import { useInventory } from "@/hooks/useInventory";
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,10 +32,7 @@ export default function Products() {
   const { user } = useAuth();
   const utils = trpc.useUtils();
 
-  const { data: inventoryProducts, isLoading, error } = trpc.inventory.list.useQuery(undefined, {
-    retry: 3,
-    retryDelay: 1000,
-  });
+  const { data: inventoryProducts, isLoading, error } = useInventory(););
 
   const normalizeSize = (size: string): string => {
     if (!size) return '';
