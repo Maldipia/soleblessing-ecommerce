@@ -368,20 +368,23 @@ export default function AdminDashboard() {
   const stats = useMemo(()=>{
     // Raw inventory items (each row = 1 unit in stock)
     const rawItems = Array.isArray(inventory) ? inventory : [];
-    // Total assets = sum of selling prices of all individual units
+    // Total Assets = sum of UNIT COST (what you paid) — your actual inventory investment
     const totalAssets = rawItems.reduce((s:number, item:any) =>
+      s + (item.unitCost || 0), 0);
+    // Retail value = sum of selling prices
+    const retailValue = rawItems.reduce((s:number, item:any) =>
       s + (item.sellingPrice > 0 ? item.sellingPrice : (item.srp || 0)), 0);
-    // Total units = number of individual items in stock
+    // Potential profit = retail - cost
     const totalUnits = rawItems.length;
-    // Potential profit = assets at selling price minus assets at SRP (discount savings)
     const srpTotal = rawItems.reduce((s:number, item:any) => s + (item.srp || 0), 0);
-    const savings = srpTotal > totalAssets ? srpTotal - totalAssets : 0;
+    const potentialProfit = retailValue > totalAssets ? retailValue - totalAssets : 0;
     return {
       total: inventoryGrouped.length,
       totalUnits,
-      totalAssets,
+      totalAssets,    // unit cost total — your investment
+      retailValue,    // selling price total — potential revenue
       srpTotal,
-      savings,
+      potentialProfit,
       lowStock: inventoryGrouped.filter(p=>p.totalStock<=1&&p.totalStock>0).length,
       outStock: inventoryGrouped.filter(p=>p.totalStock===0).length,
       totalOrders: sbOrders.length,
@@ -542,17 +545,20 @@ export default function AdminDashboard() {
               {/* ── Total Assets hero card ── */}
               <div className="bg-[#050f12] rounded-2xl p-6 flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] font-bold tracking-[.18em] uppercase text-[#C9A84C] mb-1">Total Inventory Assets</p>
-                  <div className="text-4xl font-black text-white mb-1">{fmt(stats.totalAssets)}</div>
-                  <p className="text-xs text-white/40">{stats.totalUnits} units across {stats.total} SKUs</p>
+                  <p className="text-[10px] font-bold tracking-[.18em] uppercase text-[#C9A84C] mb-1">Total Inventory Cost</p>
+                  <div className="text-4xl font-black text-white mb-1">{stats.totalAssets>0?fmt(stats.totalAssets):"—"}</div>
+                  <p className="text-xs text-white/40">{stats.totalUnits} units · {stats.total} SKUs</p>
                 </div>
-                <div className="text-right">
-                  <p className="text-[10px] text-white/30 uppercase tracking-wider mb-1">SRP Value</p>
-                  <p className="text-xl font-bold text-white/50">{fmt(stats.srpTotal)}</p>
-                  {stats.savings > 0 && (
-                    <p className="text-[11px] text-[#C9A84C] font-semibold mt-1">
-                      ₱{(stats.savings/100).toLocaleString("en-PH")} below SRP
-                    </p>
+                <div className="text-right space-y-1.5">
+                  <div>
+                    <p className="text-[10px] text-white/30 uppercase tracking-wider">Retail Value</p>
+                    <p className="text-lg font-bold text-white/70">{fmt(stats.retailValue)}</p>
+                  </div>
+                  {stats.potentialProfit > 0 && (
+                    <div>
+                      <p className="text-[10px] text-white/30 uppercase tracking-wider">Potential Profit</p>
+                      <p className="text-sm font-bold text-[#C9A84C]">{fmt(stats.potentialProfit)}</p>
+                    </div>
                   )}
                 </div>
               </div>
