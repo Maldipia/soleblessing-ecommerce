@@ -120,7 +120,7 @@ export default function ShoeCleaner() {
             <div className="relative">
               <div className="absolute -inset-4 bg-gradient-to-r from-orange-500/20 to-yellow-500/20 rounded-3xl blur-3xl" />
               <img 
-                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663209569700/mRBOimITgtbKDVee.jpg" 
+                src="/soleblessing-logo.png" 
                 alt="Clean White Sneakers"
                 className="relative rounded-2xl shadow-2xl w-full max-w-md mx-auto"
               />
@@ -177,7 +177,7 @@ export default function ShoeCleaner() {
             <Card className="bg-gradient-to-br from-zinc-800 to-zinc-900 border-zinc-700 overflow-hidden group hover:border-orange-500/50 transition-all">
               <div className="relative h-64 bg-gradient-to-br from-orange-500/10 to-transparent flex items-center justify-center">
                 <img 
-                  src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663209569700/yAENPyxWqtPDQbUy.jpg" 
+                  src="/soleblessing-logo.png" 
                   alt="Solo Cleaner"
                   className="h-48 object-contain group-hover:scale-105 transition-transform"
                 />
@@ -227,7 +227,7 @@ export default function ShoeCleaner() {
               </div>
               <div className="relative h-64 bg-gradient-to-br from-orange-500/20 to-transparent flex items-center justify-center mt-8">
                 <img 
-                  src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663209569700/OJrvyvLgbrtIurQx.jpg" 
+                  src="/soleblessing-logo.png" 
                   alt="Complete Kit"
                   className="h-48 object-contain group-hover:scale-105 transition-transform"
                 />
