@@ -72,7 +72,6 @@ export default async function handler(req, res) {
       const driveUrl    = (row[18] || '').trim();
 
       if (!itemCode || !details) continue;
-      if (!driveUrl) continue;
       if (!size) continue;
       const isSoldOut = status.includes('SOLD') || status === 'MISSING';
       if (isSoldOut) continue;
