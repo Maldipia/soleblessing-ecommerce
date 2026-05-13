@@ -76,7 +76,11 @@ export default async function handler(req, res) {
       if (!size) continue;
       const isSoldOut = status.includes('SOLD') || status === 'MISSING';
       if (isSoldOut) continue;
-      const price = sellingPrice || srp;
+      // Sanity cap: reject prices > ₱99,999 (corrupt sheet cell like 55356005300)
+      const MAX_PRICE = 9999900; // ₱99,999 in centavos
+      const cleanSelling = sellingPrice <= MAX_PRICE ? sellingPrice : 0;
+      const cleanSrp     = srp <= MAX_PRICE ? srp : 0;
+      const price = cleanSelling || cleanSrp;
       if (!price) continue;
       if (seen.has(itemCode)) continue;
       seen.add(itemCode);
@@ -84,8 +88,8 @@ export default async function handler(req, res) {
       // Apply Supabase overrides if they exist
       const ov = overrides.get(itemCode) || {};
       const finalUnitCost = ov.unit_cost != null ? ov.unit_cost : unitCost; // admin-only
-      const finalSrp = ov.srp != null ? ov.srp : srp;
-      const finalSelling = ov.selling_price != null ? ov.selling_price : sellingPrice;
+      const finalSrp = ov.srp != null ? ov.srp : cleanSrp;
+      const finalSelling = ov.selling_price != null ? ov.selling_price : cleanSelling;
       const finalSku = ov.sku || sku;
       const finalSize = ov.size || size;
       const finalName = ov.name || details;
