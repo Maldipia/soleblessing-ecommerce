@@ -4,6 +4,10 @@
   "installCommand": "pnpm install",
   "rewrites": [
     {
+      "source": "/api/inventory",
+      "destination": "/api/inventory"
+    },
+    {
       "source": "/api/trpc/(.*)",
       "destination": "/api/trpc"
     },
