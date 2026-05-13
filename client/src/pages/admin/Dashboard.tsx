@@ -362,14 +362,30 @@ export default function AdminDashboard() {
     orderFilter==="all"?sbOrders:sbOrders.filter(o=>o.status===orderFilter),
     [sbOrders,orderFilter]);
 
-  const stats = useMemo(()=>({
-    total:inventoryGrouped.length,
-    lowStock:inventoryGrouped.filter(p=>p.totalStock<=1&&p.totalStock>0).length,
-    outStock:inventoryGrouped.filter(p=>p.totalStock===0).length,
-    totalOrders:sbOrders.length,
-    pendingOrders:sbOrders.filter(o=>o.status==="pending").length,
-    revenue:sbOrders.filter(o=>o.status!=="cancelled").reduce((s,o)=>s+o.total,0),
-  }),[inventoryGrouped,sbOrders]);
+  const stats = useMemo(()=>{
+    // Raw inventory items (each row = 1 unit in stock)
+    const rawItems = Array.isArray(inventory) ? inventory : [];
+    // Total assets = sum of selling prices of all individual units
+    const totalAssets = rawItems.reduce((s:number, item:any) =>
+      s + (item.sellingPrice > 0 ? item.sellingPrice : (item.srp || 0)), 0);
+    // Total units = number of individual items in stock
+    const totalUnits = rawItems.length;
+    // Potential profit = assets at selling price minus assets at SRP (discount savings)
+    const srpTotal = rawItems.reduce((s:number, item:any) => s + (item.srp || 0), 0);
+    const savings = srpTotal > totalAssets ? srpTotal - totalAssets : 0;
+    return {
+      total: inventoryGrouped.length,
+      totalUnits,
+      totalAssets,
+      srpTotal,
+      savings,
+      lowStock: inventoryGrouped.filter(p=>p.totalStock<=1&&p.totalStock>0).length,
+      outStock: inventoryGrouped.filter(p=>p.totalStock===0).length,
+      totalOrders: sbOrders.length,
+      pendingOrders: sbOrders.filter(o=>o.status==="pending").length,
+      revenue: sbOrders.filter(o=>o.status!=="cancelled").reduce((s,o)=>s+o.total,0),
+    };
+  },[inventory,inventoryGrouped,sbOrders]);
 
   const deleteProduct = async (id:string) => {
     if(!confirm("Delete this product?")) return;
@@ -492,12 +508,32 @@ export default function AdminDashboard() {
           {/* ── OVERVIEW ── */}
           {section==="overview"&&(
             <div className="space-y-6">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {/* ── Total Assets hero card ── */}
+              <div className="bg-[#050f12] rounded-2xl p-6 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-bold tracking-[.18em] uppercase text-[#C9A84C] mb-1">Total Inventory Assets</p>
+                  <div className="text-4xl font-black text-white mb-1">{fmt(stats.totalAssets)}</div>
+                  <p className="text-xs text-white/40">{stats.totalUnits} units across {stats.total} SKUs</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] text-white/30 uppercase tracking-wider mb-1">SRP Value</p>
+                  <p className="text-xl font-bold text-white/50">{fmt(stats.srpTotal)}</p>
+                  {stats.savings > 0 && (
+                    <p className="text-[11px] text-[#C9A84C] font-semibold mt-1">
+                      ₱{(stats.savings/100).toLocaleString("en-PH")} below SRP
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* ── Stat cards grid ── */}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 {[
-                  {label:"Sheet Inventory",value:stats.total,icon:Package,color:"text-blue-600",bg:"bg-blue-50"},
-                  {label:"Low/Out Stock",value:stats.lowStock+stats.outStock,icon:AlertTriangle,color:"text-amber-600",bg:"bg-amber-50"},
-                  {label:"Total Orders",value:stats.totalOrders,icon:ShoppingCart,color:"text-purple-600",bg:"bg-purple-50"},
-                  {label:"Revenue",value:fmt(stats.revenue),icon:TrendingUp,color:"text-green-600",bg:"bg-green-50"},
+                  {label:"SKUs",        value:stats.total,                             icon:Package,       color:"text-blue-600",   bg:"bg-blue-50"},
+                  {label:"Units",       value:stats.totalUnits,                        icon:Tag,           color:"text-indigo-600", bg:"bg-indigo-50"},
+                  {label:"Low Stock",   value:stats.lowStock+stats.outStock,           icon:AlertTriangle, color:"text-amber-600",  bg:"bg-amber-50"},
+                  {label:"Orders",      value:stats.totalOrders,                       icon:ShoppingCart,  color:"text-purple-600", bg:"bg-purple-50"},
+                  {label:"Revenue",     value:fmt(stats.revenue),                      icon:TrendingUp,    color:"text-green-600",  bg:"bg-green-50"},
                 ].map(s=>(
                   <div key={s.label} className="bg-white border border-gray-100 rounded-xl p-5">
                     <div className={`w-9 h-9 ${s.bg} rounded-lg flex items-center justify-center mb-3`}>
