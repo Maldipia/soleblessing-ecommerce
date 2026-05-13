@@ -15,7 +15,7 @@ function ProductCard({ p, onClick }: { p: any; onClick: () => void }) {
       <div className="relative aspect-square bg-[#EDE9E3] overflow-hidden">
         {p.imageUrl
           ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy"/>
-          : <div className="w-full h-full flex items-center justify-center text-4xl opacity-20">👟</div>}
+          : <div className="w-full h-full flex items-center justify-center text-4xl opacity-20">\u{1F45F}</div>}
         {p.discount > 0 && <span className="absolute top-2 left-2 bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full">-{p.discount}%</span>}
       </div>
       <div className="p-3">
@@ -36,28 +36,32 @@ export default function RecommendedProducts() {
 
   const items = useMemo(() => {
     if (!data) return [];
-    return [...data].sort((a,b)=>b.discount-a.discount).slice(0,12);
+    // Deduplicate: one entry per SKU, pick the item with best discount
+    const seen = new Map<string,any>();
+    data.forEach((item:any) => {
+      const existing = seen.get(item.sku);
+      if (!existing || item.discount > existing.discount) seen.set(item.sku, item);
+    });
+    const unique = Array.from(seen.values());
+    return unique.sort((a:any,b:any)=>b.discount-a.discount).slice(0,12);
   }, [data]);
 
   if (isLoading) return (
-        <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide px-1">
-          {[...Array(4)].map((_,i) => (
-            <div key={i} className="w-48 md:w-56 flex-shrink-0 bg-white rounded-2xl overflow-hidden animate-pulse">
-              <div className="aspect-square bg-gray-100"/>
-              <div className="p-3 space-y-2">
-                <div className="h-3 bg-gray-100 rounded w-2/3"/>
-                <div className="h-4 bg-gray-100 rounded"/>
-              </div>
-            </div>
-          ))}
+    <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide px-1">
+      {[...Array(4)].map((_,i) => (
+        <div key={i} className="w-48 md:w-56 flex-shrink-0 bg-white rounded-2xl overflow-hidden animate-pulse">
+          <div className="aspect-square bg-gray-100"/>
+          <div className="p-3 space-y-2"><div className="h-3 bg-gray-100 rounded w-2/3"/><div className="h-4 bg-gray-100 rounded"/></div>
         </div>
+      ))}
+    </div>
   );
   if (!items.length) return <p className="text-sm text-gray-400 py-4">No items yet.</p>;
 
   return (
     <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide px-1">
       {items.map((p: any) => (
-        <ProductCard key={p.itemCode} p={p} onClick={()=>setLocation(`/inventory/${p.itemCode}`)}/>
+        <ProductCard key={p.sku} p={p} onClick={()=>setLocation(`/inventory/${p.itemCode}`)}/>
       ))}
     </div>
   );
