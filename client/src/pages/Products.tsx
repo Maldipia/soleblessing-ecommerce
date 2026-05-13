@@ -32,7 +32,7 @@ export default function Products() {
   const { user } = useAuth();
   const utils = trpc.useUtils();
 
-  const { data: inventoryProducts, isLoading, error } = useInventory(););
+  const { data: inventoryProducts, isLoading, error } = useInventory();
 
   const normalizeSize = (size: string): string => {
     if (!size) return '';
