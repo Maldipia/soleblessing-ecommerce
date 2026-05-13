@@ -11,6 +11,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import AdminSettings from "./Settings";
+import { useInventory, refreshInventory } from "@/hooks/useInventory";
 import AdminPromos from "./Promos";
 
 type Section = "overview"|"inventory"|"products"|"orders"|"promos"|"settings"|"analytics";
@@ -225,11 +226,20 @@ export default function AdminDashboard() {
   const [productCategory, setProductCategory] = useState("All");
   const [expandedSizeId, setExpandedSizeId] = useState<string|null>(null);
 
-  const {data:inventory,isLoading:invLoading,refetch:refetchInv} = trpc.inventory.list.useQuery(undefined,{enabled:isAdmin});
-  const syncMutation = trpc.inventory.refresh.useMutation({
-    onSuccess:()=>{refetchInv();setSyncing(false);toast.success("Synced!");},
-    onError:()=>setSyncing(false),
-  });
+  const { data: inventory, isLoading: invLoading, refetch: refetchInv } = useInventory() as any;
+  const syncInventory = async () => {
+    setSyncing(true);
+    try {
+      const { refreshInventory } = await import("@/hooks/useInventory");
+      const result = await refreshInventory();
+      refetchInv();
+      setSyncing(false);
+      toast.success(`Synced! ${result.count} products loaded`);
+    } catch(e: any) {
+      setSyncing(false);
+      toast.error("Sync failed: " + e.message);
+    }
+  };
 
   const loadProducts = async () => {
     setLoadingProducts(true);
@@ -394,7 +404,7 @@ export default function AdminDashboard() {
                 <Plus className="h-3.5 w-3.5"/> Add Product
               </button>
             )}
-            <button onClick={()=>{setSyncing(true);syncMutation.mutate();}} disabled={syncing}
+            <button onClick={()=>{syncInventory();}} disabled={syncing}
               className="flex items-center gap-2 bg-[#0d2430] text-white px-4 py-2 text-xs font-semibold rounded-lg hover:bg-[#122d3a] disabled:opacity-50">
               <RefreshCw className={`h-3.5 w-3.5 ${syncing?"animate-spin":""}`}/> Sync Sheets
             </button>
@@ -497,7 +507,7 @@ export default function AdminDashboard() {
                     className="w-full pl-9 pr-4 py-2.5 text-sm bg-white border border-gray-200 rounded-lg outline-none focus:border-[#0d2430]"/>
                 </div>
                 <span className="text-xs text-gray-400">{filteredInv.length} products</span>
-                <button onClick={()=>{setSyncing(true);syncMutation.mutate();}} disabled={syncing}
+                <button onClick={()=>{syncInventory();}} disabled={syncing}
                   className="flex items-center gap-2 border border-gray-200 bg-white text-[#0d2430] px-3 py-2 text-xs font-semibold rounded-lg hover:bg-gray-50 ml-auto">
                   <RefreshCw className={`h-3.5 w-3.5 ${syncing?"animate-spin":""}`}/> Sync
                 </button>
