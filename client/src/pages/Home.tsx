@@ -4,7 +4,6 @@ import NewArrivals from "@/components/NewArrivals";
 import ClearanceSection from "@/components/ClearanceSection";
 import LastPairSection from "@/components/LastPairSection";
 import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
-import { trpc } from "@/lib/trpc";
 import { ShoppingCart, Search, ArrowRight, Star, Shield, Truck, RefreshCw } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState, useEffect } from "react";
