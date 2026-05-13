@@ -7,7 +7,6 @@ import { toast } from "sonner";
 import { useCart } from "@/contexts/CartContext";
 import { ReviewList } from "@/components/ReviewList";
 import { ReviewForm } from "@/components/ReviewForm";
-import { useState as useReviewState } from "react";
 
 export default function InventoryDetail() {
   const params = useParams();
