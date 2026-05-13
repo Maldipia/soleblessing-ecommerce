@@ -1,8 +1,8 @@
-// SoleBlessing — login dialog stub (Manus removed)
-// This component is kept for import compatibility but renders nothing.
-
-export function ManusDialog() {
+// SoleBlessing — login dialog (stub, no external auth needed)
+export function LoginDialog() {
   return null;
 }
 
-export default ManusDialog;
+// Keep named export for any existing imports
+export { LoginDialog as ManusDialog };
+export default LoginDialog;
