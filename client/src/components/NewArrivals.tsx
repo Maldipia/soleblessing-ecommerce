@@ -1,117 +1,49 @@
-import { trpc } from "@/lib/trpc";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import type { FC } from "react";
+import { useInventory } from "@/hooks/useInventory";
 import { useLocation } from "wouter";
-import { Sparkles } from "lucide-react";
+import { useMemo } from "react";
+
+const fmt = (c: number) => `₱\${(c/100).toLocaleString("en-PH")}`;
+function ProductCard({ p, onClick }: { p: any; onClick: () => void }) {
+  return (
+    <div onClick={onClick} className="bg-white rounded-2xl overflow-hidden hover:shadow-lg transition-all cursor-pointer group flex-shrink-0 w-48 md:w-56">
+      <div className="relative aspect-square bg-[#EDE9E3] overflow-hidden">
+        {p.imageUrl
+          ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy"/>
+          : <div className="w-full h-full flex items-center justify-center text-4xl opacity-20">👟</div>}
+        {p.discount>0 && <span className="absolute top-2 left-2 bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full">-{p.discount}%</span>}
+      </div>
+      <div className="p-3">
+        <p className="text-[9px] font-bold tracking-widest uppercase text-[#C9A84C] mb-0.5">{p.sku}</p>
+        <p className="text-xs font-bold text-[#0d2430] leading-tight line-clamp-2 mb-1.5">{p.name}</p>
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-sm font-black text-[#0d2430]">{fmt(p.sellingPrice||p.srp)}</span>
+          {p.sellingPrice>0&&p.srp>p.sellingPrice&&<span className="text-[10px] text-gray-400 line-through">{fmt(p.srp)}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function NewArrivals() {
   const [, setLocation] = useLocation();
-  const { data: newProducts, isLoading } = trpc.products.newArrivals.useQuery();
+  const { data, isLoading } = useInventory();
 
-  if (isLoading) {
-    return (
-      <div className="container py-12">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold">New Arrivals</h2>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[...Array(8)].map((_, i) => (
-            <Card key={i} className="overflow-hidden">
-              <div className="aspect-square bg-muted animate-pulse" />
-              <CardContent className="p-4">
-                <div className="h-4 bg-muted rounded animate-pulse mb-2" />
-                <div className="h-4 bg-muted rounded animate-pulse w-2/3" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-    );
-  }
+  const items = useMemo(() => {
+    if (!data) return [];
+    return [...data].sort((a,b)=>Number(b.itemCode)-Number(a.itemCode)).slice(0,12);
+  }, [data]);
 
-  if (!newProducts || newProducts.length === 0) {
-    return null;
-  }
+  if (isLoading) return (
+    <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide px-1">
+      {[...Array(4)].map((_,i) => <div key={i} className="w-48 md:w-56 flex-shrink-0 bg-white rounded-2xl overflow-hidden animate-pulse"><div className="aspect-square bg-gray-100"/><div className="p-3 space-y-2"><div className="h-3 bg-gray-100 rounded w-2/3"/><div className="h-4 bg-gray-100 rounded"/></div></div>)}
+    </div>
+  );
+  if (!items.length) return <p className="text-sm text-gray-400 py-4">No new arrivals</p>;
 
   return (
-    <div className="container py-12 border-t">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-6 w-6 text-primary" />
-          <h2 className="text-2xl font-bold">New Arrivals</h2>
-        </div>
-        <Button variant="outline" onClick={() => setLocation("/products?sort=newest")}>
-          View All
-        </Button>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {newProducts.map((product: any) => {
-          const images = product.images ? JSON.parse(product.images) : [];
-          // Use thumbnail (index 0) for card display
-          const thumbnailImage = images[0] || "/placeholder.png";
-          const price = product.salePrice || product.basePrice;
-          const hasDiscount = !!product.salePrice;
-          
-          // Check if product is new (added within last 7 days)
-          const isNew = product.createdAt && 
-            (new Date().getTime() - new Date(product.createdAt).getTime()) < 7 * 24 * 60 * 60 * 1000;
-
-          return (
-            <Card
-              key={product.id}
-              className="group cursor-pointer hover:shadow-lg transition-shadow overflow-hidden"
-              onClick={() => setLocation(`/product/${product.id}`)}
-            >
-              <div className="relative aspect-square overflow-hidden bg-muted">
-                <img
-                  src={thumbnailImage}
-                  loading="lazy"
-                  alt={product.name}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
-                {isNew && (
-                  <div className="absolute top-2 left-2 bg-primary text-primary-foreground px-2 py-1 rounded text-xs font-bold">
-                    NEW
-                  </div>
-                )}
-                {hasDiscount && (
-                  <div className="absolute top-2 right-2 bg-red-500 text-white px-2 py-1 rounded text-xs font-bold">
-                    SALE
-                  </div>
-                )}
-                {product.clearance === 1 && (
-                  <div className="absolute bottom-2 right-2 bg-orange-500 text-white px-2 py-1 rounded text-xs font-bold">
-                    CLEARANCE
-                  </div>
-                )}
-              </div>
-
-              <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground mb-1">{product.brand}</p>
-                <h3 className="font-semibold mb-2 line-clamp-2">{product.name}</h3>
-
-                <div className="flex items-center gap-2">
-                  {hasDiscount ? (
-                    <>
-                      <span className="text-lg font-bold text-primary">
-                        ₱{(price / 100).toLocaleString()}
-                      </span>
-                      <span className="text-sm text-muted-foreground line-through">
-                        ₱{(product.basePrice / 100).toLocaleString()}
-                      </span>
-                    </>
-                  ) : (
-                    <span className="text-lg font-bold">
-                      ₱{(price / 100).toLocaleString()}
-                    </span>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+    <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide px-1">
+      {items.map(p => <ProductCard key={p.itemCode} p={p} onClick={()=>setLocation(`/inventory/${p.itemCode}`)}/>)}
     </div>
   );
 }
