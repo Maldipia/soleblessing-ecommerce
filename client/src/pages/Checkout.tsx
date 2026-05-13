@@ -43,15 +43,19 @@ export default function Checkout() {
     (async () => {
       try {
         const rows = await sb.select("sb_settings", "select=key,value&key=in.(payment_methods,shipping)");
+        // value column is text — parse JSON before using
+        const parse = (v: any) => { try { return typeof v === "string" ? JSON.parse(v) : v; } catch { return null; } };
         rows.forEach((r: any) => {
-          if (r.key === "payment_methods") {
-            const enabled = r.value.filter((m: any) => m.enabled);
+          const v = parse(r.value);
+          if (!v) return;
+          if (r.key === "payment_methods" && Array.isArray(v)) {
+            const enabled = v.filter((m: any) => m.enabled);
             setPaymentMethods(enabled);
             if (enabled.length > 0) setForm(f => ({ ...f, paymentMethod: enabled[0].id }));
           }
-          if (r.key === "shipping") {
-            setFreeThreshold(r.value.free_threshold || 300000);
-            setFlatRate(r.value.flat_rate || 15000);
+          if (r.key === "shipping" && v.free_threshold) {
+            setFreeThreshold(v.free_threshold || 300000);
+            setFlatRate(v.flat_rate || 15000);
           }
         });
       } catch(e) {
