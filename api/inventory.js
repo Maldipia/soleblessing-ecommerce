@@ -112,6 +112,7 @@ export default async function handler(req, res) {
           if (!s || !p || p >= s) return 0;
           return Math.round(((s - p) / s) * 100);
         })(),
+        unitCost: finalUnitCost || null,   // col E — shown in admin only, not in product UI
         edited: hasSbOverride,
       });
     }
