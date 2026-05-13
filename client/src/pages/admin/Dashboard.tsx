@@ -34,13 +34,21 @@ function useAdminAuth() {
 
 // ─── Product Form Modal ─────────────────────────────────────────────────
 function ProductModal({ product, onClose, onSave }: { product?: any; onClose:()=>void; onSave:()=>void }) {
+  // Parse sizes into editable rows [{size, qty}]
+  const parseSizeRows = (sizesObj: any): {size: string; qty: number}[] => {
+    if (!sizesObj) return [{size:"US 7",qty:0},{size:"US 8",qty:0},{size:"US 9",qty:0},{size:"US 10",qty:0}];
+    try {
+      const obj = typeof sizesObj === "string" ? JSON.parse(sizesObj) : sizesObj;
+      return Object.entries(obj).map(([size, qty]) => ({size, qty: Number(qty)}));
+    } catch { return [{size:"US 7",qty:0},{size:"US 8",qty:0}]; }
+  };
+  const [sizeRows, setSizeRows] = useState<{size:string;qty:number}[]>(() => parseSizeRows(product?.sizes));
   const [form, setForm] = useState({
     name: product?.name||"", brand: product?.brand||"", category: product?.category||"Sneakers",
     description: product?.description||"", price: product ? String(product.price/100):"",
     sale_price: product?.sale_price ? String(product.sale_price/100):"",
     sku: product?.sku||"", stock: product ? String(product.stock):"1",
     featured: product?.featured||false, status: product?.status||"active",
-    sizes: product?.sizes ? JSON.stringify(product.sizes):'{"US 7":0,"US 8":0,"US 9":0,"US 10":0}',
     images: product?.images?.join("\n")||"",
   });
   const [saving, setSaving] = useState(false);
@@ -58,7 +66,7 @@ function ProductModal({ product, onClose, onSave }: { product?: any; onClose:()=
         sale_price:form.sale_price?Math.round(parseFloat(form.sale_price)*100):null,
         sku:form.sku||null, stock:parseInt(form.stock)||0,
         featured:form.featured, status:form.status,
-        sizes:(()=>{try{return JSON.parse(form.sizes);}catch{return {};}})(),
+        sizes: Object.fromEntries(sizeRows.filter(r=>r.size.trim()).map(r=>[r.size.trim(), r.qty])),
         images:form.images.split("\n").map((s:string)=>s.trim()).filter(Boolean),
         updated_at:new Date().toISOString(),
       };
@@ -117,11 +125,65 @@ function ProductModal({ product, onClose, onSave }: { product?: any; onClose:()=
               <textarea value={form.description} onChange={e=>s("description",e.target.value)} rows={2}
                 placeholder="Product description, materials, fit notes..."
                 className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-[#0d2430] resize-none"/></div>
-            <div><label className="text-xs font-semibold text-gray-500 block mb-1.5">Sizes & Stock (JSON)</label>
-              <textarea value={form.sizes} onChange={e=>s("sizes",e.target.value)} rows={2}
-                placeholder='{"US 7":2,"US 8":5,"US 9":3}'
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-mono outline-none focus:border-[#0d2430] resize-none"/>
-              <p className="text-[10px] text-gray-400 mt-1">Format: size → quantity. Zero = sold out.</p></div>
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-semibold text-gray-500">Sizes & Stock</label>
+                <button type="button" onClick={()=>setSizeRows(r=>[...r,{size:"",qty:0}])}
+                  className="flex items-center gap-1 text-[11px] font-bold text-[#C9A84C] hover:opacity-70 transition-opacity">
+                  <Plus className="h-3 w-3"/> Add Size
+                </button>
+              </div>
+              <div className="space-y-2">
+                {sizeRows.map((row,i)=>(
+                  <div key={i} className="flex items-center gap-2">
+                    <input
+                      value={row.size}
+                      onChange={e=>setSizeRows(rows=>rows.map((r,idx)=>idx===i?{...r,size:e.target.value}:r))}
+                      placeholder="e.g. US 9"
+                      className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d2430]"
+                    />
+                    <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden">
+                      <button type="button"
+                        onClick={()=>setSizeRows(rows=>rows.map((r,idx)=>idx===i?{...r,qty:Math.max(0,r.qty-1)}:r))}
+                        className="w-8 h-9 flex items-center justify-center hover:bg-gray-100 transition-colors text-gray-500 font-bold">−</button>
+                      <input type="number" min="0"
+                        value={row.qty}
+                        onChange={e=>setSizeRows(rows=>rows.map((r,idx)=>idx===i?{...r,qty:Math.max(0,parseInt(e.target.value)||0)}:r))}
+                        className="w-14 h-9 text-center text-sm font-semibold outline-none border-x border-gray-200"
+                      />
+                      <button type="button"
+                        onClick={()=>setSizeRows(rows=>rows.map((r,idx)=>idx===i?{...r,qty:r.qty+1}:r))}
+                        className="w-8 h-9 flex items-center justify-center hover:bg-gray-100 transition-colors text-gray-500 font-bold">+</button>
+                    </div>
+                    <span className={`text-[10px] font-bold w-16 text-center px-2 py-1 rounded-full ${row.qty===0?"bg-red-100 text-red-500":"bg-green-100 text-green-700"}`}>
+                      {row.qty===0?"Sold out":"In stock"}
+                    </span>
+                    <button type="button"
+                      onClick={()=>setSizeRows(rows=>rows.filter((_,idx)=>idx!==i))}
+                      className="text-gray-300 hover:text-red-400 transition-colors w-6 h-6 flex items-center justify-center flex-shrink-0">
+                      <X className="h-4 w-4"/>
+                    </button>
+                  </div>
+                ))}
+                {sizeRows.length===0&&(
+                  <button type="button" onClick={()=>setSizeRows([{size:"US 7",qty:0},{size:"US 8",qty:0},{size:"US 9",qty:0},{size:"US 10",qty:0}])}
+                    className="w-full py-2 text-xs text-gray-400 border border-dashed border-gray-200 rounded-xl hover:border-[#C9A84C] hover:text-[#C9A84C] transition-colors">
+                    + Add sizes
+                  </button>
+                )}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {["US 6","US 6.5","US 7","US 7.5","US 8","US 8.5","US 9","US 9.5","US 10","US 10.5","US 11","US 12"].map(sz=>(
+                  !sizeRows.some(r=>r.size===sz) && (
+                    <button key={sz} type="button"
+                      onClick={()=>setSizeRows(r=>[...r,{size:sz,qty:1}])}
+                      className="text-[10px] px-2 py-1 border border-dashed border-gray-200 rounded-full text-gray-400 hover:border-[#0d2430] hover:text-[#0d2430] transition-colors">
+                      + {sz}
+                    </button>
+                  )
+                ))}
+              </div>
+            </div>
             <div><label className="text-xs font-semibold text-gray-500 block mb-1.5">Image URLs (one per line)</label>
               <textarea value={form.images} onChange={e=>s("images",e.target.value)} rows={2}
                 placeholder="https://example.com/image.jpg"
