@@ -2,6 +2,7 @@ import { trpc } from "@/lib/trpc";
 import { sb } from "@/lib/supabase";
 import { useLocation } from "wouter";
 import { useState, useMemo, useEffect } from "react";
+import { Download } from "lucide-react";
 import {
   LayoutDashboard, Package, ShoppingCart, BarChart3,
   Shield, ChevronRight, Lock, LogOut, Zap, ExternalLink,
@@ -24,6 +25,76 @@ const STATUS_COLOR: Record<string,string> = {
   processing:"bg-indigo-100 text-indigo-800", shipped:"bg-purple-100 text-purple-800",
   delivered:"bg-green-100 text-green-800", cancelled:"bg-red-100 text-red-600",
 };
+
+
+// ─── QR Code Modal ──────────────────────────────────────────────────────────
+function QRModal({ itemCode, name, onClose }: { itemCode: string; name: string; onClose: () => void }) {
+  const url = `https://soleblessingofficial.com/inventory/${itemCode}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}&bgcolor=ffffff&color=050f12&margin=10`;
+
+  const download = async () => {
+    const res = await fetch(qrUrl);
+    const blob = await res.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `SB-QR-${itemCode}.png`;
+    a.click();
+  };
+
+  const copy = () => {
+    navigator.clipboard.writeText(url);
+    toast.success("Link copied!");
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+        <div className="bg-[#050f12] px-5 py-4 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-bold tracking-[.15em] uppercase text-[#C9A84C]">Product QR Code</p>
+            <p className="text-sm font-black text-white truncate max-w-[220px]">{name}</p>
+          </div>
+          <button onClick={onClose} className="text-white/40 hover:text-white transition-colors">
+            <X className="h-5 w-5"/>
+          </button>
+        </div>
+        <div className="p-6 flex flex-col items-center gap-4">
+          {/* QR Code */}
+          <div className="bg-white border-4 border-[#050f12] rounded-2xl p-3">
+            <img src={qrUrl} alt="QR Code" className="w-52 h-52" />
+          </div>
+          {/* Item code */}
+          <div className="text-center">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Item Code</p>
+            <p className="text-lg font-black text-[#0d2430] font-mono">{itemCode}</p>
+          </div>
+          {/* URL */}
+          <div className="w-full bg-gray-50 rounded-xl px-4 py-2.5 flex items-center gap-2">
+            <p className="text-[11px] text-gray-500 truncate flex-1 font-mono">{url}</p>
+            <button onClick={copy} className="text-[#C9A84C] hover:opacity-70 flex-shrink-0">
+              <Copy className="h-4 w-4"/>
+            </button>
+          </div>
+          {/* Actions */}
+          <div className="flex gap-3 w-full">
+            <button onClick={download}
+              className="flex-1 bg-[#0d2430] text-white py-3 text-xs font-bold tracking-wide rounded-xl hover:bg-[#122d3a] flex items-center justify-center gap-2">
+              <Download className="h-4 w-4"/> Download PNG
+            </button>
+            <button onClick={() => window.open(url, "_blank")}
+              className="flex-1 border border-gray-200 text-[#0d2430] py-3 text-xs font-semibold rounded-xl hover:bg-gray-50 flex items-center justify-center gap-2">
+              <ExternalLink className="h-4 w-4"/> Open Link
+            </button>
+          </div>
+          <p className="text-[10px] text-gray-400 text-center leading-relaxed">
+            Print or share this QR code. Customers scan it to go directly to this product page.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function useAdminAuth() {
   const [isAdmin] = useState<boolean>(() => {
@@ -219,6 +290,7 @@ export default function AdminDashboard() {
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [productModal, setProductModal] = useState<{open:boolean;product?:any}>({open:false});
+  const [qrModal, setQrModal] = useState<{open:boolean;itemCode:string;name:string}|null>(null);
   const [sbProducts, setSbProducts] = useState<any[]>([]);
   const [sbOrders, setSbOrders] = useState<any[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
@@ -358,6 +430,7 @@ export default function AdminDashboard() {
   // ─── Dashboard ──────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#F7F4EF] flex">
+      {qrModal?.open && <QRModal itemCode={qrModal.itemCode} name={qrModal.name} onClose={()=>setQrModal(null)}/>}
       {productModal.open&&<ProductModal product={productModal.product} onClose={()=>setProductModal({open:false})} onSave={()=>{setProductModal({open:false});loadProducts();}}/>}
 
       {/* Sidebar */}
@@ -524,6 +597,7 @@ export default function AdminDashboard() {
                     <th className="text-left px-4 py-3">Price</th>
                     <th className="text-left px-4 py-3">Sizes</th>
                     <th className="text-left px-4 py-3">Stock</th>
+                    <th className="text-center px-4 py-3 w-12">QR</th>
                   </tr></thead>
                   <tbody className="divide-y divide-gray-50">
                     {filteredInv.map(p=>(
@@ -541,6 +615,13 @@ export default function AdminDashboard() {
                           {(p.sizes||[]).length>3&&<span className="text-[9px] text-gray-400">+{p.sizes.length-3}</span>}
                         </div></td>
                         <td className="px-4 py-3 text-xs font-bold" style={{color:p.totalStock===0?"#ef4444":p.totalStock<=1?"#f59e0b":"#22c55e"}}>{p.totalStock}</td>
+                        <td className="px-4 py-3 text-center">
+                          <button onClick={()=>setQrModal({open:true,itemCode:p.itemCode,name:p.name})}
+                            className="w-8 h-8 flex items-center justify-center bg-gray-100 text-gray-500 rounded-lg hover:bg-[#050f12] hover:text-white transition-all mx-auto"
+                            title="View QR Code">
+                            <QrCode className="h-4 w-4"/>
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -610,6 +691,7 @@ export default function AdminDashboard() {
                       <th className="text-right px-3 py-3 w-36">Sale Price</th>
                       <th className="text-center px-3 py-3 w-20">Stock</th>
                       <th className="text-center px-3 py-3 w-16">Status</th>
+                      <th className="text-center px-3 py-3 w-12">QR</th>
                       <th className="px-3 py-3 w-20"/>
                     </tr></thead>
                     <tbody className="divide-y divide-gray-50">
@@ -693,6 +775,14 @@ export default function AdminDashboard() {
                                 p.status==="active"?"bg-[#0d2430] text-white":
                                 p.status==="draft"?"bg-gray-100 text-gray-500":"bg-red-100 text-red-500"
                               }`}>{p.status}</span>
+                            </td>
+                            {/* QR */}
+                            <td className="px-3 py-3 text-center">
+                              <button onClick={()=>setQrModal({open:true,itemCode:p.sku||p.id,name:p.name})}
+                                className="w-7 h-7 flex items-center justify-center bg-gray-100 text-gray-500 rounded-lg hover:bg-[#050f12] hover:text-white transition-all mx-auto"
+                                title="View QR Code">
+                                <QrCode className="h-3.5 w-3.5"/>
+                              </button>
                             </td>
                             {/* Actions */}
                             <td className="px-3 py-3">
