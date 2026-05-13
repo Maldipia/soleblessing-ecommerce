@@ -678,7 +678,7 @@ export default function AdminDashboard() {
                 ) : (
                   <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead><tr className="bg-[#F7F4EF] text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100">
+                    <thead className="sticky top-0 z-10"><tr className="bg-[#F7F4EF] text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100">
                       <th className="w-14 px-4 py-3"/>
                       <th className="text-left px-3 py-3">Product</th>
                       <th className="text-left px-3 py-3 w-24">Brand</th>
@@ -800,7 +800,7 @@ export default function AdminDashboard() {
                   </div>
                 ) : (
                   <table className="w-full">
-                    <thead><tr className="bg-[#F7F4EF] text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100">
+                    <thead className="sticky top-0 z-10"><tr className="bg-[#F7F4EF] text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100">
                       <th className="text-left px-5 py-3 w-12"/>
                       <th className="text-left px-3 py-3 w-28">SKU</th>
                       <th className="text-left px-3 py-3">Product</th>
