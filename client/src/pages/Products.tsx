@@ -38,7 +38,7 @@ export default function Products() {
           itemCode: item.itemCode,
           sku: item.sku,
           name: item.name,
-          brand: (item.sku.match(/^[A-Za-z]+/) || [""])[0].toUpperCase() || "OTHER",
+          brand: item.brand || "Other",
           price: item.srp || item.sellingPrice,
           salePrice: item.sellingPrice < item.srp ? item.sellingPrice : null,
           imageUrl: item.imageUrl,
@@ -204,7 +204,14 @@ export default function Products() {
                   </div>
                   {/* Info */}
                   <div className="p-4">
-                    <p className="text-[9px] font-bold tracking-[.12em] uppercase text-[#C9A84C] mb-1">{p.brand}</p>
+                    {(() => {
+                      const bc: Record<string,string> = {
+                        "Nike":"bg-black text-white","Jordan":"bg-red-600 text-white",
+                        "Adidas":"bg-blue-600 text-white","VEJA":"bg-green-600 text-white",
+                        "On Running":"bg-gray-700 text-white",
+                      };
+                      return <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full mb-1 inline-block ${bc[p.brand]||"bg-[#C9A84C] text-[#050f12]"}`}>{p.brand}</span>;
+                    })()}
                     <h3 className="text-sm font-bold text-[#0d2430] leading-tight line-clamp-2 mb-2">{p.name}</h3>
                     {/* Sizes */}
                     <div className="flex flex-wrap gap-1 mb-3">
