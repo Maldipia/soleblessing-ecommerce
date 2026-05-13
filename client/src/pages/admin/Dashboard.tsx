@@ -15,7 +15,7 @@ import AdminSettings from "./Settings";
 import { useInventory, refreshInventory } from "@/hooks/useInventory";
 import AdminPromos from "./Promos";
 
-type Section = "overview"|"inventory"|"products"|"orders"|"promos"|"settings"|"analytics";
+type Section = "overview"|"products"|"orders"|"promos"|"settings"|"analytics";
 
 const ADMIN_KEY = "sb_admin_v1";
 const fmt = (c: number) => `₱${(c/100).toLocaleString("en-PH")}`;
@@ -383,8 +383,7 @@ export default function AdminDashboard() {
 
   const NAV = [
     {id:"overview" as Section, icon:LayoutDashboard, label:"Overview"},
-    {id:"inventory" as Section, icon:Package,        label:"Inventory"},
-    {id:"products"  as Section, icon:Plus,           label:"Products"},
+    {id:"products"  as Section, icon:Package,        label:"Products"},
     {id:"orders"    as Section, icon:ShoppingCart,   label:"Orders"},
     {id:"promos"    as Section, icon:Tag,            label:"Promo Codes"},
     {id:"settings"  as Section, icon:Settings,       label:"Settings"},
@@ -513,7 +512,7 @@ export default function AdminDashboard() {
                 <div className="bg-white border border-gray-100 rounded-xl p-6">
                   <div className="flex justify-between items-center mb-4">
                     <h2 className="text-xs font-bold uppercase tracking-wider text-[#0d2430]">⚠ Low Stock</h2>
-                    <button onClick={()=>setSection("inventory")} className="text-xs text-[#C9A84C] font-semibold">View All →</button>
+                    <button onClick={()=>setSection("products")} className="text-xs text-[#C9A84C] font-semibold">View All →</button>
                   </div>
                   <div className="divide-y divide-gray-50">
                     {inventoryGrouped.filter(p=>p.totalStock<=1).slice(0,6).map(p=>(
@@ -570,115 +569,107 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {/* ── INVENTORY ── */}
-          {section==="inventory"&&(
-            <div>
-              <div className="flex items-center gap-3 mb-6">
+          {/* ── PRODUCTS (unified: Sheets + Custom) ── */}
+          {section==="products"&&(
+            <div className="space-y-6">
+
+              {/* ── TOP BAR ── */}
+              <div className="flex items-center gap-3 flex-wrap">
                 <div className="relative flex-1 max-w-sm">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400"/>
-                  <input placeholder="Search name or SKU…" value={search} onChange={e=>setSearch(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2.5 text-sm bg-white border border-gray-200 rounded-lg outline-none focus:border-[#0d2430]"/>
+                  <input placeholder="Search name, SKU, item code…" value={search} onChange={e=>setSearch(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2.5 text-sm bg-white border border-gray-200 rounded-xl outline-none focus:border-[#0d2430]"/>
                 </div>
-                <span className="text-xs text-gray-400">{filteredInv.length} products</span>
-                <button onClick={()=>{syncInventory();}} disabled={syncing}
-                  className="flex items-center gap-2 border border-gray-200 bg-white text-[#0d2430] px-3 py-2 text-xs font-semibold rounded-lg hover:bg-gray-50 ml-auto">
-                  <RefreshCw className={`h-3.5 w-3.5 ${syncing?"animate-spin":""}`}/> Sync
+                <span className="text-xs text-gray-400">{filteredInv.length} from Sheets</span>
+                <button onClick={()=>syncInventory()} disabled={syncing}
+                  className="flex items-center gap-2 border border-gray-200 bg-white text-[#0d2430] px-3 py-2 text-xs font-semibold rounded-xl hover:bg-gray-50 disabled:opacity-50">
+                  <RefreshCw className={`h-3.5 w-3.5 ${syncing?"animate-spin":""}`}/> Sync Sheets
                 </button>
-                <a href="https://docs.google.com/spreadsheets/d/1WZttK5ZsPhnBz91JmBb-V4GCs-42uXjTUXz67V5sSDI/edit" target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-2 bg-[#C9A84C] text-[#050f12] px-3 py-2 text-xs font-semibold rounded-lg hover:opacity-90">
+                <a href="https://docs.google.com/spreadsheets/d/1WZttK5ZsPhnBz91JmBb-V4GCs-42uXjTUXz67V5sSDI/edit?gid=631652219"
+                  target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-2 bg-[#C9A84C] text-[#050f12] px-3 py-2 text-xs font-semibold rounded-xl hover:opacity-90">
                   <ExternalLink className="h-3.5 w-3.5"/> Edit in Sheets
                 </a>
               </div>
-              <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead><tr className="bg-[#F7F4EF] text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                    <th className="text-left px-5 py-3">Product</th>
-                    <th className="text-left px-4 py-3">SKU</th>
-                    <th className="text-left px-4 py-3">Price</th>
-                    <th className="text-left px-4 py-3">Sizes</th>
-                    <th className="text-left px-4 py-3">Stock</th>
-                    <th className="text-center px-4 py-3 w-12">QR</th>
-                  </tr></thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {filteredInv.map(p=>(
-                      <tr key={p.sku} className="hover:bg-gray-50">
-                        <td className="px-5 py-3"><div className="flex items-center gap-3">
-                          {p.imageUrl?<img src={p.imageUrl} alt={p.name} className="w-10 h-10 object-cover rounded bg-gray-100 flex-shrink-0"/>
-                            :<div className="w-10 h-10 bg-[#EDE9E3] rounded flex items-center justify-center text-lg flex-shrink-0">👟</div>}
-                          <div><div className="font-medium text-[#0d2430] text-xs leading-tight max-w-[200px] truncate">{p.name}</div>
-                            <div className="text-[10px] text-gray-400 font-mono">{p.itemCode}</div></div>
-                        </div></td>
-                        <td className="px-4 py-3 font-mono text-[10px] text-gray-500">{p.sku}</td>
-                        <td className="px-4 py-3 text-xs font-bold text-[#0d2430]">{p.sellingPrice>0?fmt(p.sellingPrice):fmt(p.srp)}</td>
-                        <td className="px-4 py-3"><div className="flex flex-wrap gap-1">
-                          {(p.sizes||[]).slice(0,3).map((s:string)=><span key={s} className="text-[9px] px-1.5 py-0.5 bg-gray-50 border border-gray-100 rounded text-gray-500">{s}</span>)}
-                          {(p.sizes||[]).length>3&&<span className="text-[9px] text-gray-400">+{p.sizes.length-3}</span>}
-                        </div></td>
-                        <td className="px-4 py-3 text-xs font-bold" style={{color:p.totalStock===0?"#ef4444":p.totalStock<=1?"#f59e0b":"#22c55e"}}>{p.totalStock}</td>
-                        <td className="px-4 py-3 text-center">
-                          <button onClick={()=>setQrModal({open:true,itemCode:p.itemCode,name:p.name})}
-                            className="w-8 h-8 flex items-center justify-center bg-gray-100 text-gray-500 rounded-lg hover:bg-[#050f12] hover:text-white transition-all mx-auto"
-                            title="View QR Code">
-                            <QrCode className="h-4 w-4"/>
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {filteredInv.length===0&&<div className="text-center py-12 text-sm text-gray-400">{invLoading?"Loading…":"No products found"}</div>}
-              </div>
-            </div>
-          )}
 
-          {/* ── PRODUCTS (Supabase) ── */}
-          {section==="products"&&(
-            <div>
-              {/* Search + category filters */}
-              <div className="flex items-center gap-3 mb-4">
-                <div className="relative flex-1 max-w-sm">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400"/>
-                  <input placeholder="Search SKU, name…"
-                    value={search} onChange={e=>setSearch(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2.5 text-sm bg-white border border-gray-200 rounded-xl outline-none focus:border-[#0d2430]"/>
-                </div>
-                <span className="text-xs text-gray-400">{filteredProducts.length} products</span>
-                <button onClick={()=>setProductModal({open:true})}
-                  className="flex items-center gap-2 bg-[#C9A84C] text-[#050f12] px-4 py-2 text-xs font-bold rounded-xl hover:opacity-90 ml-auto">
-                  <Plus className="h-3.5 w-3.5"/> Add Product
-                </button>
-                <button onClick={loadProducts}
-                  className="flex items-center gap-2 border border-gray-200 bg-white text-[#0d2430] px-3 py-2 text-xs font-semibold rounded-xl hover:bg-gray-50">
-                  <RefreshCw className={`h-3.5 w-3.5 ${loadingProducts?"animate-spin":""}`}/>
-                </button>
-              </div>
-
-              {/* Category pills */}
-              <div className="flex gap-2 flex-wrap mb-5">
-                {["All",...Array.from(new Set(sbProducts.map((p:any)=>p.category).filter(Boolean)))].map(cat=>{
-                  const count = cat==="All" ? sbProducts.length : sbProducts.filter((p:any)=>p.category===cat).length;
-                  const active = productCategory===cat;
-                  return(
-                    <button key={cat} onClick={()=>setProductCategory(cat)}
-                      className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${
-                        active?"bg-[#0d2430] text-white border-[#0d2430]":"bg-white text-gray-600 border-gray-200 hover:border-gray-400"
-                      }`}>
-                      {cat}
-                      <span className={`text-[10px] font-black ${active?"text-[#C9A84C]":"text-gray-400"}`}>{count}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Products table */}
+              {/* ── SHEETS INVENTORY TABLE ── */}
               <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
-                {loadingProducts ? (
-                  <div className="py-16 text-center"><div className="flex gap-2 justify-center">{[0,1,2].map(i=><div key={i} className="w-2 h-2 bg-[#C9A84C] rounded-full animate-bounce" style={{animationDelay:`${i*.15}s`}}/>)}</div></div>
-                ) : filteredProducts.length === 0 ? (
-                  <div className="py-20 text-center">
-                    <Package className="h-10 w-10 text-gray-200 mx-auto mb-3"/>
-                    <p className="text-sm text-gray-400 mb-4">No products yet</p>
-                    <button onClick={()=>setProductModal({open:true})} className="bg-[#0d2430] text-white px-5 py-2.5 text-xs font-bold rounded-xl hover:bg-[#122d3a]">Add First Product</button>
+                <div className="px-5 py-3 border-b border-gray-50 flex items-center justify-between">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#0d2430]">
+                    Live Inventory <span className="text-[#C9A84C] ml-1">· 2025 Sheet</span>
+                  </h3>
+                  <span className="text-[10px] text-gray-400">{filteredInv.length} items</span>
+                </div>
+                {invLoading ? (
+                  <div className="py-12 text-center"><div className="flex gap-2 justify-center">{[0,1,2].map(i=><div key={i} className="w-2 h-2 bg-[#C9A84C] rounded-full animate-bounce" style={{animationDelay:`${i*.15}s`}}/>)}</div></div>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead><tr className="bg-[#F7F4EF] text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100">
+                      <th className="text-left px-5 py-3 w-14"/>
+                      <th className="text-left px-4 py-3">Product</th>
+                      <th className="text-left px-4 py-3 w-24">SKU</th>
+                      <th className="text-left px-4 py-3 w-20">Size</th>
+                      <th className="text-right px-4 py-3 w-28">Price</th>
+                      <th className="text-center px-4 py-3 w-20">Stock</th>
+                      <th className="text-center px-4 py-3 w-12">QR</th>
+                    </tr></thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {filteredInv.length===0 ? (
+                        <tr><td colSpan={7} className="text-center py-12 text-sm text-gray-400">No products found</td></tr>
+                      ) : filteredInv.map(p=>(
+                        <tr key={p.itemCode} className="hover:bg-gray-50/50 transition-colors">
+                          <td className="px-5 py-2.5">
+                            <div className="w-11 h-11 bg-[#EDE9E3] rounded-lg overflow-hidden">
+                              {p.imageUrl ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover"/> : <span className="w-full h-full flex items-center justify-center text-base opacity-20">👟</span>}
+                            </div>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <p className="text-sm font-semibold text-[#0d2430] leading-tight">{p.name}</p>
+                            <p className="text-[10px] text-gray-400 font-mono mt-0.5">{p.itemCode}</p>
+                          </td>
+                          <td className="px-4 py-2.5 font-mono text-[11px] text-gray-500">{p.sku}</td>
+                          <td className="px-4 py-2.5">
+                            <span className="text-[11px] bg-[#EDE9E3] text-[#0d2430] px-2 py-1 rounded font-bold">{p.size}</span>
+                          </td>
+                          <td className="px-4 py-2.5 text-right">
+                            {p.sellingPrice>0 ? (
+                              <div>
+                                <span className="text-sm font-black text-[#0d2430]">{fmt(p.sellingPrice)}</span>
+                                {p.srp>0&&p.srp>p.sellingPrice&&<span className="text-[10px] text-gray-400 line-through ml-1">{fmt(p.srp)}</span>}
+                              </div>
+                            ) : <span className="text-xs text-gray-400">{fmt(p.srp||0)}</span>}
+                          </td>
+                          <td className="px-4 py-2.5 text-center">
+                            <span className={`text-xs font-bold ${p.totalStock===0?"text-red-500":p.totalStock<=2?"text-amber-500":"text-green-600"}`}>{p.totalStock}</span>
+                          </td>
+                          <td className="px-4 py-2.5 text-center">
+                            <button onClick={()=>setQrModal({open:true,itemCode:p.itemCode,name:p.name})}
+                              className="w-8 h-8 flex items-center justify-center bg-gray-100 text-gray-500 rounded-lg hover:bg-[#050f12] hover:text-white transition-all mx-auto">
+                              <QrCode className="h-4 w-4"/>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+
+              {/* ── CUSTOM PRODUCTS (Supabase) ── */}
+              <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
+                <div className="px-5 py-3 border-b border-gray-50 flex items-center justify-between">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#0d2430]">
+                    Custom Listings <span className="text-gray-400 font-normal ml-1">· Manually added</span>
+                  </h3>
+                  <button onClick={()=>setProductModal({open:true})}
+                    className="flex items-center gap-1.5 bg-[#0d2430] text-white px-3 py-1.5 text-[11px] font-bold rounded-lg hover:bg-[#122d3a]">
+                    <Plus className="h-3 w-3"/> Add Custom
+                  </button>
+                </div>
+                {filteredProducts.length===0 ? (
+                  <div className="py-8 text-center">
+                    <p className="text-sm text-gray-400 mb-3">No custom products yet</p>
+                    <button onClick={()=>setProductModal({open:true})} className="text-xs text-[#C9A84C] font-semibold underline">Add one</button>
                   </div>
                 ) : (
                   <table className="w-full">
@@ -698,38 +689,20 @@ export default function AdminDashboard() {
                       {filteredProducts.map((p:any)=>{
                         const discount = p.sale_price && p.price ? Math.round((1-p.sale_price/p.price)*100) : 0;
                         const sizeEntries = p.sizes ? Object.entries(p.sizes) : [];
-                        const sizeLabel = sizeEntries.length===1
-                          ? `${sizeEntries[0][0]}:${sizeEntries[0][1]}`
-                          : sizeEntries.length > 0
-                            ? `${sizeEntries.length} sizes`
-                            : "—";
+                        const sizeLabel = sizeEntries.length===1 ? `${sizeEntries[0][0]}:${sizeEntries[0][1]}` : sizeEntries.length > 0 ? `${sizeEntries.length} sizes` : "—";
                         const totalQty = sizeEntries.reduce((sum:number,[,qty]:any)=>sum+Number(qty),0) || p.stock || 0;
                         const isLow = totalQty > 0 && totalQty <= 3;
                         return(
                           <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
-                            {/* Image */}
-                            <td className="px-5 py-3">
-                              <div className="w-12 h-12 bg-[#EDE9E3] rounded-lg overflow-hidden flex-shrink-0">
-                                {p.images?.[0]
-                                  ? <img src={p.images[0]} alt={p.name} className="w-full h-full object-cover"/>
-                                  : <span className="w-full h-full flex items-center justify-center text-lg opacity-20">👟</span>}
-                              </div>
-                            </td>
-                            {/* SKU */}
-                            <td className="px-3 py-3">
-                              <span className="text-[11px] font-mono text-gray-400">{p.sku || "—"}</span>
-                            </td>
-                            {/* Name + category */}
-                            <td className="px-3 py-3">
-                              <p className="text-sm font-semibold text-[#0d2430] leading-tight">{p.name}</p>
-                              <p className="text-[10px] text-gray-400 mt-0.5">{p.category}</p>
-                            </td>
-                            {/* Size pill */}
+                            <td className="px-5 py-3"><div className="w-12 h-12 bg-[#EDE9E3] rounded-lg overflow-hidden">
+                              {p.images?.[0] ? <img src={p.images[0]} alt={p.name} className="w-full h-full object-cover"/> : <span className="w-full h-full flex items-center justify-center text-lg opacity-20">👟</span>}
+                            </div></td>
+                            <td className="px-3 py-3"><span className="text-[11px] font-mono text-gray-400">{p.sku||"—"}</span></td>
+                            <td className="px-3 py-3"><p className="text-sm font-semibold text-[#0d2430]">{p.name}</p><p className="text-[10px] text-gray-400">{p.category}</p></td>
                             <td className="px-3 py-3">
                               <div className="relative">
-                                <button
-                                  onClick={()=>setExpandedSizeId(expandedSizeId===p.id?null:p.id)}
-                                  className="flex items-center gap-1.5 border border-[#C9A84C] text-[#0d2430] text-[11px] font-bold px-2.5 py-1 rounded hover:bg-[#C9A84C]/10 transition-colors">
+                                <button onClick={()=>setExpandedSizeId(expandedSizeId===p.id?null:p.id)}
+                                  className="flex items-center gap-1.5 border border-[#C9A84C] text-[#0d2430] text-[11px] font-bold px-2.5 py-1 rounded hover:bg-[#C9A84C]/10">
                                   <span>{sizeLabel}</span>
                                   <svg className={`w-3 h-3 text-gray-400 transition-transform ${expandedSizeId===p.id?"rotate-180":""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
                                 </button>
@@ -746,57 +719,15 @@ export default function AdminDashboard() {
                                 )}
                               </div>
                             </td>
-                            {/* Price */}
-                            <td className="px-3 py-3 text-right">
-                              <span className={`text-sm ${p.sale_price?"text-gray-400 line-through text-[11px]":"font-bold text-[#0d2430]"}`}>
-                                ₱{(p.price/100).toLocaleString("en-PH",{minimumFractionDigits:2})}
-                              </span>
-                            </td>
-                            {/* Sale price + discount */}
-                            <td className="px-3 py-3 text-right">
-                              {p.sale_price ? (
-                                <div className="flex items-center justify-end gap-1.5">
-                                  <span className="text-sm font-bold text-red-500">₱{(p.sale_price/100).toLocaleString("en-PH",{minimumFractionDigits:2})}</span>
-                                  {discount>0&&<span className="text-[10px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded">-{discount}%</span>}
-                                </div>
-                              ) : (
-                                <span className="text-[11px] text-gray-300">+ sale</span>
-                              )}
-                            </td>
-                            {/* Stock */}
-                            <td className="px-3 py-3 text-center">
-                              <span className={`text-xs font-bold ${totalQty===0?"text-red-500":isLow?"text-amber-500":"text-green-600"}`}>
-                                {totalQty} units
-                              </span>
-                            </td>
-                            {/* Status */}
-                            <td className="px-3 py-3 text-center">
-                              <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
-                                p.status==="active"?"bg-[#0d2430] text-white":
-                                p.status==="draft"?"bg-gray-100 text-gray-500":"bg-red-100 text-red-500"
-                              }`}>{p.status}</span>
-                            </td>
-                            {/* QR */}
-                            <td className="px-3 py-3 text-center">
-                              <button onClick={()=>setQrModal({open:true,itemCode:p.sku||p.id,name:p.name})}
-                                className="w-7 h-7 flex items-center justify-center bg-gray-100 text-gray-500 rounded-lg hover:bg-[#050f12] hover:text-white transition-all mx-auto"
-                                title="View QR Code">
-                                <QrCode className="h-3.5 w-3.5"/>
-                              </button>
-                            </td>
-                            {/* Actions */}
-                            <td className="px-3 py-3">
-                              <div className="flex items-center gap-1.5 justify-end">
-                                <button onClick={()=>setProductModal({open:true,product:p})}
-                                  className="w-7 h-7 flex items-center justify-center bg-gray-100 text-gray-500 rounded-lg hover:bg-[#0d2430] hover:text-white transition-all">
-                                  <Edit2 className="h-3.5 w-3.5"/>
-                                </button>
-                                <button onClick={()=>deleteProduct(p.id)}
-                                  className="w-7 h-7 flex items-center justify-center bg-gray-100 text-gray-400 rounded-lg hover:bg-red-100 hover:text-red-500 transition-all">
-                                  <Trash2 className="h-3.5 w-3.5"/>
-                                </button>
-                              </div>
-                            </td>
+                            <td className="px-3 py-3 text-right"><span className={`text-sm ${p.sale_price?"text-gray-400 line-through text-[11px]":"font-bold text-[#0d2430]"}`}>₱{(p.price/100).toLocaleString("en-PH",{minimumFractionDigits:2})}</span></td>
+                            <td className="px-3 py-3 text-right">{p.sale_price ? (<div className="flex items-center justify-end gap-1.5"><span className="text-sm font-bold text-red-500">₱{(p.sale_price/100).toLocaleString("en-PH",{minimumFractionDigits:2})}</span>{discount>0&&<span className="text-[10px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded">-{discount}%</span>}</div>) : <span className="text-[11px] text-gray-300">+ sale</span>}</td>
+                            <td className="px-3 py-3 text-center"><span className={`text-xs font-bold ${totalQty===0?"text-red-500":isLow?"text-amber-500":"text-green-600"}`}>{totalQty} units</span></td>
+                            <td className="px-3 py-3 text-center"><span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${p.status==="active"?"bg-[#0d2430] text-white":p.status==="draft"?"bg-gray-100 text-gray-500":"bg-red-100 text-red-500"}`}>{p.status}</span></td>
+                            <td className="px-3 py-3 text-center"><button onClick={()=>setQrModal({open:true,itemCode:p.sku||p.id,name:p.name})} className="w-7 h-7 flex items-center justify-center bg-gray-100 text-gray-500 rounded-lg hover:bg-[#050f12] hover:text-white transition-all mx-auto"><QrCode className="h-3.5 w-3.5"/></button></td>
+                            <td className="px-3 py-3"><div className="flex items-center gap-1.5 justify-end">
+                              <button onClick={()=>setProductModal({open:true,product:p})} className="w-7 h-7 flex items-center justify-center bg-gray-100 text-gray-500 rounded-lg hover:bg-[#0d2430] hover:text-white transition-all"><Edit2 className="h-3.5 w-3.5"/></button>
+                              <button onClick={()=>deleteProduct(p.id)} className="w-7 h-7 flex items-center justify-center bg-gray-100 text-gray-400 rounded-lg hover:bg-red-100 hover:text-red-500 transition-all"><Trash2 className="h-3.5 w-3.5"/></button>
+                            </div></td>
                           </tr>
                         );
                       })}
