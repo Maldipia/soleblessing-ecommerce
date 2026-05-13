@@ -19,6 +19,25 @@ function parsePrice(str) {
   const n = parseFloat(str.replace(/[₱,\s]/g, ''));
   return isNaN(n) ? 0 : Math.round(n * 100);
 }
+function detectBrand(name, sku) {
+  const n = (name || '').toUpperCase();
+  const s = (sku  || '').toUpperCase();
+  // Jordan first (subset of Nike)
+  if (n.includes('JORDAN') || n.includes('AIR JORDAN')) return 'Jordan';
+  // Nike
+  if (n.includes('NIKE') || n.includes('AIR FORCE') || n.includes('LEBRON') ||
+      n.includes('DUNK') || n.includes('GAMMA FORCE') || n.includes('PRECISION') ||
+      n.includes('COURT ROYALE') || n.includes('COURT LEGACY') || n.includes('COURT VISION') ||
+      n.includes('WAFFLE') || n.includes('AF1') || n.includes('SB ') || n.includes('WMNS AIR')) return 'Nike';
+  // On Running
+  if (s.startsWith('3MF') || s.startsWith('3ME') || n.includes('CLOUD ') ||
+      n.includes('NOVA FORM') || n.includes('ON RUNNING')) return 'On Running';
+  // VEJA
+  if (n.includes('VEJA')) return 'VEJA';
+  // Default → Adidas (SUPERSTAR, STAN SMITH, NMD, CAMPUS, SAMBA, GAZELLE, RIVALRY, FORUM, etc.)
+  return 'Adidas';
+}
+
 function convertDriveUrl(url) {
   if (!url || !url.trim()) return '';
   const m = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
@@ -112,6 +131,7 @@ export default async function handler(req, res) {
           if (!s || !p || p >= s) return 0;
           return Math.round(((s - p) / s) * 100);
         })(),
+        brand: detectBrand(finalName, finalSku),
         unitCost: finalUnitCost || null,   // col E — shown in admin only, not in product UI
         edited: hasSbOverride,
       });
