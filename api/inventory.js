@@ -1,6 +1,7 @@
 
 const SPREADSHEET_ID = '1WZttK5ZsPhnBz91JmBb-V4GCs-42uXjTUXz67V5sSDI';
 const GID_2025 = '631652219';
+const GID_2024 = '0';
 const SUPABASE_URL = 'https://akualfrqzaierqsfcnkp.supabase.co';
 const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || '';
 
@@ -53,16 +54,20 @@ export default async function handler(req, res) {
 
   try {
     // Fetch Google Sheets CSV + Supabase overrides in parallel
-    const [csvRes, sbRes] = await Promise.allSettled([
+    const [csvRes2025, csvRes2024, sbRes] = await Promise.allSettled([
       fetch(`https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=${GID_2025}`,
+        { headers: { 'User-Agent': 'Mozilla/5.0' } }),
+      fetch(`https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=${GID_2024}`,
         { headers: { 'User-Agent': 'Mozilla/5.0' } }),
       SUPABASE_KEY ? fetch(`${SUPABASE_URL}/rest/v1/sb_inventory?select=*`,
         { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }) : Promise.resolve(null),
     ]);
 
-    if (csvRes.status !== 'fulfilled' || !csvRes.value.ok) {
+    if (csvRes2025.status !== 'fulfilled' || !csvRes2025.value.ok) {
       return res.status(502).json({ error: 'Sheet fetch failed' });
     }
+    // Use csvRes alias for backward compat
+    const csvRes = csvRes2025;
 
     // Build Supabase overrides map keyed by item_code
     const overrides = new Map();
@@ -71,12 +76,20 @@ export default async function handler(req, res) {
       if (Array.isArray(rows)) rows.forEach(r => overrides.set(r.item_code, r));
     }
 
-    const csvText = await csvRes.value.text();
-    const lines = csvText.split('\n').slice(2);
+    const csvText2025 = await csvRes.value.text();
+    const csvText2024 = csvRes2024.status === 'fulfilled' && csvRes2024.value.ok
+      ? await csvRes2024.value.text() : '';
+
+    // Combine both tabs — 2025 first, then 2024 (2025 takes priority on duplicates)
+    const allLines = [
+      ...csvText2025.split('\n').slice(2).map(l => ({line: l, tab: '2025'})),
+      ...csvText2024.split('\n').slice(2).map(l => ({line: l, tab: '2024'})),
+    ];
+
     const products = [];
     const seen = new Set();
 
-    for (const line of lines) {
+    for (const {line, tab} of allLines) {
       if (!line.trim()) continue;
       const row = parseCSVLine(line);
       if (row.length < 7) continue;
@@ -131,13 +144,16 @@ export default async function handler(req, res) {
           if (!s || !p || p >= s) return 0;
           return Math.round(((s - p) / s) * 100);
         })(),
+        tab,
         brand: detectBrand(finalName, finalSku),
         unitCost: finalUnitCost || null,   // col E — shown in admin only, not in product UI
         edited: hasSbOverride,
       });
     }
 
-    res.status(200).json({ products, count: products.length, tab: '2025' });
+    const count2025 = products.filter(p => p.tab === '2025').length;
+    const count2024 = products.filter(p => p.tab === '2024').length;
+    res.status(200).json({ products, count: products.length, tabs: { '2025': count2025, '2024': count2024 } });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
