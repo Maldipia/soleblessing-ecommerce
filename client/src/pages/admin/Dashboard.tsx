@@ -347,21 +347,6 @@ export default function AdminDashboard() {
     return Array.from(map.values());
   },[inventory]);
 
-  const filteredInv = useMemo(()=>{
-    const base = Array.isArray(inventory) ? inventory : inventoryGrouped;
-    return base.filter((p:any)=>{
-      if(tabFilter!=='all' && p.tab!==tabFilter) return false;
-      if(!search) return true;
-      return p.name?.toLowerCase().includes(search.toLowerCase())||
-        p.sku?.toLowerCase().includes(search.toLowerCase())||
-        p.itemCode?.toLowerCase().includes(search.toLowerCase())||
-        (p.brand||'').toLowerCase().includes(search.toLowerCase());
-    });
-  },[inventory,inventoryGrouped,search,tabFilter])mport { trpc } from "@/lib/trpc";
-import { sb } from "@/lib/supabase";
-import { useLocation } from "wouter";
-import { useState, useMemo, useEffect } from "react";
-import {
   LayoutDashboard, Package, ShoppingCart, BarChart3,
   Shield, ChevronRight, Lock, LogOut, Zap, ExternalLink,
   Search, RefreshCw, AlertTriangle, TrendingUp, Plus,
@@ -706,10 +691,17 @@ export default function AdminDashboard() {
     return Array.from(map.values());
   },[inventory]);
 
-  const filteredInv = useMemo(()=>
-    !search?inventoryGrouped:inventoryGrouped.filter(p=>
-      p.name?.toLowerCase().includes(search.toLowerCase())||p.sku?.toLowerCase().includes(search.toLowerCase())),
-    [inventoryGrouped,search]);
+  const filteredInv = useMemo(()=>{
+    const base = Array.isArray(inventory) ? inventory : inventoryGrouped;
+    return base.filter((p:any)=>{
+      if(tabFilter!=='all' && (p as any).tab!==tabFilter) return false;
+      if(!search) return true;
+      return p.name?.toLowerCase().includes(search.toLowerCase())||
+        p.sku?.toLowerCase().includes(search.toLowerCase())||
+        p.itemCode?.toLowerCase().includes(search.toLowerCase())||
+        ((p as any).brand||'').toLowerCase().includes(search.toLowerCase());
+    });
+  },[inventory,inventoryGrouped,search,tabFilter]);
 
   const filteredProducts = useMemo(()=>
     sbProducts.filter((p:any)=>{
