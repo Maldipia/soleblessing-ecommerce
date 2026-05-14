@@ -291,6 +291,366 @@ export default function AdminDashboard() {
   const [loginError, setLoginError] = useState("");
   const [productModal, setProductModal] = useState<{open:boolean;product?:any}>({open:false});
   const [qrModal, setQrModal] = useState<{open:boolean;itemCode:string;name:string}|null>(null);
+  const [tabFilter, setTabFilter] = useState<'all'|'2025'|'2024'>('all');
+  const [editingRow, setEditingRow] = useState<string|null>(null);
+  const [editValues, setEditValues] = useState<Record<string,any>>({});
+  const [savingRow, setSavingRow] = useState<string|null>(null);
+  const [sbProducts, setSbProducts] = useState<any[]>([]);
+  const [sbOrders, setSbOrders] = useState<any[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [orderFilter, setOrderFilter] = useState("all");
+  const [productCategory, setProductCategory] = useState("All");
+  const [expandedSizeId, setExpandedSizeId] = useState<string|null>(null);
+
+  const { data: inventory, isLoading: invLoading, refetch: refetchInv } = useInventory() as any;
+  const syncInventory = async () => {
+    setSyncing(true);
+    try {
+      const { refreshInventory } = await import("@/hooks/useInventory");
+      const result = await refreshInventory();
+      refetchInv();
+      setSyncing(false);
+      toast.success(`Synced! ${result.count} products loaded`);
+    } catch(e: any) {
+      setSyncing(false);
+      toast.error("Sync failed: " + e.message);
+    }
+  };
+
+  const loadProducts = async () => {
+    setLoadingProducts(true);
+    try{setSbProducts(await sb.select("sb_products","order=created_at.desc"));}
+    catch(e){console.error(e);}
+    finally{setLoadingProducts(false);}
+  };
+  const loadOrders = async () => {
+    try{setSbOrders(await sb.select("sb_orders","order=created_at.desc"));}
+    catch(e){console.error(e);}
+  };
+
+  useEffect(()=>{if(isAdmin){loadProducts();loadOrders();}}, [isAdmin]);
+
+  // Close size dropdown on outside click
+  useEffect(()=>{
+    const handler = ()=>setExpandedSizeId(null);
+    document.addEventListener("click", handler);
+    return ()=>document.removeEventListener("click", handler);
+  },[]);
+
+  const inventoryGrouped = useMemo(()=>{
+    if(!inventory) return [];
+    const map = new Map<string,any>();
+    inventory.forEach(item=>{
+      if(!map.has(item.sku)) map.set(item.sku,{...item,sizes:[item.size],totalStock:item.status==="AVAILABLE"?1:0});
+      else{const g=map.get(item.sku);if(item.size&&!g.sizes.includes(item.size))g.sizes.push(item.size);if(item.status==="AVAILABLE")g.totalStock++;}
+    });
+    return Array.from(map.values());
+  },[inventory]);
+
+  const filteredInv = useMemo(()=>{
+    const base = Array.isArray(inventory) ? inventory : inventoryGrouped;
+    return base.filter((p:any)=>{
+      if(tabFilter!=='all' && p.tab!==tabFilter) return false;
+      if(!search) return true;
+      return p.name?.toLowerCase().includes(search.toLowerCase())||
+        p.sku?.toLowerCase().includes(search.toLowerCase())||
+        p.itemCode?.toLowerCase().includes(search.toLowerCase())||
+        (p.brand||'').toLowerCase().includes(search.toLowerCase());
+    });
+  },[inventory,inventoryGrouped,search,tabFilter])mport { trpc } from "@/lib/trpc";
+import { sb } from "@/lib/supabase";
+import { useLocation } from "wouter";
+import { useState, useMemo, useEffect } from "react";
+import {
+  LayoutDashboard, Package, ShoppingCart, BarChart3,
+  Shield, ChevronRight, Lock, LogOut, Zap, ExternalLink,
+  Search, RefreshCw, AlertTriangle, TrendingUp, Plus,
+  Edit2, Trash2, X, Save, Eye, Settings, Tag,
+  Download, QrCode, Copy,
+} from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
+import AdminSettings from "./Settings";
+import { useInventory, refreshInventory } from "@/hooks/useInventory";
+import AdminPromos from "./Promos";
+
+type Section = "overview"|"products"|"orders"|"promos"|"settings"|"analytics";
+
+const ADMIN_KEY = "sb_admin_v1";
+const fmt = (c: number) => `₱${(c/100).toLocaleString("en-PH")}`;
+const fmtDate = (d: string) => new Date(d).toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"});
+const STATUS_COLOR: Record<string,string> = {
+  pending:"bg-amber-100 text-amber-800", paid:"bg-blue-100 text-blue-800",
+  processing:"bg-indigo-100 text-indigo-800", shipped:"bg-purple-100 text-purple-800",
+  delivered:"bg-green-100 text-green-800", cancelled:"bg-red-100 text-red-600",
+};
+
+
+// ─── QR Code Modal ──────────────────────────────────────────────────────────
+function QRModal({ itemCode, name, onClose }: { itemCode: string; name: string; onClose: () => void }) {
+  const url = `https://soleblessingofficial.com/inventory/${itemCode}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}&bgcolor=ffffff&color=050f12&margin=10`;
+
+  const download = async () => {
+    const res = await fetch(qrUrl);
+    const blob = await res.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `SB-QR-${itemCode}.png`;
+    a.click();
+  };
+
+  const copy = () => {
+    navigator.clipboard.writeText(url);
+    toast.success("Link copied!");
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+        <div className="bg-[#050f12] px-5 py-4 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-bold tracking-[.15em] uppercase text-[#C9A84C]">Product QR Code</p>
+            <p className="text-sm font-black text-white truncate max-w-[220px]">{name}</p>
+          </div>
+          <button onClick={onClose} className="text-white/40 hover:text-white transition-colors">
+            <X className="h-5 w-5"/>
+          </button>
+        </div>
+        <div className="p-6 flex flex-col items-center gap-4">
+          {/* QR Code */}
+          <div className="bg-white border-4 border-[#050f12] rounded-2xl p-3">
+            <img src={qrUrl} alt="QR Code" className="w-52 h-52" />
+          </div>
+          {/* Item code */}
+          <div className="text-center">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Item Code</p>
+            <p className="text-lg font-black text-[#0d2430] font-mono">{itemCode}</p>
+          </div>
+          {/* URL */}
+          <div className="w-full bg-gray-50 rounded-xl px-4 py-2.5 flex items-center gap-2">
+            <p className="text-[11px] text-gray-500 truncate flex-1 font-mono">{url}</p>
+            <button onClick={copy} className="text-[#C9A84C] hover:opacity-70 flex-shrink-0">
+              <Copy className="h-4 w-4"/>
+            </button>
+          </div>
+          {/* Actions */}
+          <div className="flex gap-3 w-full">
+            <button onClick={download}
+              className="flex-1 bg-[#0d2430] text-white py-3 text-xs font-bold tracking-wide rounded-xl hover:bg-[#122d3a] flex items-center justify-center gap-2">
+              <Download className="h-4 w-4"/> Download PNG
+            </button>
+            <button onClick={() => window.open(url, "_blank")}
+              className="flex-1 border border-gray-200 text-[#0d2430] py-3 text-xs font-semibold rounded-xl hover:bg-gray-50 flex items-center justify-center gap-2">
+              <ExternalLink className="h-4 w-4"/> Open Link
+            </button>
+          </div>
+          <p className="text-[10px] text-gray-400 text-center leading-relaxed">
+            Print or share this QR code. Customers scan it to go directly to this product page.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function useAdminAuth() {
+  const [isAdmin] = useState<boolean>(() => {
+    try { return localStorage.getItem(ADMIN_KEY)==="true"; } catch { return false; }
+  });
+  const logout = () => { localStorage.removeItem(ADMIN_KEY); window.location.reload(); };
+  return { isAdmin, logout };
+}
+
+// ─── Product Form Modal ─────────────────────────────────────────────────
+function ProductModal({ product, onClose, onSave }: { product?: any; onClose:()=>void; onSave:()=>void }) {
+  // Parse sizes into editable rows [{size, qty}]
+  const parseSizeRows = (sizesObj: any): {size: string; qty: number}[] => {
+    if (!sizesObj) return [{size:"US 7",qty:0},{size:"US 8",qty:0},{size:"US 9",qty:0},{size:"US 10",qty:0}];
+    try {
+      const obj = typeof sizesObj === "string" ? JSON.parse(sizesObj) : sizesObj;
+      return Object.entries(obj).map(([size, qty]) => ({size, qty: Number(qty)}));
+    } catch { return [{size:"US 7",qty:0},{size:"US 8",qty:0}]; }
+  };
+  const [sizeRows, setSizeRows] = useState<{size:string;qty:number}[]>(() => parseSizeRows(product?.sizes));
+  const [form, setForm] = useState({
+    name: product?.name||"", brand: product?.brand||"", category: product?.category||"Sneakers",
+    description: product?.description||"", price: product ? String(product.price/100):"",
+    sale_price: product?.sale_price ? String(product.sale_price/100):"",
+    sku: product?.sku||"", stock: product ? String(product.stock):"1",
+    featured: product?.featured||false, status: product?.status||"active",
+    images: product?.images?.join("\n")||"",
+  });
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+  const s = (k:string,v:any) => setForm(f=>({...f,[k]:v}));
+
+  const handleSave = async () => {
+    if (!form.name||!form.brand||!form.price){setErr("Name, brand and price required.");return;}
+    setSaving(true); setErr("");
+    try {
+      const payload = {
+        name:form.name, brand:form.brand, category:form.category,
+        description:form.description||null,
+        price:Math.round(parseFloat(form.price)*100),
+        sale_price:form.sale_price?Math.round(parseFloat(form.sale_price)*100):null,
+        sku:form.sku||null, stock:parseInt(form.stock)||0,
+        featured:form.featured, status:form.status,
+        sizes: Object.fromEntries(sizeRows.filter(r=>r.size.trim()).map(r=>[r.size.trim(), r.qty])),
+        images:form.images.split("\n").map((s:string)=>s.trim()).filter(Boolean),
+        updated_at:new Date().toISOString(),
+      };
+      if (product?.id) await sb.update("sb_products",`id=eq.${product.id}`,payload);
+      else await sb.insert("sb_products",payload);
+      toast.success(product?"Product updated!":"Product added!");
+      onSave();
+    } catch(e:any){setErr(e.message||"Save failed");}
+    finally{setSaving(false);}
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 sticky top-0 bg-white">
+          <h2 className="font-black text-[#0d2430] text-lg">{product?"Edit Product":"Add New Product"}</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5"/></button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div className="grid grid-cols-1 gap-4">
+            <div><label className="text-xs font-semibold text-gray-500 block mb-1.5">Product Name *</label>
+              <input value={form.name} onChange={e=>s("name",e.target.value)} placeholder="e.g. Adidas Samba OG Classic"
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-[#0d2430]"/></div>
+            <div className="grid grid-cols-2 gap-4">
+              <div><label className="text-xs font-semibold text-gray-500 block mb-1.5">Brand *</label>
+                <input value={form.brand} onChange={e=>s("brand",e.target.value)} placeholder="e.g. Adidas"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-[#0d2430]"/></div>
+              <div><label className="text-xs font-semibold text-gray-500 block mb-1.5">Category</label>
+                <select value={form.category} onChange={e=>s("category",e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-[#0d2430]">
+                  {["Sneakers","Perfume","Gadgets","Apparel","Accessories"].map(c=><option key={c}>{c}</option>)}
+                </select></div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div><label className="text-xs font-semibold text-gray-500 block mb-1.5">Price (₱) *</label>
+                <input type="number" value={form.price} onChange={e=>s("price",e.target.value)} placeholder="0.00"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-[#0d2430]"/></div>
+              <div><label className="text-xs font-semibold text-gray-500 block mb-1.5">Sale Price (₱)</label>
+                <input type="number" value={form.sale_price} onChange={e=>s("sale_price",e.target.value)} placeholder="Optional"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-[#0d2430]"/></div>
+              <div><label className="text-xs font-semibold text-gray-500 block mb-1.5">Stock</label>
+                <input type="number" value={form.stock} onChange={e=>s("stock",e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-[#0d2430]"/></div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div><label className="text-xs font-semibold text-gray-500 block mb-1.5">SKU</label>
+                <input value={form.sku} onChange={e=>s("sku",e.target.value)} placeholder="SB-ADI-001"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-mono outline-none focus:border-[#0d2430]"/></div>
+              <div><label className="text-xs font-semibold text-gray-500 block mb-1.5">Status</label>
+                <select value={form.status} onChange={e=>s("status",e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-[#0d2430]">
+                  <option value="active">Active</option><option value="draft">Draft</option><option value="archived">Archived</option>
+                </select></div>
+            </div>
+            <div><label className="text-xs font-semibold text-gray-500 block mb-1.5">Description</label>
+              <textarea value={form.description} onChange={e=>s("description",e.target.value)} rows={2}
+                placeholder="Product description, materials, fit notes..."
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-[#0d2430] resize-none"/></div>
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-semibold text-gray-500">Sizes & Stock</label>
+                <button type="button" onClick={()=>setSizeRows(r=>[...r,{size:"",qty:0}])}
+                  className="flex items-center gap-1 text-[11px] font-bold text-[#C9A84C] hover:opacity-70 transition-opacity">
+                  <Plus className="h-3 w-3"/> Add Size
+                </button>
+              </div>
+              <div className="space-y-2">
+                {sizeRows.map((row,i)=>(
+                  <div key={i} className="flex items-center gap-2">
+                    <input
+                      value={row.size}
+                      onChange={e=>setSizeRows(rows=>rows.map((r,idx)=>idx===i?{...r,size:e.target.value}:r))}
+                      placeholder="e.g. US 9"
+                      className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d2430]"
+                    />
+                    <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden">
+                      <button type="button"
+                        onClick={()=>setSizeRows(rows=>rows.map((r,idx)=>idx===i?{...r,qty:Math.max(0,r.qty-1)}:r))}
+                        className="w-8 h-9 flex items-center justify-center hover:bg-gray-100 transition-colors text-gray-500 font-bold">−</button>
+                      <input type="number" min="0"
+                        value={row.qty}
+                        onChange={e=>setSizeRows(rows=>rows.map((r,idx)=>idx===i?{...r,qty:Math.max(0,parseInt(e.target.value)||0)}:r))}
+                        className="w-14 h-9 text-center text-sm font-semibold outline-none border-x border-gray-200"
+                      />
+                      <button type="button"
+                        onClick={()=>setSizeRows(rows=>rows.map((r,idx)=>idx===i?{...r,qty:r.qty+1}:r))}
+                        className="w-8 h-9 flex items-center justify-center hover:bg-gray-100 transition-colors text-gray-500 font-bold">+</button>
+                    </div>
+                    <span className={`text-[10px] font-bold w-16 text-center px-2 py-1 rounded-full ${row.qty===0?"bg-red-100 text-red-500":"bg-green-100 text-green-700"}`}>
+                      {row.qty===0?"Sold out":"In stock"}
+                    </span>
+                    <button type="button"
+                      onClick={()=>setSizeRows(rows=>rows.filter((_,idx)=>idx!==i))}
+                      className="text-gray-300 hover:text-red-400 transition-colors w-6 h-6 flex items-center justify-center flex-shrink-0">
+                      <X className="h-4 w-4"/>
+                    </button>
+                  </div>
+                ))}
+                {sizeRows.length===0&&(
+                  <button type="button" onClick={()=>setSizeRows([{size:"US 7",qty:0},{size:"US 8",qty:0},{size:"US 9",qty:0},{size:"US 10",qty:0}])}
+                    className="w-full py-2 text-xs text-gray-400 border border-dashed border-gray-200 rounded-xl hover:border-[#C9A84C] hover:text-[#C9A84C] transition-colors">
+                    + Add sizes
+                  </button>
+                )}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {["US 6","US 6.5","US 7","US 7.5","US 8","US 8.5","US 9","US 9.5","US 10","US 10.5","US 11","US 12"].map(sz=>(
+                  !sizeRows.some(r=>r.size===sz) && (
+                    <button key={sz} type="button"
+                      onClick={()=>setSizeRows(r=>[...r,{size:sz,qty:1}])}
+                      className="text-[10px] px-2 py-1 border border-dashed border-gray-200 rounded-full text-gray-400 hover:border-[#0d2430] hover:text-[#0d2430] transition-colors">
+                      + {sz}
+                    </button>
+                  )
+                ))}
+              </div>
+            </div>
+            <div><label className="text-xs font-semibold text-gray-500 block mb-1.5">Image URLs (one per line)</label>
+              <textarea value={form.images} onChange={e=>s("images",e.target.value)} rows={2}
+                placeholder="https://example.com/image.jpg"
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-[#0d2430] resize-none"/></div>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input type="checkbox" checked={form.featured} onChange={e=>s("featured",e.target.checked)} className="accent-[#0d2430] w-4 h-4"/>
+              <span className="text-sm text-gray-600">Featured product (shows on homepage)</span>
+            </label>
+          </div>
+          {err&&<p className="text-red-500 text-xs bg-red-50 px-3 py-2 rounded-lg">{err}</p>}
+          <div className="flex gap-3 pt-2">
+            <button onClick={onClose} className="flex-1 border border-gray-200 py-3 text-sm font-semibold rounded-xl hover:bg-gray-50">Cancel</button>
+            <button onClick={handleSave} disabled={saving}
+              className="flex-1 bg-[#0d2430] text-white py-3 text-sm font-bold rounded-xl hover:bg-[#122d3a] disabled:opacity-50 flex items-center justify-center gap-2">
+              <Save className="h-4 w-4"/>{saving?"Saving…":product?"Update Product":"Add Product"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Dashboard ─────────────────────────────────────────────────────
+export default function AdminDashboard() {
+  const [,setLocation] = useLocation();
+  const {isAdmin, logout} = useAdminAuth();
+  const [section, setSection] = useState<Section>("overview");
+  const [search, setSearch] = useState("");
+  const [syncing, setSyncing] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [password, setPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [productModal, setProductModal] = useState<{open:boolean;product?:any}>({open:false});
+  const [qrModal, setQrModal] = useState<{open:boolean;itemCode:string;name:string}|null>(null);
+  const [tabFilter, setTabFilter] = useState<'all'|'2025'|'2024'>('all');
   const [editingRow, setEditingRow] = useState<string|null>(null);
   const [editValues, setEditValues] = useState<Record<string,any>>({});
   const [savingRow, setSavingRow] = useState<string|null>(null);
@@ -653,7 +1013,15 @@ export default function AdminDashboard() {
                   <input placeholder="Search name, SKU, item code…" value={search} onChange={e=>setSearch(e.target.value)}
                     className="w-full pl-9 pr-4 py-2.5 text-sm bg-white border border-gray-200 rounded-xl outline-none focus:border-[#0d2430]"/>
                 </div>
-                <span className="text-xs text-gray-400">{filteredInv.length} from Sheets</span>
+                <span className="text-xs text-gray-400">{filteredInv.length} items</span>
+                <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1">
+                  {(['all','2025','2024'] as const).map(t=>(
+                    <button key={t} onClick={()=>setTabFilter(t)}
+                      className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${tabFilter===t?'bg-white text-[#0d2430] shadow-sm':'text-gray-500 hover:text-gray-700'}`}>
+                      {t==='all'?'All':t}
+                    </button>
+                  ))}
+                </div>
                 <button onClick={()=>syncInventory()} disabled={syncing}
                   className="flex items-center gap-2 border border-gray-200 bg-white text-[#0d2430] px-3 py-2 text-xs font-semibold rounded-xl hover:bg-gray-50 disabled:opacity-50">
                   <RefreshCw className={`h-3.5 w-3.5 ${syncing?"animate-spin":""}`}/> Sync Sheets
@@ -708,7 +1076,7 @@ export default function AdminDashboard() {
                           <td className="px-3 py-2">
                             {isEditing
                               ?<input className={inp} value={editValues.name||""} onChange={e=>setEditValues(v=>({...v,name:e.target.value}))}/>
-                              :<div><p className="text-xs font-bold text-[#0d2430]">{p.name}</p><p className="text-[10px] text-gray-400 font-mono">{p.itemCode}</p></div>}
+                              :<div><p className="text-xs font-bold text-[#0d2430]">{p.name}</p><div className="flex items-center gap-1.5 mt-0.5"><p className="text-[10px] text-gray-400 font-mono">{p.itemCode}</p><span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${(p as any).tab==="2024"?"bg-amber-100 text-amber-700":"bg-blue-100 text-blue-700"}`}>{(p as any).tab||"2025"}</span></div></div>}
                           </td>
                           <td className="px-3 py-2">
                             {(() => {
