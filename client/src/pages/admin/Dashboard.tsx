@@ -347,17 +347,6 @@ export default function AdminDashboard() {
     return Array.from(map.values());
   },[inventory]);
 
-  LayoutDashboard, Package, ShoppingCart, BarChart3,
-  Shield, ChevronRight, Lock, LogOut, Zap, ExternalLink,
-  Search, RefreshCw, AlertTriangle, TrendingUp, Plus,
-  Edit2, Trash2, X, Save, Eye, Settings, Tag,
-  Download, QrCode, Copy,
-} from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { toast } from "sonner";
-import AdminSettings from "./Settings";
-import { useInventory, refreshInventory } from "@/hooks/useInventory";
-import AdminPromos from "./Promos";
 
 type Section = "overview"|"products"|"orders"|"promos"|"settings"|"analytics";
 
