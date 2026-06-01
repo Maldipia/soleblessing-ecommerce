@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { sb } from "@/lib/supabase";
 import { Trophy, Gift, Zap, Crown, TrendingUp, Search, Phone, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 
@@ -37,13 +36,17 @@ export default function LoyaltyProgram() {
     if (!num) return;
     setSearching(true); setError(""); setMember(null);
     try {
-      const results = await sb.select("sb_loyalty", `contact_number=eq.${num}&limit=1`);
-      if (!results || results.length === 0) {
+      const r = await fetch("/api/loyalty", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "lookup", phone: num }),
+      });
+      const data = r.ok ? await r.json() : { member: null, transactions: [] };
+      if (!data.member) {
         setError("No loyalty account found for this number. Join below!");
       } else {
-        setMember(results[0]);
-        const txns = await sb.select("sb_loyalty_transactions", `loyalty_id=eq.${results[0].id}&order=created_at.desc&limit=20`);
-        setTransactions(Array.isArray(txns) ? txns : []);
+        setMember(data.member);
+        setTransactions(Array.isArray(data.transactions) ? data.transactions : []);
       }
     } catch { setError("Something went wrong. Try again."); }
     finally { setSearching(false); }
@@ -54,21 +57,17 @@ export default function LoyaltyProgram() {
     if (!joinForm.name || !joinForm.phone) { toast.error("Name and phone are required"); return; }
     setJoining(true);
     try {
-      const existing = await sb.select("sb_loyalty", `contact_number=eq.${joinForm.phone.trim()}&limit=1`);
-      if (existing && existing.length > 0) { toast.error("This number is already registered!"); return; }
-      await sb.insert("sb_loyalty", {
-        customer_name: joinForm.name.trim(),
-        contact_number: joinForm.phone.trim(),
-        email: joinForm.email.trim() || null,
-        points: 0,
-        tier: "bronze",
-        total_spent: 0,
+      const r = await fetch("/api/loyalty", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "join", name: joinForm.name.trim(), phone: joinForm.phone.trim(), email: joinForm.email.trim() }),
       });
+      if (r.status === 409) { toast.error("This number is already registered!"); return; }
+      if (!r.ok) { toast.error("Failed to join. Please try again."); return; }
+      const data = await r.json();
       toast.success("Welcome to SoleBlessing Loyalty! 🎉");
       setPhone(joinForm.phone.trim());
-      // Reload member
-      const results = await sb.select("sb_loyalty", `contact_number=eq.${joinForm.phone.trim()}&limit=1`);
-      if (results?.[0]) setMember(results[0]);
+      if (data.member) setMember(data.member);
       setJoinForm({ name: "", phone: "", email: "" });
     } catch(e: any) {
       toast.error("Failed to join. Please try again.");
