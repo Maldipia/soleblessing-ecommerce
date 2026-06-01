@@ -292,6 +292,10 @@ export default function AdminDashboard() {
   const [productModal, setProductModal] = useState<{open:boolean;product?:any}>({open:false});
   const [qrModal, setQrModal] = useState<{open:boolean;itemCode:string;name:string}|null>(null);
   const [tabFilter, setTabFilter] = useState<'all'|'2025'|'2024'>('all');
+  const [imageFilter, setImageFilter] = useState<'all'|'has'|'none'>('all');
+  const [brandFilter, setBrandFilter] = useState<string>('All');
+  const [editedOnly, setEditedOnly] = useState(false);
+  const [showLegend, setShowLegend] = useState(false);
   const [editingRow, setEditingRow] = useState<string|null>(null);
   const [editValues, setEditValues] = useState<Record<string,any>>({});
   const [savingRow, setSavingRow] = useState<string|null>(null);
@@ -351,13 +355,31 @@ export default function AdminDashboard() {
     const base = Array.isArray(inventory) ? inventory : inventoryGrouped;
     return base.filter((p:any)=>{
       if(tabFilter!=='all' && (p as any).tab!==tabFilter) return false;
+      if(brandFilter!=='All' && ((p as any).brand||'')!==brandFilter) return false;
+      if(imageFilter==='has' && !p.imageUrl) return false;
+      if(imageFilter==='none' && p.imageUrl) return false;
+      if(editedOnly && !p.edited) return false;
       if(!search) return true;
       return p.name?.toLowerCase().includes(search.toLowerCase())||
         p.sku?.toLowerCase().includes(search.toLowerCase())||
         p.itemCode?.toLowerCase().includes(search.toLowerCase())||
         ((p as any).brand||'').toLowerCase().includes(search.toLowerCase());
     });
-  },[inventory,inventoryGrouped,search,tabFilter]);
+  },[inventory,inventoryGrouped,search,tabFilter,brandFilter,imageFilter,editedOnly]);
+
+  // Brands present in current inventory (for the brand toggle row)
+  const brandOptions = useMemo(()=>{
+    const base = Array.isArray(inventory) ? inventory : inventoryGrouped;
+    const s = new Set<string>();
+    base.forEach((p:any)=>{ if(p.brand) s.add(p.brand); });
+    return ['All', ...Array.from(s).sort()];
+  },[inventory,inventoryGrouped]);
+
+  // Color tokens for navigating the DB (single source of truth for chips + legend)
+  const BRAND_COLOR: Record<string,string> = {
+    "Nike":"bg-black text-white","Jordan":"bg-red-600 text-white","Adidas":"bg-blue-600 text-white",
+    "VEJA":"bg-green-600 text-white","On Running":"bg-gray-700 text-white",
+  };
 
   const filteredProducts = useMemo(()=>
     sbProducts.filter((p:any)=>{
@@ -666,10 +688,26 @@ export default function AdminDashboard() {
                   {(['all','2025','2024'] as const).map(t=>(
                     <button key={t} onClick={()=>setTabFilter(t)}
                       className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${tabFilter===t?'bg-white text-[#0d2430] shadow-sm':'text-gray-500 hover:text-gray-700'}`}>
-                      {t==='all'?'All':t}
+                      {t==='all'?'Year: All':t}
                     </button>
                   ))}
                 </div>
+                <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1">
+                  {([['all','Img: All'],['has','Has'],['none','Missing']] as const).map(([v,label])=>(
+                    <button key={v} onClick={()=>setImageFilter(v)}
+                      className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${imageFilter===v?(v==='none'?'bg-red-500 text-white shadow-sm':'bg-white text-[#0d2430] shadow-sm'):'text-gray-500 hover:text-gray-700'}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <button onClick={()=>setEditedOnly(v=>!v)}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-xl border transition-all ${editedOnly?'bg-[#C9A84C] text-[#050f12] border-[#C9A84C]':'bg-white text-gray-500 border-gray-200 hover:text-gray-700'}`}>
+                  ● Edited
+                </button>
+                <button onClick={()=>setShowLegend(v=>!v)} title="Color legend"
+                  className={`px-3 py-1.5 text-xs font-bold rounded-xl border transition-all ${showLegend?'bg-[#0d2430] text-white border-[#0d2430]':'bg-white text-gray-500 border-gray-200 hover:text-gray-700'}`}>
+                  🎨 Legend
+                </button>
                 <button onClick={()=>syncInventory()} disabled={syncing}
                   className="flex items-center gap-2 border border-gray-200 bg-white text-[#0d2430] px-3 py-2 text-xs font-semibold rounded-xl hover:bg-gray-50 disabled:opacity-50">
                   <RefreshCw className={`h-3.5 w-3.5 ${syncing?"animate-spin":""}`}/> Sync Sheets
@@ -681,11 +719,37 @@ export default function AdminDashboard() {
                 </a>
               </div>
 
+              {/* ── BRAND TOGGLES ── */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {brandOptions.map(b=>(
+                  <button key={b} onClick={()=>setBrandFilter(b)}
+                    className={`text-[11px] font-bold px-2.5 py-1 rounded-full border transition-all ${
+                      brandFilter===b
+                        ? (BRAND_COLOR[b]||'bg-[#0d2430] text-white')+' border-transparent shadow-sm'
+                        : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'}`}>
+                    {b}
+                  </button>
+                ))}
+              </div>
+
+              {/* ── COLOR LEGEND (toggle) ── */}
+              {showLegend&&(
+                <div className="bg-white border border-gray-100 rounded-2xl px-5 py-3 flex items-center gap-x-6 gap-y-2 flex-wrap text-[11px]">
+                  <span className="font-bold uppercase tracking-wider text-gray-400 text-[10px]">Legend</span>
+                  <span className="flex items-center gap-1.5"><span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">2025</span> current year</span>
+                  <span className="flex items-center gap-1.5"><span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">2024</span> prior year</span>
+                  <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded border-l-2 border-[#C9A84C] bg-[#fffbeb]"/> edited (Supabase override)</span>
+                  <span className="flex items-center gap-1.5"><span className="text-[9px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded">-%</span> on sale</span>
+                  <span className="flex items-center gap-1.5"><span className="text-lg leading-none opacity-30">👟</span> no image</span>
+                  <span className="flex items-center gap-1.5"><span className="font-bold text-green-600">●</span> in stock <span className="font-bold text-amber-500">●</span> last pair <span className="font-bold text-red-500">●</span> out</span>
+                </div>
+              )}
+
               {/* ── SHEETS INVENTORY TABLE ── */}
               <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
                 <div className="px-5 py-3 border-b border-gray-50 flex items-center justify-between">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-[#0d2430]">
-                    Live Inventory <span className="text-[#C9A84C] ml-1">· 2025 Sheet</span>
+                    Live Inventory <span className="text-[#C9A84C] ml-1">· {tabFilter==='all'?'2025 + 2024':tabFilter} Sheet</span>
                   </h3>
                   <span className="text-[10px] text-gray-400">{filteredInv.length} items</span>
                 </div>
@@ -715,7 +779,7 @@ export default function AdminDashboard() {
                         const isSaving = savingRow===p.itemCode;
                         const inp = "w-full border border-[#C9A84C] rounded-lg px-2 py-1 text-xs outline-none font-mono bg-white";
                         return(
-                        <tr key={p.itemCode} className={`transition-colors ${isEditing?"bg-[#fffbeb]":"hover:bg-gray-50/50"} ${p.edited?"border-l-2 border-[#C9A84C]":""}`}>
+                        <tr key={p.itemCode} className={`transition-colors ${isEditing?"bg-[#fffbeb]":"hover:bg-gray-50/50"} ${p.edited?"border-l-2 border-[#C9A84C]":((p as any).tab==="2024"?"border-l-2 border-amber-200":"border-l-2 border-blue-200")}`}>
                           <td className="px-4 py-2">
                             <div className="w-11 h-11 bg-[#EDE9E3] rounded-lg overflow-hidden flex-shrink-0">
                               {p.imageUrl?<img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover"/>:<span className="w-full h-full flex items-center justify-center text-lg opacity-20">👟</span>}
@@ -729,15 +793,8 @@ export default function AdminDashboard() {
                           <td className="px-3 py-2">
                             {(() => {
                               const brand = (p as any).brand || "";
-                              const colors: Record<string,string> = {
-                                "Nike":       "bg-black text-white",
-                                "Jordan":     "bg-red-600 text-white",
-                                "Adidas":     "bg-blue-600 text-white",
-                                "VEJA":       "bg-green-600 text-white",
-                                "On Running": "bg-gray-700 text-white",
-                              };
                               return brand
-                                ? <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${colors[brand]||"bg-gray-200 text-gray-700"}`}>{brand}</span>
+                                ? <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${BRAND_COLOR[brand]||"bg-gray-200 text-gray-700"}`}>{brand}</span>
                                 : <span className="text-gray-300 text-[10px]">—</span>;
                             })()}
                           </td>
