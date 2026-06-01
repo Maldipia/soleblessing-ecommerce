@@ -35,7 +35,8 @@ export default function Profile() {
     if (!trimmed) return;
     setLoading(true); setError(""); setOrder(null);
     try {
-      const results = await sb.select("sb_orders", `order_number=eq.${trimmed}&limit=1`);
+      const r = await fetch(`/api/track-order?order_number=${encodeURIComponent(trimmed)}`);
+      const results = r.ok ? await r.json() : [];
       if (!results || results.length === 0) {
         setError("Order not found. Please check your order number and try again.");
       } else {

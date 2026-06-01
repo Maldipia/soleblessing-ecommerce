@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { sb } from "@/lib/supabase";
+import { sbAdmin as sb } from "@/lib/supabaseAdmin";
 import { Plus, Edit2, Trash2, X, Save, CheckCircle, Tag, TrendingUp, Users, Clock } from "lucide-react";
 import { toast } from "sonner";
 

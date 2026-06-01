@@ -1,5 +1,5 @@
 import { trpc } from "@/lib/trpc";
-import { sb } from "@/lib/supabase";
+import { sbAdmin as sb } from "@/lib/supabaseAdmin";
 import { useLocation } from "wouter";
 import { useState, useMemo, useEffect } from "react";
 import {
@@ -481,10 +481,10 @@ export default function AdminDashboard() {
           <div className="font-black text-2xl tracking-[.14em] text-white uppercase mb-1">SoleBlessing</div>
           <div className="text-xs text-white/30 tracking-widest uppercase">Admin Access</div>
         </div>
-        <form onSubmit={e=>{
+        <form onSubmit={async e=>{
           e.preventDefault();
-          const correct=import.meta.env.VITE_ADMIN_PW||"SoleBlessing2026!";
-          if(password===correct){localStorage.setItem(ADMIN_KEY,"true");window.location.reload();}
+          const ok = await sb.authenticate(password);
+          if(ok){localStorage.setItem(ADMIN_KEY,"true");window.location.reload();}
           else setLoginError("Wrong password. Try again.");
         }} className="space-y-4">
           <div>
@@ -500,7 +500,7 @@ export default function AdminDashboard() {
           </button>
         </form>
         <p className="text-center text-[10px] text-white/20 mt-6 leading-relaxed">
-          Set password: Vercel → Environment Variables → <span className="font-mono text-white/35">VITE_ADMIN_PW</span>
+          Set password: Vercel → Environment Variables → <span className="font-mono text-white/35">ADMIN_PASSWORD</span>
         </p>
       </div>
     </div>
