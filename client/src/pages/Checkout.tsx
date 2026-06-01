@@ -127,33 +127,19 @@ export default function Checkout() {
       };
       if (promoApplied) orderData.promo_code = promoApplied.code;
 
-      const orderResult = await sb.insert("sb_orders", orderData);
-
-      // Record promo usage + increment counter
-      if (promoApplied && orderResult?.[0]?.id) {
-        try {
-          await sb.insert("sb_promo_uses", {
-            promo_id: promoApplied.id,
-            order_id: orderResult[0].id,
-            order_number: orderNumber,
-            customer_name: form.customerName,
-            discount_applied: discount,
-          });
-          // Increment uses_count
-          await fetch(
-            `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/sb_promos?id=eq.${promoApplied.id}`,
-            {
-              method: "PATCH",
-              headers: {
-                "Content-Type": "application/json",
-                "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY || "",
-                "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY || ""}`,
-              },
-              body: JSON.stringify({ uses_count: promoApplied.uses_count + 1, updated_at: new Date().toISOString() }),
-            }
-          );
-        } catch(e) { console.error("Promo log error", e); }
-      }
+      const placeRes = await fetch("/api/place-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderData,
+          promo: promoApplied ? {
+            id: promoApplied.id, code: promoApplied.code,
+            discount, customerName: form.customerName,
+            orderNumber, uses_count: promoApplied.uses_count,
+          } : null,
+        }),
+      });
+      if (!placeRes.ok) throw new Error("place-order failed");
 
       clearCart();
       sessionStorage.setItem("sb_last_order", JSON.stringify({
