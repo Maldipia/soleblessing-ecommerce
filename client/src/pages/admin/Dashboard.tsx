@@ -367,6 +367,18 @@ export default function AdminDashboard() {
     });
   },[inventory,inventoryGrouped,search,tabFilter,brandFilter,imageFilter,editedOnly]);
 
+  // Pagination — render one page at a time so toggles/edits don't re-render 880 rows
+  const PAGE_SIZE = 50;
+  const [page, setPage] = useState(1);
+  // Reset to first page whenever the filtered set changes
+  useEffect(()=>{ setPage(1); },[search,tabFilter,brandFilter,imageFilter,editedOnly]);
+  const pageCount = Math.max(1, Math.ceil(filteredInv.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const pagedInv = useMemo(
+    ()=> filteredInv.slice((safePage-1)*PAGE_SIZE, safePage*PAGE_SIZE),
+    [filteredInv, safePage]
+  );
+
   // Brands present in current inventory (for the brand toggle row)
   const brandOptions = useMemo(()=>{
     const base = Array.isArray(inventory) ? inventory : inventoryGrouped;
@@ -774,7 +786,7 @@ export default function AdminDashboard() {
                     <tbody className="divide-y divide-gray-50">
                       {filteredInv.length===0 ? (
                         <tr><td colSpan={9} className="text-center py-12 text-sm text-gray-400">No products found</td></tr>
-                      ) : filteredInv.map((p:any)=>{
+                      ) : pagedInv.map((p:any)=>{
                         const isEditing = editingRow===p.itemCode;
                         const isSaving = savingRow===p.itemCode;
                         const inp = "w-full border border-[#C9A84C] rounded-lg px-2 py-1 text-xs outline-none font-mono bg-white";
@@ -851,6 +863,24 @@ export default function AdminDashboard() {
                       })}
                     </tbody>
                   </table>
+                  </div>
+                )}
+                {!invLoading && filteredInv.length>PAGE_SIZE && (
+                  <div className="flex items-center justify-between px-5 py-3 border-t border-gray-50 text-xs">
+                    <span className="text-gray-400">
+                      Showing {(safePage-1)*PAGE_SIZE+1}–{Math.min(safePage*PAGE_SIZE,filteredInv.length)} of {filteredInv.length}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button onClick={()=>setPage(1)} disabled={safePage===1}
+                        className="px-2 py-1 rounded-lg font-bold text-gray-500 disabled:opacity-30 hover:bg-gray-100">«</button>
+                      <button onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={safePage===1}
+                        className="px-3 py-1 rounded-lg font-bold text-gray-500 disabled:opacity-30 hover:bg-gray-100">Prev</button>
+                      <span className="px-2 font-bold text-[#0d2430]">{safePage} / {pageCount}</span>
+                      <button onClick={()=>setPage(p=>Math.min(pageCount,p+1))} disabled={safePage===pageCount}
+                        className="px-3 py-1 rounded-lg font-bold text-gray-500 disabled:opacity-30 hover:bg-gray-100">Next</button>
+                      <button onClick={()=>setPage(pageCount)} disabled={safePage===pageCount}
+                        className="px-2 py-1 rounded-lg font-bold text-gray-500 disabled:opacity-30 hover:bg-gray-100">»</button>
+                    </div>
                   </div>
                 )}
               </div>
