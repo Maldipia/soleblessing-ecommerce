@@ -1,8 +1,9 @@
 const SPREADSHEET_ID = '1WZttK5ZsPhnBz91JmBb-V4GCs-42uXjTUXz67V5sSDI';
 
-// Only 2025 tab — items with image URL + size are already filtered below
+// 2025 first, then 2024 — first-seen wins on duplicate item codes (2025 priority)
 const SHEET_TABS = [
   { name: '2025', gid: '631652219' },
+  { name: '2024', gid: '0' },
 ];
 
 const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
