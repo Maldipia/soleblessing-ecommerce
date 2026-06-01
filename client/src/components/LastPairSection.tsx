@@ -39,6 +39,7 @@ export default function LastPairSection() {
     // Deduplicate: one entry per SKU, pick the item with best discount
     const seen = new Map<string,any>();
     data.forEach((item:any) => {
+      if (!item.imageUrl) return; // hide products without a photo for now
       const existing = seen.get(item.sku);
       if (!existing || item.discount > existing.discount) seen.set(item.sku, item);
     });
