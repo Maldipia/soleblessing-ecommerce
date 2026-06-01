@@ -53,14 +53,15 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
 
   try {
-    // Fetch Google Sheets CSV + Supabase overrides in parallel
-    const [csvRes2025, csvRes2024, sbRes] = await Promise.allSettled([
+    // Fetch Google Sheets CSV + Supabase overrides + image CDN cache in parallel
+    const sbAuth = { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } };
+    const [csvRes2025, csvRes2024, sbRes, imgRes] = await Promise.allSettled([
       fetch(`https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=${GID_2025}`,
         { headers: { 'User-Agent': 'Mozilla/5.0' } }),
       fetch(`https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=${GID_2024}`,
         { headers: { 'User-Agent': 'Mozilla/5.0' } }),
-      SUPABASE_KEY ? fetch(`${SUPABASE_URL}/rest/v1/sb_inventory?select=*`,
-        { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }) : Promise.resolve(null),
+      SUPABASE_KEY ? fetch(`${SUPABASE_URL}/rest/v1/sb_inventory?select=*`, sbAuth) : Promise.resolve(null),
+      SUPABASE_KEY ? fetch(`${SUPABASE_URL}/rest/v1/product_image_cache?select=item_code,supabase_url&sync_status=eq.OK`, sbAuth) : Promise.resolve(null),
     ]);
 
     if (csvRes2025.status !== 'fulfilled' || !csvRes2025.value.ok) {
@@ -74,6 +75,13 @@ export default async function handler(req, res) {
     if (sbRes.status === 'fulfilled' && sbRes.value && sbRes.value.ok) {
       const rows = await sbRes.value.json();
       if (Array.isArray(rows)) rows.forEach(r => overrides.set(r.item_code, r));
+    }
+
+    // Build CDN image map keyed by item_code (item_code → fast Supabase URL)
+    const cdnImages = new Map();
+    if (imgRes.status === 'fulfilled' && imgRes.value && imgRes.value.ok) {
+      const rows = await imgRes.value.json();
+      if (Array.isArray(rows)) rows.forEach(r => { if (r.supabase_url) cdnImages.set(r.item_code, r.supabase_url); });
     }
 
     const csvText2025 = await csvRes.value.text();
@@ -136,7 +144,7 @@ export default async function handler(req, res) {
         sellingPrice: finalSelling,
         srp: finalSrp,
         status: ov.status?.toUpperCase() || status,
-        imageUrl: convertDriveUrl(driveUrl),
+        imageUrl: cdnImages.get(itemCode) || convertDriveUrl(driveUrl),
         productsUrl: driveUrl,
         stock: finalStock,
         discount: (() => {
