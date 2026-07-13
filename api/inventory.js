@@ -53,109 +53,53 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
 
   try {
-    // Fetch Google Sheets CSV + Supabase overrides + image CDN cache in parallel
+    // Single source of truth: sb_inventory (DB). Images from product_image_cache CDN.
     const sbAuth = { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } };
-    const [csvRes2025, csvRes2024, sbRes, imgRes] = await Promise.allSettled([
-      fetch(`https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=${GID_2025}`,
-        { headers: { 'User-Agent': 'Mozilla/5.0' } }),
-      fetch(`https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=${GID_2024}`,
-        { headers: { 'User-Agent': 'Mozilla/5.0' } }),
-      SUPABASE_KEY ? fetch(`${SUPABASE_URL}/rest/v1/sb_inventory?select=*`, sbAuth) : Promise.resolve(null),
-      SUPABASE_KEY ? fetch(`${SUPABASE_URL}/rest/v1/product_image_cache?select=item_code,supabase_url&sync_status=eq.OK`, sbAuth) : Promise.resolve(null),
+    const [invRes, imgRes] = await Promise.allSettled([
+      fetch(`${SUPABASE_URL}/rest/v1/sb_inventory?select=*&order=item_code.asc&limit=5000`, sbAuth),
+      fetch(`${SUPABASE_URL}/rest/v1/product_image_cache?select=item_code,supabase_url&sync_status=eq.OK`, sbAuth),
     ]);
 
-    if (csvRes2025.status !== 'fulfilled' || !csvRes2025.value.ok) {
-      return res.status(502).json({ error: 'Sheet fetch failed' });
+    if (invRes.status !== 'fulfilled' || !invRes.value.ok) {
+      return res.status(502).json({ error: 'Inventory fetch failed' });
     }
-    // Use csvRes alias for backward compat
-    const csvRes = csvRes2025;
+    const rows = await invRes.value.json();
 
-    // Build Supabase overrides map keyed by item_code
-    const overrides = new Map();
-    if (sbRes.status === 'fulfilled' && sbRes.value && sbRes.value.ok) {
-      const rows = await sbRes.value.json();
-      if (Array.isArray(rows)) rows.forEach(r => overrides.set(r.item_code, r));
-    }
-
-    // Build CDN image map keyed by item_code (item_code → fast Supabase URL)
     const cdnImages = new Map();
     if (imgRes.status === 'fulfilled' && imgRes.value && imgRes.value.ok) {
-      const rows = await imgRes.value.json();
-      if (Array.isArray(rows)) rows.forEach(r => { if (r.supabase_url) cdnImages.set(r.item_code, r.supabase_url); });
+      const imgs = await imgRes.value.json();
+      if (Array.isArray(imgs)) imgs.forEach(r => { if (r.supabase_url) cdnImages.set(r.item_code, r.supabase_url); });
     }
 
-    const csvText2025 = await csvRes.value.text();
-    const csvText2024 = csvRes2024.status === 'fulfilled' && csvRes2024.value.ok
-      ? await csvRes2024.value.text() : '';
-
-    // Combine both tabs — 2025 first, then 2024 (2025 takes priority on duplicates)
-    const allLines = [
-      ...csvText2025.split('\n').slice(2).map(l => ({line: l, tab: '2025'})),
-      ...csvText2024.split('\n').slice(2).map(l => ({line: l, tab: '2024'})),
-    ];
-
     const products = [];
-    const seen = new Set();
-
-    for (const {line, tab} of allLines) {
-      if (!line.trim()) continue;
-      const row = parseCSVLine(line);
-      if (row.length < 7) continue;
-
-      const itemCode    = (row[0]  || '').trim();
-      const details     = (row[1]  || '').trim();
-      const sku         = (row[2]  || '').trim();
-      const size        = (row[3]  || '').trim();
-      const unitCost    = parsePrice(row[4]  || '');  // col E — admin only, never in response
-      const srp         = parsePrice(row[13] || '');
-      const sellingPrice = parsePrice(row[5]  || '');
-      const status      = (row[6]  || '').toUpperCase().trim();
-      const driveUrl    = (row[18] || '').trim();
-
-      if (!itemCode || !details) continue;
-      if (!size) continue;
+    for (const r of rows) {
+      const status = (r.status || '').toUpperCase().trim();
       const isSoldOut = status.includes('SOLD') || status === 'MISSING';
       if (isSoldOut) continue;
-      // Sanity cap: reject prices > ₱99,999 (corrupt sheet cell like 55356005300)
-      const MAX_PRICE = 9999900; // ₱99,999 in centavos
-      const cleanSelling = sellingPrice <= MAX_PRICE ? sellingPrice : 0;
-      const cleanSrp     = srp <= MAX_PRICE ? srp : 0;
-      const price = cleanSelling || cleanSrp;
+      const price = r.selling_price || r.srp || 0;
       if (!price) continue;
-      if (seen.has(itemCode)) continue;
-      seen.add(itemCode);
-
-      // Apply Supabase overrides if they exist
-      const ov = overrides.get(itemCode) || {};
-      const finalUnitCost = ov.unit_cost != null ? ov.unit_cost : unitCost; // admin-only
-      const finalSrp = ov.srp != null ? ov.srp : cleanSrp;
-      const finalSelling = ov.selling_price != null ? ov.selling_price : cleanSelling;
-      const finalSku = ov.sku || sku;
-      const finalSize = ov.size || size;
-      const finalName = ov.name || details;
-      const finalStock = ov.stock != null ? ov.stock : 1;
-      const hasSbOverride = overrides.has(itemCode);
+      if ((r.stock ?? 1) <= 0) continue;
 
       products.push({
-        itemCode,
-        name: finalName,
-        sku: finalSku,
-        size: finalSize,
-        sellingPrice: finalSelling,
-        srp: finalSrp,
-        status: ov.status?.toUpperCase() || status,
-        imageUrl: cdnImages.get(itemCode) || convertDriveUrl(driveUrl),
-        productsUrl: driveUrl,
-        stock: finalStock,
+        itemCode: r.item_code,
+        name: r.name,
+        sku: r.sku || '',
+        size: r.size || '',
+        sellingPrice: r.selling_price || 0,
+        srp: r.srp || 0,
+        status: status || 'AVAILABLE',
+        imageUrl: cdnImages.get(r.item_code) || convertDriveUrl(r.drive_url || ''),
+        productsUrl: r.drive_url || '',
+        stock: r.stock ?? 1,
         discount: (() => {
-          const s = finalSrp, p = finalSelling;
-          if (!s || !p || p >= s) return 0;
-          return Math.round(((s - p) / s) * 100);
+          const sp = r.srp || 0, pp = r.selling_price || 0;
+          if (!sp || !pp || pp >= sp) return 0;
+          return Math.round(((sp - pp) / sp) * 100);
         })(),
-        tab,
-        brand: detectBrand(finalName, finalSku),
-        unitCost: finalUnitCost || null,   // col E — shown in admin only, not in product UI
-        edited: hasSbOverride,
+        tab: r.tab || '2025',
+        brand: detectBrand(r.name || '', r.sku || ''),
+        unitCost: r.unit_cost || null, // admin only
+        edited: !!(r.updated_at && r.created_at && r.updated_at !== r.created_at),
       });
     }
 

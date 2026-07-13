@@ -310,11 +310,16 @@ export default function AdminDashboard() {
   const syncInventory = async () => {
     setSyncing(true);
     try {
+      // Pull NEW rows from Google Sheets into the DB (existing DB rows are never overwritten)
+      const imp = await fetch("/api/import-sheets", { method: "POST" });
+      const info = await imp.json().catch(() => ({}));
       const { refreshInventory } = await import("@/hooks/useInventory");
       const result = await refreshInventory();
       refetchInv();
       setSyncing(false);
-      toast.success(`Synced! ${result.count} products loaded`);
+      if (imp.ok) toast.success(`Imported ${info.imported ?? 0} new from Sheets · ${result.count} products live`);
+      else if (imp.status === 429) toast.info("Sheets import ran recently — showing latest DB data");
+      else toast.error(info.error || "Import failed");
     } catch(e: any) {
       setSyncing(false);
       toast.error("Sync failed: " + e.message);
@@ -434,6 +439,25 @@ export default function AdminDashboard() {
       revenue: sbOrders.filter(o=>o.status!=="cancelled").reduce((s,o)=>s+o.total,0),
     };
   },[inventory,inventoryGrouped,sbOrders]);
+
+  const [uploadingRow,setUploadingRow]=useState<string|null>(null);
+  const uploadPhoto = async (p:any, file:File) => {
+    if(!/^image\/(jpeg|png|webp)$/.test(file.type)){toast.error("JPEG/PNG/WebP only");return;}
+    if(file.size>5*1024*1024){toast.error("Max 5MB");return;}
+    setUploadingRow(p.itemCode);
+    try{
+      const base64:string = await new Promise((ok,err)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(",")[1]);r.onerror=()=>err(new Error("read failed"));r.readAsDataURL(file);});
+      const pw = (()=>{try{return sessionStorage.getItem("sb_admin_pw")||""}catch{return ""}})();
+      const res = await fetch("/api/upload-image",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({password:pw,item_code:p.itemCode,sku:p.sku||"",content_type:file.type,base64})});
+      const out = await res.json().catch(()=>({}));
+      if(!res.ok) throw new Error(out.error||"upload failed");
+      toast.success("Photo linked to "+p.itemCode);
+      const {refreshInventory} = await import("@/hooks/useInventory");
+      await refreshInventory(); refetchInv();
+    }catch(e:any){toast.error(e.message||"Upload failed");}
+    finally{setUploadingRow(null);}
+  };
 
   const startEdit = (p:any) => { setEditingRow(p.itemCode); setEditValues({name:p.name,sku:p.sku,size:p.size,srp:Math.round((p.srp||0)/100),selling_price:Math.round((p.sellingPrice||0)/100),stock:p.stock??1}); };
   const cancelEdit = () => { setEditingRow(null); setEditValues({}); };
@@ -788,9 +812,14 @@ export default function AdminDashboard() {
                         return(
                         <tr key={p.itemCode} className={`transition-colors ${isEditing?"bg-[#fffbeb]":"hover:bg-gray-50/50"} ${p.edited?"border-l-2 border-[#C9A84C]":((p as any).tab==="2024"?"border-l-2 border-amber-200":"border-l-2 border-blue-200")}`}>
                           <td className="px-4 py-2">
-                            <div className="w-11 h-11 bg-[#EDE9E3] rounded-lg overflow-hidden flex-shrink-0">
-                              {p.imageUrl?<img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover"/>:<span className="w-full h-full flex items-center justify-center text-lg opacity-20">👟</span>}
-                            </div>
+                            <label className="w-11 h-11 bg-[#EDE9E3] rounded-lg overflow-hidden flex-shrink-0 block cursor-pointer relative group/img" title={`Upload photo for ${p.itemCode}`}>
+                              {uploadingRow===p.itemCode
+                                ?<span className="w-full h-full flex items-center justify-center text-[9px] font-bold text-[#C9A84C] animate-pulse">…</span>
+                                :p.imageUrl?<img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover"/>:<span className="w-full h-full flex items-center justify-center text-lg opacity-20">👟</span>}
+                              <span className="absolute inset-0 bg-black/50 text-white text-[8px] font-bold items-center justify-center hidden group-hover/img:flex">UPLOAD</span>
+                              <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+                                onChange={e=>{const f=e.target.files?.[0]; e.currentTarget.value=""; if(f) uploadPhoto(p,f);}}/>
+                            </label>
                           </td>
                           <td className="px-3 py-2">
                             {isEditing
