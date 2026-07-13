@@ -53,20 +53,19 @@ export default function Checkout() {
             setPaymentMethods(enabled);
             if (enabled.length > 0) setForm(f => ({ ...f, paymentMethod: enabled[0].id }));
           }
-          if (r.key === "shipping" && v.free_threshold) {
-            setFreeThreshold(v.free_threshold || 300000);
-            setFlatRate(v.flat_rate || 15000);
+          if (r.key === "shipping") {
+            if (typeof v.free_threshold === "number") setFreeThreshold(v.free_threshold);
+            if (typeof v.flat_rate === "number") setFlatRate(v.flat_rate);
           }
         });
       } catch(e) {
         // fallback defaults
+        // Fallback: COD only — never display placeholder e-wallet/bank numbers
         const defaults = [
-          { id: "gcash", label: "GCash", detail: "Send to: 09XX-XXX-XXXX", enabled: true, icon: "📱" },
-          { id: "maya", label: "Maya", detail: "Send to: 09XX-XXX-XXXX", enabled: true, icon: "💙" },
           { id: "cod", label: "Cash on Delivery", detail: "Pay when item arrives", enabled: true, icon: "💵" },
         ];
         setPaymentMethods(defaults);
-        setForm(f => ({ ...f, paymentMethod: "gcash" }));
+        setForm(f => ({ ...f, paymentMethod: "cod" }));
       }
     })();
   }, []);
