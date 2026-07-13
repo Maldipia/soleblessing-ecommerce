@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 export interface InventoryProduct {
   itemCode: string;
   name: string;
+  brand?: string;
   sku: string;
   size: string;
   sellingPrice: number;

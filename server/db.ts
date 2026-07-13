@@ -19,7 +19,7 @@ export async function getDb() {
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {
-  if (!user.userId) {
+  if (!user.openId) {
     throw new Error("User userId is required for upsert");
   }
 
@@ -31,7 +31,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 
   try {
     const values: InsertUser = {
-      userId: user.userId,
+      openId: user.openId,
     };
     const updateSet: Record<string, unknown> = {};
 
@@ -55,7 +55,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     if (user.role !== undefined) {
       values.role = user.role;
       updateSet.role = user.role;
-    } else if (user.userId === ENV.ownerUserId) {
+    } else if (user.openId === ENV.ownerUserId) {
       values.role = 'admin';
       updateSet.role = 'admin';
     }
@@ -84,7 +84,7 @@ export async function getUserByOpenId(userId: string) {
     return undefined;
   }
 
-  const result = await db.select().from(users).where(eq(users.userId, userId)).limit(1);
+  const result = await db.select().from(users).where(eq(users.openId, userId)).limit(1);
 
   return result.length > 0 ? result[0] : undefined;
 }

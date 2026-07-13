@@ -62,7 +62,7 @@ export function ReviewForm({ sku, itemCode, onSuccess }: ReviewFormProps) {
       {/* Star rating */}
       <div>
         <label className="text-xs font-semibold text-gray-500 block mb-2">Your Rating *</label>
-        <StarRating rating={rating} onRatingChange={setRating} interactive />
+        <StarRating rating={rating} onRatingChange={setRating} />
         {rating > 0 && (
           <p className="text-xs text-[#C9A84C] font-semibold mt-1">
             {["", "Poor", "Fair", "Good", "Very Good", "Excellent!"][rating]}

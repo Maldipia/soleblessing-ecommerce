@@ -44,7 +44,7 @@ export function ReviewList({ sku }: ReviewListProps) {
         helpful_count: review.helpful_count + 1,
       });
       setReviews(prev => prev.map(r => r.id === reviewId ? { ...r, helpful_count: r.helpful_count + 1 } : r));
-      setHelpedIds(prev => new Set([...prev, reviewId]));
+      setHelpedIds(prev => { const next = new Set(prev); next.add(reviewId); return next; });
     } catch {}
   };
 

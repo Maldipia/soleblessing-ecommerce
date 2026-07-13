@@ -22,10 +22,8 @@ Subject: ${subject}
 ${body}
   `.trim();
   
-  return await notifyOwner({
-    title: `Email: ${subject}`,
-    content: message,
-  });
+  await notifyOwner(`Email: ${subject}\n${message}`);
+  return false; // notification stub — nothing actually delivered
 }
 
 /**

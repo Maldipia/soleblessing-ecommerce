@@ -494,14 +494,14 @@ export default function ProductDetail() {
             </TabsList>
             
             <TabsContent value="reviews" className="mt-6">
-              <ReviewList productId={productId} />
+              <ReviewList sku={String(productId)} />
             </TabsContent>
             
             <TabsContent value="write" className="mt-6">
               {user ? (
                 <div className="max-w-2xl">
                   <ReviewForm
-                    productId={productId}
+                    sku={String(productId)}
                     onSuccess={() => {
                       // Switch to reviews tab after submission
                       const reviewsTab = document.querySelector('[value="reviews"]') as HTMLButtonElement;

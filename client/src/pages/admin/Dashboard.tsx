@@ -344,7 +344,7 @@ export default function AdminDashboard() {
   const inventoryGrouped = useMemo(()=>{
     if(!inventory) return [];
     const map = new Map<string,any>();
-    inventory.forEach(item=>{
+    inventory.forEach((item: any)=>{
       if(!map.has(item.sku)) map.set(item.sku,{...item,sizes:[item.size],totalStock:item.status==="AVAILABLE"?1:0});
       else{const g=map.get(item.sku);if(item.size&&!g.sizes.includes(item.size))g.sizes.push(item.size);if(item.status==="AVAILABLE")g.totalStock++;}
     });
