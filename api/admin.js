@@ -27,7 +27,7 @@ export default async function handler(req, res) {
   if (op === 'auth') return res.status(200).json({ ok: true });
   if (!ALLOWED.has(table)) return res.status(400).json({ error: 'table not allowed' });
 
-  const method = op === 'select' ? 'GET' : op === 'insert' ? 'POST'
+  const method = op === 'select' ? 'GET' : (op === 'insert' || op === 'upsert') ? 'POST'
                : op === 'update' ? 'PATCH' : op === 'delete' ? 'DELETE' : null;
   if (!method) return res.status(400).json({ error: 'bad op' });
 
@@ -36,12 +36,12 @@ export default async function handler(req, res) {
     apikey: SERVICE_KEY,
     Authorization: `Bearer ${SERVICE_KEY}`,
     'Content-Type': 'application/json',
-    Prefer: 'return=representation',
+    Prefer: op === 'upsert' ? 'resolution=merge-duplicates,return=representation' : 'return=representation',
   };
   try {
     const r = await fetch(url, {
       method, headers,
-      body: (op === 'insert' || op === 'update') ? JSON.stringify(data) : undefined,
+      body: (op === 'insert' || op === 'upsert' || op === 'update') ? JSON.stringify(data) : undefined,
     });
     const text = await r.text();
     if (!r.ok) return res.status(r.status).json({ error: text });

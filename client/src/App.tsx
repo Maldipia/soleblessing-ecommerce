@@ -74,7 +74,7 @@ function Router() {
         <Route component={NotFound} />
       </Switch>
       {!isAdmin && <Footer />}
-      {!isAdmin && <ChatWidget />}
+      {/* ChatWidget hidden: auth is stubbed so chat can never sign in — re-enable after Next.js rebuild */}
     </>
   );
 }

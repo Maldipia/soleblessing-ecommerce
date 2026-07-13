@@ -443,10 +443,7 @@ export default function AdminDashboard() {
       const payload = {item_code:itemCode,name:editValues.name,sku:editValues.sku,size:editValues.size,
         srp:Math.round(Number(editValues.srp)*100),selling_price:Math.round(Number(editValues.selling_price)*100),
         stock:Number(editValues.stock),updated_at:new Date().toISOString()};
-      const sbKey = import.meta.env.VITE_SUPABASE_ANON_KEY||'';
-      const sbUrl = 'https://akualfrqzaierqsfcnkp.supabase.co/rest/v1/sb_inventory';
-      const hdrs = {'apikey':sbKey,'Authorization':`Bearer ${sbKey}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'};
-      await fetch(sbUrl,{method:'POST',headers:hdrs,body:JSON.stringify(payload)});
+      await sb.upsert('sb_inventory','on_conflict=item_code',payload);
       toast.success('Saved!');
       setEditingRow(null); setEditValues({});
       const {refreshInventory} = await import('@/hooks/useInventory');
@@ -456,10 +453,8 @@ export default function AdminDashboard() {
   };
   const resetEdit = async (itemCode:string) => {
     if(!confirm('Reset to Google Sheets data?')) return;
-    const sbKey = import.meta.env.VITE_SUPABASE_ANON_KEY||'';
-    await fetch(`https://akualfrqzaierqsfcnkp.supabase.co/rest/v1/sb_inventory?item_code=eq.${itemCode}`,
-      {method:'DELETE',headers:{'apikey':sbKey,'Authorization':`Bearer ${sbKey}`}});
-    toast.success('Reset to Sheets');
+    try { await sb.delete('sb_inventory',`item_code=eq.${itemCode}`); toast.success('Reset to Sheets'); }
+    catch(e:any){ toast.error('Reset failed'); return; }
     const {refreshInventory} = await import('@/hooks/useInventory');
     await refreshInventory(); refetchInv();
   };

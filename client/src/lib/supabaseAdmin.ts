@@ -30,6 +30,7 @@ export const sbAdmin = {
   },
   select: (table: string, query = '') => call('select', table, query),
   insert: (table: string, data: object) => call('insert', table, '', data),
+  upsert: (table: string, query: string, data: object) => call('upsert', table, query, data),
   update: (table: string, query: string, data: object) => call('update', table, query, data),
   delete: (table: string, query: string) => call('delete', table, query),
 };
