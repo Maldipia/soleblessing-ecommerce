@@ -22,7 +22,7 @@ async function uploadLogo(file: File): Promise<string> {
   return `${SUPABASE_URL}/storage/v1/object/public/product-images/${filename}`;
 }
 
-type PaymentMethod = { id: string; label: string; detail: string; enabled: boolean; icon: string };
+type PaymentMethod = { id: string; type?: string; label: string; account_name?: string; account_number?: string; detail: string; enabled: boolean; icon: string };
 type Brand = { site_name: string; tagline: string; logo_url: string; primary_color: string; dark_color: string };
 type Shipping = { free_threshold: number; flat_rate: number; couriers: string[] };
 type Socials = { facebook: string; instagram: string; tiktok: string; messenger: string };
@@ -41,13 +41,9 @@ export default function AdminSettings() {
     primary_color: "#C9A84C",
     dark_color: "#050f12",
   });
-  const [payments, setPayments] = useState<PaymentMethod[]>([
-    { id: "gcash", label: "GCash", detail: "Send to: 09XX-XXX-XXXX", enabled: true, icon: "📱" },
-    { id: "maya",  label: "Maya",  detail: "Send to: 09XX-XXX-XXXX", enabled: true, icon: "💙" },
-    { id: "bdo",   label: "BDO Bank Transfer", detail: "Acct: XXXX · Juan dela Cruz", enabled: true, icon: "🏦" },
-    { id: "bpi",   label: "BPI Bank Transfer", detail: "Acct: XXXX · Juan dela Cruz", enabled: true, icon: "🏦" },
-    { id: "cod",   label: "Cash on Delivery",  detail: "Pay when item arrives", enabled: true, icon: "💵" },
-  ]);
+  // Starts EMPTY on purpose. Placeholder accounts here were previously being saved
+  // to the DB and shown to real customers. The DB is the only source of truth.
+  const [payments, setPayments] = useState<PaymentMethod[]>([]);
   const [shipping, setShipping] = useState<Shipping>({
     free_threshold: 300000,
     flat_rate: 15000,
@@ -114,9 +110,18 @@ export default function AdminSettings() {
 
   const addPayment = () =>
     setPayments(p => [...p, {
-      id: `custom_${Date.now()}`, label: "New Method",
-      detail: "", enabled: true, icon: "💳",
+      id: `custom_${Date.now()}`, type: "ewallet", label: "New Method",
+      account_name: "", account_number: "", detail: "", enabled: true, icon: "💳",
     }]);
+
+  // `detail` is the single display string used by checkout. Keep it derived from
+  // name + number so the two can never drift apart.
+  const withDerivedDetail = (list: PaymentMethod[]) => list.map(m => ({
+    ...m,
+    detail: (m.account_name && m.account_number)
+      ? `${m.account_name} — ${m.account_number}`
+      : (m.detail || ""),
+  }));
 
   const removePayment = (id: string) =>
     setPayments(p => p.filter(m => m.id !== id));
@@ -271,7 +276,7 @@ export default function AdminSettings() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="text-sm font-bold text-[#0d2430] uppercase tracking-wide">Payment Methods</h3>
-              <p className="text-xs text-gray-400 mt-0.5">These appear on the checkout page for customers</p>
+              <p className="text-xs text-gray-400 mt-0.5">Single source of truth — shown on checkout AND the payment portal</p>
             </div>
             <button onClick={addPayment}
               className="flex items-center gap-2 bg-[#0d2430] text-white px-4 py-2 text-xs font-bold rounded-lg hover:bg-[#122d3a]">
@@ -287,27 +292,49 @@ export default function AdminSettings() {
                 }`}>
                 <div className="flex items-start gap-4">
                   <div className="text-2xl mt-1">{m.icon}</div>
-                  <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="flex-1 grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <div>
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                        Type
+                      </label>
+                      <select value={m.type || "ewallet"}
+                        onChange={e => updatePayment(m.id, "type", e.target.value)}
+                        className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm outline-none focus:border-[#0d2430] bg-white">
+                        <option value="ewallet">E-Wallet</option>
+                        <option value="bank">Bank</option>
+                        <option value="cod">COD</option>
+                      </select>
+                    </div>
                     <div>
                       <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
                         Method Name
                       </label>
                       <input value={m.label}
                         onChange={e => updatePayment(m.id, "label", e.target.value)}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d2430]" />
-                    </div>
-                    <div className="md:col-span-1">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
-                        Account / Details
-                      </label>
-                      <input value={m.detail}
-                        onChange={e => updatePayment(m.id, "detail", e.target.value)}
-                        placeholder="e.g. 0917-XXX-XXXX · Juan dela Cruz"
+                        placeholder="GCash"
                         className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d2430]" />
                     </div>
                     <div>
                       <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
-                        Icon (emoji)
+                        Account Name
+                      </label>
+                      <input value={m.account_name || ""}
+                        onChange={e => updatePayment(m.id, "account_name", e.target.value)}
+                        placeholder="Must match the app exactly"
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d2430]" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                        Account Number
+                      </label>
+                      <input value={m.account_number || ""}
+                        onChange={e => updatePayment(m.id, "account_number", e.target.value)}
+                        placeholder="0966 960 6060"
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono outline-none focus:border-[#0d2430]" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                        Icon
                       </label>
                       <input value={m.icon}
                         onChange={e => updatePayment(m.id, "icon", e.target.value)}
@@ -335,7 +362,16 @@ export default function AdminSettings() {
             ))}
           </div>
 
-          <SaveBtn onSave={() => save("payment_methods", payments)} />
+          <p className="text-[11px] text-gray-400 mt-4 leading-relaxed">
+            These are the only accounts customers ever see — on <span className="font-mono">/upload-payment</span> and at checkout.
+            Nothing is hardcoded in the site anymore, so what you save here is what goes live.
+          </p>
+
+          <SaveBtn onSave={() => {
+            const cleaned = withDerivedDetail(payments);
+            setPayments(cleaned);
+            save("payment_methods", cleaned);
+          }} />
         </div>
       )}
 
