@@ -1,10 +1,28 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { usePaymentMethods, digitsOnly, maskAccount, maskName } from "@/hooks/usePaymentMethods";
 
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwha-_yAysVRVspY0z1XYcD3lz1ow1Z4704M-Eu0Moq4hXjeL6uB4bLiVEr3Fyw5uKPcg/exec";
 
+// Maps a payment-method id from sb_settings → its static QR image in /public.
+// Add an entry here only when the matching QR file actually exists.
+const QR_IMAGES: Record<string,string> = {
+  gcash_pia: "/qr-gcash.png",
+};
+
+const badgeClass = (m:{type?:string;label:string}) =>
+  m.type === "ewallet" ? "sb-badge-gcash"
+  : /union/i.test(m.label) ? "sb-badge-ub"
+  : "sb-badge-generic";
+
+const badgeLabel = (m:{label:string}) => {
+  const w = m.label.trim().split(/\s+/);
+  return w.length > 1 ? <>{w[0]}<br/>{w.slice(1).join(" ")}</> : m.label;
+};
+
 export default function UploadPayment() {
+  const { banks, ewallets, methods: payMethods, loading: payLoading, error: payError } = usePaymentMethods();
   const [activeTab, setActiveTab] = useState<"bank"|"ewallet"|"qr">("bank");
-  const [method, setMethod] = useState("GCash");
+  const [method, setMethod] = useState("");
   const [file, setFile]     = useState<File|null>(null);
   const [preview, setPreview] = useState<string|null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -26,6 +44,20 @@ export default function UploadPayment() {
       setTimeout(() => { btn.textContent = orig; btn.classList.remove("copied"); }, 1800);
     });
   }
+
+  // Default the selected method + visible tab to whatever the Dashboard actually has enabled.
+  useEffect(() => {
+    if (!payLoading && !method && payMethods.length > 0) setMethod(payMethods[0].label);
+  }, [payLoading, payMethods, method]);
+
+  useEffect(() => {
+    if (payLoading) return;
+    if (banks.length === 0 && ewallets.length > 0) setActiveTab("ewallet");
+  }, [payLoading, banks.length, ewallets.length]);
+
+  const qrMethods = payMethods.filter(m => QR_IMAGES[m.id]);
+  const methodChoices = Array.from(new Set(payMethods.map(m => m.label)))
+    .map(label => ({ m: label, e: (payMethods.find(x => x.label === label)?.icon) || "💳" }));
 
   function handleFile(f: File) {
     setFile(f);
@@ -102,10 +134,10 @@ export default function UploadPayment() {
         .sb-pay-card:hover{border-color:#2d5a60;}
         .sb-pay-card:hover::before{opacity:1;}
         .sb-bank-badge{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;flex-shrink:0;font-family:'DM Sans',sans-serif;}
-        .sb-badge-bdo{background:#012169;color:#fff;font-size:13px;}
-        .sb-badge-bpi{background:#c8102e;color:#fff;font-size:14px;}
         .sb-badge-ub{background:#e87722;color:#fff;font-size:10px;line-height:1.2;text-align:center;}
         .sb-badge-gcash{background:#007dff;color:#fff;font-size:10px;line-height:1.3;text-align:center;}
+        .sb-badge-generic{background:#1e3840;color:#c9a84c;font-size:10px;line-height:1.2;text-align:center;}
+        .sb-pay-empty{background:#112830;border:1px dashed #1e3840;border-radius:10px;padding:16px;font-size:12px;color:#4a7055;line-height:1.6;text-align:center;}
         .sb-pay-info{flex:1;min-width:0;}
         .sb-pay-bank{font-size:10px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:#4a7055;margin-bottom:1px;}
         .sb-pay-holder{font-size:13px;font-weight:500;margin-bottom:1px;}
@@ -113,7 +145,7 @@ export default function UploadPayment() {
         .sb-copy-btn{background:#152e35;border:1px solid #1e3840;color:#7a9e85;font-size:10px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;padding:7px 12px;border-radius:7px;cursor:pointer;flex-shrink:0;transition:all .2s;}
         .sb-copy-btn:hover{color:#c9a84c;border-color:rgba(201,168,76,.25);}
         .sb-copy-btn.copied{background:rgba(93,184,122,.1);color:#5db87a;border-color:rgba(93,184,122,.3);}
-        .sb-qr-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+        .sb-qr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;}
         .sb-qr-card{background:#112830;border:1px solid #1e3840;border-radius:10px;padding:16px 12px;text-align:center;}
         .sb-qr-label{font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px;}
         .sb-qr-ph{width:100%;aspect-ratio:1;border:1.5px dashed #1e3840;border-radius:8px;display:flex;align-items:center;justify-content:center;background:#0b1a1f;color:#1e3840;font-size:10px;text-align:center;line-height:1.5;margin-bottom:8px;padding:8px;}
@@ -232,55 +264,55 @@ export default function UploadPayment() {
                 </div>
 
                 <div className={`sb-tab-section${activeTab==="bank"?" active":""}`}>
-                  {[
-                    {cls:"sb-badge-bdo",lbl:"BDO",bank:"BDO Unibank",holder:"Legeryn Pia",num:"0126-000-62617",copy:"012600062617"},
-                    {cls:"sb-badge-bpi",lbl:"BPI",bank:"Bank of Philippine Islands",holder:"Legeryn Pia",num:"1539-235-628",copy:"1539235628"},
-                    {cls:"sb-badge-ub",lbl:<>Union<br/>Bank</>,bank:"UnionBank Philippines",holder:"Legeryn Pia",num:"1093-2100-0528",copy:"109321000528"},
-                  ].map((a,i)=>(
-                    <div key={i} className="sb-pay-card">
-                      <div className={`sb-bank-badge ${a.cls}`}>{a.lbl}</div>
+                  {payLoading && <div className="sb-pay-empty">Loading payment accounts…</div>}
+                  {!payLoading && banks.length===0 && (
+                    <div className="sb-pay-empty">No bank transfer accounts are currently available. Please use E-Wallet, or message us.</div>
+                  )}
+                  {banks.map(a=>(
+                    <div key={a.id} className="sb-pay-card">
+                      <div className={`sb-bank-badge ${badgeClass(a)}`}>{badgeLabel(a)}</div>
                       <div className="sb-pay-info">
-                        <div className="sb-pay-bank">{a.bank}</div>
-                        <div className="sb-pay-holder">{a.holder}</div>
-                        <div className="sb-pay-number">{a.num}</div>
+                        <div className="sb-pay-bank">{a.label}</div>
+                        <div className="sb-pay-holder">{a.account_name}</div>
+                        <div className="sb-pay-number">{a.account_number}</div>
                       </div>
-                      <button className="sb-copy-btn" onClick={e=>copyText(a.copy,e.currentTarget)}>Copy</button>
+                      <button className="sb-copy-btn" onClick={e=>copyText(digitsOnly(a.account_number),e.currentTarget)}>Copy</button>
                     </div>
                   ))}
                 </div>
 
                 <div className={`sb-tab-section${activeTab==="ewallet"?" active":""}`}>
-                  {[
-                    {holder:"Legeryn Pia",num:"0966 960 6060",copy:"09669606060"},
-                    {holder:"Michael Talla",num:"0935 763 7498",copy:"09357637498"},
-                  ].map((g,i)=>(
-                    <div key={i} className="sb-pay-card">
-                      <div className="sb-bank-badge sb-badge-gcash">G<br/>Cash</div>
+                  {payLoading && <div className="sb-pay-empty">Loading payment accounts…</div>}
+                  {!payLoading && ewallets.length===0 && (
+                    <div className="sb-pay-empty">No e-wallet accounts are currently available. Please use Bank transfer, or message us.</div>
+                  )}
+                  {ewallets.map(g=>(
+                    <div key={g.id} className="sb-pay-card">
+                      <div className={`sb-bank-badge ${badgeClass(g)}`}>{badgeLabel(g)}</div>
                       <div className="sb-pay-info">
-                        <div className="sb-pay-bank">GCash</div>
-                        <div className="sb-pay-holder">{g.holder}</div>
-                        <div className="sb-pay-number">{g.num}</div>
+                        <div className="sb-pay-bank">{g.label}</div>
+                        <div className="sb-pay-holder">{g.account_name}</div>
+                        <div className="sb-pay-number">{g.account_number}</div>
                       </div>
-                      <button className="sb-copy-btn" onClick={e=>copyText(g.copy,e.currentTarget)}>Copy</button>
+                      <button className="sb-copy-btn" onClick={e=>copyText(digitsOnly(g.account_number),e.currentTarget)}>Copy</button>
                     </div>
                   ))}
                 </div>
 
                 <div className={`sb-tab-section${activeTab==="qr"?" active":""}`}>
                   <div className="sb-qr-grid">
-                    {[
-                      {src:"/qr-bdo.png",  label:"BDO",   color:"#4d90d6", name:"BDOSB",     acct:"••••2617"},
-                      {src:"/qr-bpi.png",  label:"BPI",   color:"#e05a6b", name:"BPISB",     acct:"•••••628"},
-                      {src:"/qr-gcash.png",label:"GCash", color:"#4d90d6", name:"LE****N P.", acct:"0966 ••••"},
-                    ].map((q,i)=>(
-                      <div key={i} className="sb-qr-card sb-qr-clickable" onClick={()=>setLightbox({src:q.src,label:q.label})} title="Tap to enlarge">
-                        <div className="sb-qr-label" style={{color:q.color}}>{q.label}</div>
+                    {qrMethods.length===0 && (
+                      <div className="sb-pay-empty">No QR codes available yet — use the Bank or E-Wallet tab.</div>
+                    )}
+                    {qrMethods.map(q=>(
+                      <div key={q.id} className="sb-qr-card sb-qr-clickable" onClick={()=>setLightbox({src:QR_IMAGES[q.id],label:q.label})} title="Tap to enlarge">
+                        <div className="sb-qr-label" style={{color:"#4d90d6"}}>{q.label}</div>
                         <div className="sb-qr-ph sb-qr-ph-img">
-                          <img src={q.src} alt={`${q.label} QR Code`}/>
+                          <img src={QR_IMAGES[q.id]} alt={`${q.label} QR Code`}/>
                           <div className="sb-qr-zoom-hint">🔍 Tap to enlarge</div>
                         </div>
-                        <div className="sb-qr-name">{q.name}</div>
-                        <div className="sb-qr-acct">{q.acct}</div>
+                        <div className="sb-qr-name">{maskName(q.account_name)}</div>
+                        <div className="sb-qr-acct">{maskAccount(q.account_number)}</div>
                         <div className="sb-instapay">InstaPay</div>
                       </div>
                     ))}
@@ -315,7 +347,7 @@ export default function UploadPayment() {
 
                 <span className="sb-method-label">Payment Method</span>
                 <div className="sb-method-grid">
-                  {[{m:"GCash",e:"💙"},{m:"Maya",e:"💚"},{m:"Bank",e:"🏦"},{m:"COD",e:"💵"}].map(({m,e})=>(
+                  {methodChoices.map(({m,e})=>(
                     <button key={m} className={`sb-method-btn${method===m?" active":""}`} onClick={()=>setMethod(m)}>
                       <span className="sb-method-emoji">{e}</span>{m}
                     </button>
