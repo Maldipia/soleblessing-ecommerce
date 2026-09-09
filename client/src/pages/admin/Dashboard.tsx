@@ -96,11 +96,26 @@ function QRModal({ itemCode, name, onClose }: { itemCode: string; name: string; 
   );
 }
 
+// sessionStorage key holding the admin password (set by sbAdmin.authenticate).
+const PW_KEY = "sb_admin_pw";
+
 function useAdminAuth() {
   const [isAdmin] = useState<boolean>(() => {
-    try { return localStorage.getItem(ADMIN_KEY)==="true"; } catch { return false; }
+    try {
+      const flagged = localStorage.getItem(ADMIN_KEY)==="true";
+      // The "logged in" flag lives in localStorage (survives tab close) but the actual
+      // credential lives in sessionStorage (does NOT). When they drift apart the panel
+      // looks logged in while every privileged write returns {"error":"unauthorized"}.
+      // Force a clean re-login instead of letting saves fail silently.
+      const hasPw = !!sessionStorage.getItem(PW_KEY);
+      if (flagged && !hasPw) { localStorage.removeItem(ADMIN_KEY); return false; }
+      return flagged;
+    } catch { return false; }
   });
-  const logout = () => { localStorage.removeItem(ADMIN_KEY); window.location.reload(); };
+  const logout = () => {
+    try { localStorage.removeItem(ADMIN_KEY); sessionStorage.removeItem(PW_KEY); } catch {}
+    window.location.reload();
+  };
   return { isAdmin, logout };
 }
 
@@ -447,7 +462,7 @@ export default function AdminDashboard() {
     setUploadingRow(p.itemCode);
     try{
       const base64:string = await new Promise((ok,err)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(",")[1]);r.onerror=()=>err(new Error("read failed"));r.readAsDataURL(file);});
-      const pw = (()=>{try{return sessionStorage.getItem("sb_admin_pw")||""}catch{return ""}})();
+      const pw = (()=>{try{return sessionStorage.getItem(PW_KEY)||""}catch{return ""}})();
       const res = await fetch("/api/upload-image",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({password:pw,item_code:p.itemCode,sku:p.sku||"",content_type:file.type,base64})});
       const out = await res.json().catch(()=>({}));
