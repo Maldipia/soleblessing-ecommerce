@@ -981,7 +981,7 @@ export default function AdminDashboard() {
   const [intakeLoading,setIntakeLoading]=useState(false);
   const [intakeSearch,setIntakeSearch]=useState("");
   const [intakeCond,setIntakeCond]=useState("All");
-  const [intakeAll,setIntakeAll]=useState(false); // false = scanned pairs only (clean intake log)
+  const intakeAll=false; // Latest Inventory is the scan log ONLY — full stock lives in Products & Inventory
   const [intakeShown,setIntakeShown]=useState(50);
   const loadIntake=async()=>{
     setIntakeLoading(true);
@@ -2098,10 +2098,7 @@ export default function AdminDashboard() {
                     className="border border-gray-200 rounded-lg px-2 text-xs outline-none">
                     {["All","Good","Stained","Missing pair","Unknown"].map(c=><option key={c}>{c}</option>)}
                   </select>
-                  <div className="flex rounded-lg border border-gray-200 overflow-hidden text-[11px] font-bold">
-                    <button onClick={()=>setIntakeAll(false)} className={`px-3 py-2 ${!intakeAll?"bg-[#0d2430] text-white":"text-gray-400"}`}>📷 Scanned ({scannedCount})</button>
-                    <button onClick={()=>setIntakeAll(true)} className={`px-3 py-2 ${intakeAll?"bg-[#0d2430] text-white":"text-gray-400"}`}>All items ({intakeRows.length})</button>
-                  </div>
+                  <span className="text-[11px] font-bold text-gray-400 self-center">📷 {scannedCount} scanned pair{scannedCount===1?"":"s"}</span>
                 </div>
                 <div className="flex gap-2">
                   <button onClick={()=>setScanBox(true)}
@@ -2161,8 +2158,8 @@ export default function AdminDashboard() {
                         </tr>
                       );})}
                     {!intakeLoading&&filteredIntake.length===0&&<tr><td colSpan={13} className="px-4 py-10 text-center text-sm text-gray-400">
-                      {!intakeAll&&!intakeSearch&&intakeCond==="All"
-                        ?<>Nothing scanned yet — hit <b>📷 SCAN SHOEBOX</b> to log your first pair.<br/><span className="text-[11px]">Your {intakeRows.length} sheet-imported items live under "All items".</span></>
+                      {!intakeSearch&&intakeCond==="All"
+                        ?<>Nothing scanned yet — hit <b>📷 SCAN SHOEBOX</b> to log your first pair.<br/><span className="text-[11px]">Everything else stays in Products &amp; Inventory.</span></>
                         :"No matches"}</td></tr>}
                     {intakeLoading&&<tr><td colSpan={13} className="px-4 py-10 text-center text-sm text-gray-400">Loading…</td></tr>}
                   </tbody>
