@@ -1320,8 +1320,8 @@ export default function AdminDashboard() {
         onClose={()=>setScanBox(false)}
         onSaved={()=>{loadIntake();refetchInv();refreshInventory().catch(()=>{});}}/>}
 
-      {/* Sidebar */}
-      <aside className={`${sidebarOpen?"w-56":"w-14"} flex-shrink-0 bg-[#050f12] flex flex-col transition-all duration-300 sticky top-0 h-screen overflow-y-auto`}>
+      {/* Sidebar — staff admins get a top-bar-only phone layout (single screen, no nav needed) */}
+      {!isStaff&&<aside className={`${sidebarOpen?"w-56":"w-14"} flex-shrink-0 bg-[#050f12] flex flex-col transition-all duration-300 sticky top-0 h-screen overflow-y-auto hidden sm:flex`}>
         <div className="px-4 py-4 flex items-center gap-3 border-b border-white/[.06]">
           <img src="/logo-soleblessing.png" alt="SoleBlessing" className="h-9 w-9 object-contain flex-shrink-0"
             onError={e=>{(e.target as HTMLImageElement).style.display="none";}}/>
@@ -1352,12 +1352,12 @@ export default function AdminDashboard() {
             {sidebarOpen&&<span className="text-xs">Collapse</span>}
           </button>
         </div>
-      </aside>
+      </aside>}
 
       {/* Main */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto min-w-0">
         {/* Top bar */}
-        <div className="bg-white border-b border-gray-100 px-8 py-4 flex items-center justify-between sticky top-0 z-10">
+        <div className="bg-white border-b border-gray-100 px-3 sm:px-8 py-3 sm:py-4 flex items-center justify-between gap-2 sticky top-0 z-10 flex-wrap">
           {section==="overview"?(
             <div className="leading-tight">
               <h1 className="text-lg font-black text-[#0d2430] tracking-tight">
@@ -1383,17 +1383,43 @@ export default function AdminDashboard() {
               </button>
             )}
             {!isStaff&&<button onClick={()=>{syncInventory();}} disabled={syncing}
-              className="flex items-center gap-2 bg-[#0d2430] text-white px-4 py-2 text-xs font-semibold rounded-lg hover:bg-[#122d3a] disabled:opacity-50">
+              className="hidden sm:flex items-center gap-2 bg-[#0d2430] text-white px-4 py-2 text-xs font-semibold rounded-lg hover:bg-[#122d3a] disabled:opacity-50">
               <RefreshCw className={`h-3.5 w-3.5 ${syncing?"animate-spin":""}`}/> Sync Sheets
             </button>}
             {!isStaff&&<button onClick={()=>setLocation("/upload-payment")}
-              className="flex items-center gap-2 border border-gray-200 text-[#0d2430] px-4 py-2 text-xs font-semibold rounded-lg hover:bg-gray-50">
+              className="hidden sm:flex items-center gap-2 border border-gray-200 text-[#0d2430] px-4 py-2 text-xs font-semibold rounded-lg hover:bg-gray-50">
               <Zap className="h-3.5 w-3.5"/> Payment Portal
             </button>}
           </div>
         </div>
 
-        <div className="p-8">
+        {/* Mobile nav — the sidebar is hidden on phones */}
+        {!isStaff&&(
+          <div className="sm:hidden bg-[#050f12] px-2 py-2 flex gap-1 overflow-x-auto sticky top-[57px] z-10">
+            {NAV.map(n=>(
+              <button key={n.id} onClick={()=>setSection(n.id)}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-bold whitespace-nowrap flex-shrink-0 ${section===n.id?"bg-[#C9A84C]/20 text-[#C9A84C]":"text-white/50"}`}>
+                <n.icon className="h-3.5 w-3.5"/>{n.label}
+              </button>
+            ))}
+            <button onClick={logout} className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-bold whitespace-nowrap text-white/40 ml-auto flex-shrink-0">
+              <LogOut className="h-3.5 w-3.5"/>
+            </button>
+          </div>
+        )}
+        {isStaff&&(
+          <div className="bg-[#050f12] px-3 py-2.5 flex items-center justify-between sticky top-[57px] z-10">
+            <div className="flex items-center gap-2">
+              <img src="/logo-soleblessing.png" alt="" className="h-6 w-6 object-contain" onError={e=>{(e.target as HTMLImageElement).style.display="none";}}/>
+              <span className="text-white font-black text-xs tracking-wider uppercase">SoleBlessing · Scanner</span>
+            </div>
+            <button onClick={logout} className="flex items-center gap-1.5 text-white/50 text-[11px] font-bold">
+              <LogOut className="h-3.5 w-3.5"/> Log out
+            </button>
+          </div>
+        )}
+
+        <div className="p-3 sm:p-8">
 
           {/* ── OVERVIEW ── */}
           {section==="overview"&&(
@@ -2094,11 +2120,11 @@ export default function AdminDashboard() {
             <div className="space-y-4">
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div className="flex gap-2 flex-wrap">
-                  <div className="relative">
+                  <div className="relative flex-1 sm:flex-none min-w-[180px]">
                     <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-300"/>
                     <input value={intakeSearch} onChange={e=>setIntakeSearch(e.target.value)}
-                      placeholder="code / model / SKU / barcode / any size"
-                      className="pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-xs w-64 outline-none focus:border-[#C9A84C]"/>
+                      placeholder="code / model / SKU / barcode / size"
+                      className="pl-8 pr-3 py-2.5 border border-gray-200 rounded-lg text-xs w-full sm:w-64 outline-none focus:border-[#C9A84C]"/>
                   </div>
                   <select value={intakeCond} onChange={e=>setIntakeCond(e.target.value)}
                     className="border border-gray-200 rounded-lg px-2 text-xs outline-none">
@@ -2108,7 +2134,7 @@ export default function AdminDashboard() {
                 </div>
                 <div className="flex gap-2">
                   <button onClick={()=>setScanBox(true)}
-                    className="flex items-center gap-2 bg-[#0d2430] text-white px-4 py-2 text-xs font-black rounded-lg hover:bg-[#122d3a]">
+                    className="flex items-center gap-2 bg-[#0d2430] text-white px-4 py-2.5 text-xs font-black rounded-lg hover:bg-[#122d3a] flex-1 sm:flex-none justify-center">
                     📷 SCAN SHOEBOX
                   </button>
                   <button onClick={intakeCSV} className="flex items-center gap-1.5 border border-gray-200 text-gray-500 px-3 py-2 text-xs font-bold rounded-lg hover:bg-gray-50">
