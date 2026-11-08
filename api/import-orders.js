@@ -50,13 +50,16 @@ export default async function handler(req, res) {
     if (!texts.some(Boolean)) return res.status(502).json({ error: 'order sheet fetch failed' });
 
     const tabCounts = {};
+    // Tabs whose layout keeps the standard AA-AF item block (AE = Unit cost).
+    // 'WALK IN' and 'LAY AWAY' diverge after col X — never read cost there.
+    const COST_TABS = new Set(['STRAIGHT PAYMENT', 'COD', 'COP', 'WALK-IN']);
     const rows = texts.flatMap((t, i) => {
       const rs = t ? parseCSV(t).slice(1) : [];
       tabCounts[TABS[i].name] = rs.length;
-      return rs;
+      return rs.map(r => ({ r, tab: TABS[i].name }));
     });
     const orders = new Map(); let last = null;
-    for (const r of rows) {
+    for (const { r, tab } of rows) {
       const oid = (r[2] || '').trim();
       const item = (r[26] || '').trim();
       if (oid) {
@@ -70,7 +73,14 @@ export default async function handler(req, res) {
         });
         last = orders.get(oid);
       }
-      if (item && last) last.items.push({ id: item, name: (r[27] || '').trim(), sku: (r[28] || '').trim(), size: (r[29] || '').trim(), price: peso(r[31]), qty: 1, brand: '', imageUrl: '' });
+      if (item && last) {
+        const sheetCost = COST_TABS.has(tab) ? peso(r[30]) : 0; // col AE "Unit cost"
+        last.items.push({
+          id: item, name: (r[27] || '').trim(), sku: (r[28] || '').trim(), size: (r[29] || '').trim(),
+          price: peso(r[31]), qty: 1, brand: '', imageUrl: '',
+          ...(sheetCost > 0 ? { cost: sheetCost, cost_source: 'sheet' } : {}),
+        });
+      }
     }
 
     // Snapshot acquisition cost onto each line whose code matches inventory (immutable COGS)
@@ -131,12 +141,64 @@ export default async function handler(req, res) {
       }
     }
 
+    // ── REFRESH PASS ──────────────────────────────────────────────────────
+    // Orders are often imported BEFORE the sheet's item columns are encoded
+    // (items get filled when the invoice is made). Self-heal here:
+    //  a) imported order with no items + sheet now has items → fill items/total, soft-decrement
+    //  b) imported line missing cost + sheet AE has cost for same code → fill cost
+    // Only ever fills blanks; never overwrites existing items or costs.
+    let refreshed = 0, costFilled = 0;
+    try {
+      const needRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/sb_orders?source=eq.sheet_import&select=id,order_number,items,shipping_fee,status&order=created_at.desc&limit=500`, { headers: H });
+      if (needRes.ok) {
+        for (const d of await needRes.json()) {
+          const s = orders.get(d.order_number);
+          if (!s) continue;
+          const dbItems = Array.isArray(d.items) ? d.items : [];
+          if (!dbItems.length && s.items.length) {
+            const subtotal = s.items.reduce((a, i) => a + i.price, 0);
+            const r2 = await fetch(`${SUPABASE_URL}/rest/v1/sb_orders?id=eq.${d.id}`, {
+              method: 'PATCH', headers: { ...H, Prefer: 'return=minimal' },
+              body: JSON.stringify({ items: s.items, subtotal, total: subtotal + (d.shipping_fee || 0), updated_at: new Date().toISOString() }),
+            });
+            if (r2.ok) {
+              refreshed++;
+              if (d.status !== 'cancelled') {
+                try {
+                  await fetch(`${SUPABASE_URL}/rest/v1/rpc/sb_soft_decrement`, {
+                    method: 'POST', headers: H, body: JSON.stringify({ p_items: s.items }),
+                  });
+                } catch (e) { /* non-fatal */ }
+              }
+            }
+            continue;
+          }
+          let changed = false;
+          const upd = dbItems.map(it => {
+            if ((it.cost == null || it.cost === 0) && it.id) {
+              const sl = s.items.find(x => x.id === it.id && x.cost > 0);
+              if (sl) { changed = true; return { ...it, cost: sl.cost, cost_source: sl.cost_source || 'sheet' }; }
+            }
+            return it;
+          });
+          if (changed) {
+            const r3 = await fetch(`${SUPABASE_URL}/rest/v1/sb_orders?id=eq.${d.id}`, {
+              method: 'PATCH', headers: { ...H, Prefer: 'return=minimal' },
+              body: JSON.stringify({ items: upd, updated_at: new Date().toISOString() }),
+            });
+            if (r3.ok) costFilled++;
+          }
+        }
+      }
+    } catch (e) { /* refresh is best-effort */ }
+
     await fetch(`${SUPABASE_URL}/rest/v1/sync_log`, {
       method: 'POST', headers: H,
-      body: JSON.stringify({ sync_type: 'order_import', total: payload.length, synced: inserted, triggered_by: 'admin', notes: 'SB ORDER sheet -> sb_orders (insert-only)' }),
+      body: JSON.stringify({ sync_type: 'order_import', total: payload.length, synced: inserted, triggered_by: 'admin', notes: `sheet -> sb_orders · +${inserted} new · ${refreshed} late-encoded filled · ${costFilled} costs from sheet` }),
     }).catch(() => {});
 
-    return res.status(200).json({ ok: true, parsed: payload.length, imported: inserted, tabs: tabCounts });
+    return res.status(200).json({ ok: true, parsed: payload.length, imported: inserted, refreshed, cost_filled: costFilled, tabs: tabCounts });
   } catch (e) {
     return res.status(500).json({ error: String(e && e.message || e) });
   }
