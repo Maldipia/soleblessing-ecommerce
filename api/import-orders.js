@@ -81,6 +81,24 @@ export default async function handler(req, res) {
           price: peso(r[31]), qty: 1, brand: '', imageUrl: '',
           ...(sheetCost > 0 ? { cost: sheetCost, cost_source: 'sheet' } : {}),
         });
+      } else if (last && !item && COST_TABS.has(tab)) {
+        // FALLBACK — the AA-AF sync block is only filled at invoice time, but the
+        // FB form writes the item immediately into the legacy columns:
+        // Y (24) item code · Z (25) product name · AF (31) price.
+        // Wire those up so fresh orders show name/size/price/total right away.
+        const legacyName = (r[25] || '').trim();
+        const legacyCode = normCode(r[24]);
+        const legacyPrice = peso(r[31]);
+        if ((legacyName || legacyCode) && last.items.length === 0 && (legacyPrice > 0 || legacyName)) {
+          // Pull a trailing size token out of the name when present (e.g. "… 11M", "… 9.5")
+          let nm = legacyName, size = '';
+          const m = legacyName.match(/\s+(?:size\s*)?((?:US\s?)?\d{1,2}(?:\.5)?\s?[MWmw]?)$/);
+          if (m && parseFloat(m[1]) >= 4 && parseFloat(m[1]) <= 15) { size = m[1].trim(); nm = legacyName.slice(0, m.index).trim(); }
+          last.items.push({
+            id: legacyCode, name: nm || 'Item', sku: '', size,
+            price: legacyPrice, qty: 1, brand: '', imageUrl: '', item_source: 'legacy_cols',
+          });
+        }
       }
     }
 
@@ -157,6 +175,29 @@ export default async function handler(req, res) {
           const s = orders.get(d.order_number);
           if (!s) continue;
           const dbItems = Array.isArray(d.items) ? d.items : [];
+          // Upgrade: legacy-col placeholder lines → full AA-AF lines once invoicing fills them
+          if (dbItems.length && dbItems.every(i => i.item_source === 'legacy_cols')
+              && s.items.length && s.items.some(i => !i.item_source)) {
+            const fresh = s.items.filter(i => !i.item_source);
+            const subtotal = fresh.reduce((a, i) => a + i.price, 0);
+            const r1 = await fetch(`${SUPABASE_URL}/rest/v1/sb_orders?id=eq.${d.id}`, {
+              method: 'PATCH', headers: { ...H, Prefer: 'return=minimal' },
+              body: JSON.stringify({ items: fresh, subtotal, total: subtotal + (d.shipping_fee || 0), updated_at: new Date().toISOString() }),
+            });
+            if (r1.ok) {
+              refreshed++;
+              const oldCodes = new Set(dbItems.map(i => i.id).filter(Boolean));
+              const newOnly = fresh.filter(i => i.id && !oldCodes.has(i.id));
+              if (d.status !== 'cancelled' && newOnly.length) {
+                try {
+                  await fetch(`${SUPABASE_URL}/rest/v1/rpc/sb_soft_decrement`, {
+                    method: 'POST', headers: H, body: JSON.stringify({ p_items: newOnly }),
+                  });
+                } catch (e) { /* non-fatal */ }
+              }
+            }
+            continue;
+          }
           if (!dbItems.length && s.items.length) {
             const subtotal = s.items.reduce((a, i) => a + i.price, 0);
             const r2 = await fetch(`${SUPABASE_URL}/rest/v1/sb_orders?id=eq.${d.id}`, {
