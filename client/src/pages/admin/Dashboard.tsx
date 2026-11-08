@@ -1651,22 +1651,21 @@ export default function AdminDashboard() {
                       {o.invoice_url
                         ? <span className="flex items-center gap-1 flex-wrap">
                             <a href={o.invoice_url} target="_blank" rel="noopener noreferrer"
-                              className="text-[11px] font-bold text-[#8a6d25] border border-[#C9A84C] px-2 py-0.5 rounded-lg hover:bg-[#C9A84C]/10 flex items-center gap-1">
-                              <ExternalLink className="h-3 w-3"/> Invoice</a>
+                              title={o.invoice_sent_at?`Emailed to customer ${fmtDate(o.invoice_sent_at)}`:"Invoice created — not emailed yet"}
+                              className={`text-[11px] font-bold px-2.5 py-0.5 rounded-lg flex items-center gap-1 ${o.invoice_sent_at
+                                ?"bg-green-600 text-white border border-green-600 hover:bg-green-700 shadow-sm"
+                                :"text-[#8a6d25] border border-[#C9A84C] hover:bg-[#C9A84C]/10"}`}>
+                              {o.invoice_sent_at?<>✓ Invoice</>:<><ExternalLink className="h-3 w-3"/> Invoice</>}</a>
                             <button onClick={()=>generateInvoice(o,true)} disabled={invBusy===o.id} title="Create a new invoice and replace the link"
                               className="text-[11px] font-bold text-gray-500 border border-gray-200 px-2 py-0.5 rounded-lg hover:border-[#C9A84C] hover:text-[#8a6d25] disabled:opacity-50">
                               {invBusy===o.id?"…":"↻ Change"}</button>
                             {o.invoice_sent_at
-                              ? <span className="flex items-center gap-1">
-                                  <span className="text-[11px] font-bold bg-emerald-500 text-white px-2.5 py-0.5 rounded-lg">
-                                    ✓ Invoice sent {fmtDate(o.invoice_sent_at)}</span>
-                                  <button onClick={()=>sendInvoice(o,true)} disabled={sendBusy===o.id} title="Email the invoice again"
-                                    className="text-[11px] font-bold text-gray-400 border border-gray-200 px-2 py-0.5 rounded-lg hover:text-emerald-700 hover:border-emerald-300 disabled:opacity-50">
-                                    {sendBusy===o.id?"…":"↻"}</button>
-                                </span>
+                              ? <button onClick={()=>sendInvoice(o,true)} disabled={sendBusy===o.id} title="Email the invoice again"
+                                  className="text-[11px] font-bold text-green-700 border border-green-300 px-2 py-0.5 rounded-lg hover:bg-green-50 disabled:opacity-50">
+                                  {sendBusy===o.id?"…":"📧 ↻"}</button>
                               : <button onClick={()=>sendInvoice(o)} disabled={sendBusy===o.id}
                                   title={o.customer_email?`Email the invoice to ${o.customer_email}`:"No email on this order"}
-                                  className="text-[11px] font-bold border border-emerald-500 text-emerald-700 px-2.5 py-0.5 rounded-lg hover:bg-emerald-50 disabled:opacity-50">
+                                  className="text-[11px] font-bold bg-emerald-500 text-white px-2.5 py-0.5 rounded-lg hover:bg-emerald-600 disabled:opacity-50">
                                   {sendBusy===o.id?"Sending…":"📧 Send invoice"}</button>}
                           </span>
                         : <button onClick={()=>generateInvoice(o)} disabled={invBusy===o.id}
