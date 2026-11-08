@@ -31,7 +31,21 @@ export default async function handler(req, res) {
       if (m) return res.status(409).json({ error: 'out_of_stock', item_code: m[1] });
       return res.status(r.status).json({ error: text });
     }
-    return res.status(200).json({ order: JSON.parse(text || 'null') });
+    const order = JSON.parse(text || 'null');
+
+    // Mirror website orders into the Google ORDER sheet so the existing GAS
+    // invoice system covers them too. Fire-and-forget; GAS webhook URL set in env.
+    const GAS_HOOK = process.env.GAS_ORDER_WEBHOOK || '';
+    if (GAS_HOOK && order) {
+      try {
+        await fetch(GAS_HOOK, {
+          method: 'POST', redirect: 'follow',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ kind: 'website_order', order }),
+        });
+      } catch (e) { /* non-fatal — invoice can be generated from sheet later */ }
+    }
+    return res.status(200).json({ order });
   } catch (e) {
     return res.status(500).json({ error: String(e) });
   }
