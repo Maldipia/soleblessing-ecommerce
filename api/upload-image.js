@@ -19,10 +19,12 @@ export default async function handler(req, res) {
 
   let body = req.body;
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }
-  const { password, item_code, sku = '', content_type = 'image/jpeg', base64 } = body || {};
+  const { password, sku = '', content_type = 'image/jpeg', base64 } = body || {};
+  // Canonical code: uppercase, whitespace stripped — photo lands on the exact item
+  const item_code = String((body || {}).item_code || '').replace(/\s+/g, '').toUpperCase();
 
   if (password !== ADMIN_PASSWORD) return res.status(401).json({ error: 'unauthorized' });
-  if (!item_code || !/^[A-Za-z0-9_-]{1,32}$/.test(item_code)) return res.status(400).json({ error: 'bad item_code' });
+  if (!item_code || !/^[A-Z0-9_-]{1,32}$/.test(item_code)) return res.status(400).json({ error: 'bad item_code' });
   if (!base64) return res.status(400).json({ error: 'missing image data' });
   if (!/^image\/(jpeg|png|webp)$/.test(content_type)) return res.status(400).json({ error: 'jpeg/png/webp only' });
 

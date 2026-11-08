@@ -19,6 +19,7 @@ function parseCSV(text) {
 const PLACEHOLDERS = new Set(['NOT YET','NOT SENT','N/A','NA','-','TBD','PENDING']);
 const clean = v => { const t = String(v || '').trim(); return PLACEHOLDERS.has(t.toUpperCase()) ? '' : t; };
 const peso = v => { const n = parseFloat(String(v || '').replace(/[₱,\s]/g, '')); return isNaN(n) ? 0 : Math.round(n * 100); };
+const normCode = v => String(v || '').replace(/\s+/g, '').toUpperCase();
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -61,7 +62,7 @@ export default async function handler(req, res) {
     const orders = new Map(); let last = null;
     for (const { r, tab } of rows) {
       const oid = (r[2] || '').trim();
-      const item = (r[26] || '').trim();
+      const item = normCode(r[26]);
       if (oid) {
         if (!orders.has(oid)) orders.set(oid, {
           ts: (r[0] || '').trim(), email: (r[1] || '').trim(), fb: (r[3] || '').trim(),
@@ -87,7 +88,7 @@ export default async function handler(req, res) {
     const costMap = {};
     try {
       const invRes = await fetch(`${SUPABASE_URL}/rest/v1/sb_inventory?select=item_code,unit_cost&unit_cost=gt.0&limit=5000`, { headers: H });
-      if (invRes.ok) for (const r of await invRes.json()) costMap[r.item_code] = r.unit_cost;
+      if (invRes.ok) for (const r of await invRes.json()) costMap[normCode(r.item_code)] = r.unit_cost;
     } catch { /* cost enrichment is best-effort */ }
     for (const o of orders.values())
       for (const it of o.items)

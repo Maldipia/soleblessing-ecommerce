@@ -808,14 +808,16 @@ export default function AdminDashboard() {
     finally{setUploadingRow(null);}
   };
 
-  const startEdit = (p:any) => { setEditingRow(p.itemCode); setEditValues({name:p.name,sku:p.sku,size:p.size,srp:Math.round((p.srp||0)/100),selling_price:Math.round((p.sellingPrice||0)/100),stock:p.stock??1}); };
+  const INV_STATUSES=["Available","Reserved","Sold","Returned","Damaged","Archived"];
+  const canonStatus=(s:string)=>INV_STATUSES.find(x=>x.toUpperCase()===(s||"").toUpperCase().trim())||"Available";
+  const startEdit = (p:any) => { setEditingRow(p.itemCode); setEditValues({name:p.name,sku:p.sku,size:p.size,srp:Math.round((p.srp||0)/100),selling_price:Math.round((p.sellingPrice||0)/100),stock:p.stock??1,status:canonStatus(p.status)}); };
   const cancelEdit = () => { setEditingRow(null); setEditValues({}); };
   const saveEdit = async (itemCode:string) => {
     setSavingRow(itemCode);
     try {
       const payload = {item_code:itemCode,name:editValues.name,sku:editValues.sku,size:editValues.size,
         srp:Math.round(Number(editValues.srp)*100),selling_price:Math.round(Number(editValues.selling_price)*100),
-        stock:Number(editValues.stock),updated_at:new Date().toISOString()};
+        stock:Number(editValues.stock),status:editValues.status||"Available",updated_at:new Date().toISOString()};
       await sb.upsert('sb_inventory','on_conflict=item_code',payload);
       toast.success('Saved!');
       setEditingRow(null); setEditValues({});
@@ -1377,7 +1379,12 @@ export default function AdminDashboard() {
                           </td>
                           <td className="px-3 py-2 text-center">
                             {isEditing
-                              ?<input className={inp+" text-center"} type="number" min="0" value={editValues.stock??1} onChange={e=>setEditValues(v=>({...v,stock:e.target.value}))}/>
+                              ?<div className="space-y-1">
+                                 <input className={inp+" text-center"} type="number" min="0" value={editValues.stock??1} onChange={e=>setEditValues(v=>({...v,stock:e.target.value}))}/>
+                                 <select className={inp+" text-center text-[10px]"} value={editValues.status||"Available"} onChange={e=>setEditValues(v=>({...v,status:e.target.value}))}>
+                                   {INV_STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
+                                 </select>
+                               </div>
                               :<span className={`text-xs font-bold ${(p.stock||1)===0?"text-red-500":(p.stock||1)<=2?"text-amber-500":"text-green-600"}`}>{p.stock??1}</span>}
                           </td>
                           <td className="px-3 py-2 text-center">

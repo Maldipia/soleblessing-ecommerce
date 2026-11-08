@@ -21,6 +21,13 @@ function parsePrice(v) {
   const n = parseFloat(String(v).replace(/[₱,\s]/g, ''));
   return isNaN(n) ? 0 : Math.round(n * 100);
 }
+// Canonical item code: uppercase, whitespace stripped (AB0564 == ab 0564; AB0564 <> AA0564)
+const normCode = (v) => String(v || '').replace(/\s+/g, '').toUpperCase();
+// Sheet statuses (AVAILABLE / SOLD OUT / blank) → 6-state model enforced by the DB
+const mapStatus = (raw) => {
+  const u = String(raw || '').toUpperCase();
+  return (u.includes('SOLD') || u === 'MISSING') ? 'Sold' : 'Available';
+};
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -57,21 +64,22 @@ export default async function handler(req, res) {
 
     const seen = new Set();
     const rows = [];
+    const dupesInFile = [];
     for (const { line, tab } of allLines) {
       if (!line.trim()) continue;
       const row = parseCSVLine(line);
       if (row.length < 7) continue;
-      const item_code = (row[0] || '').trim();
+      const item_code = normCode(row[0]);
       const name = (row[1] || '').trim();
       const sku = (row[2] || '').trim();
       const size = (row[3] || '').trim();
       const unit_cost = parsePrice(row[4] || '');
       const selling_price = parsePrice(row[5] || '');
-      const status = (row[6] || '').toUpperCase().trim();
+      const status = mapStatus(row[6]);
       const srp = parsePrice(row[13] || '');
       const drive_url = (row[18] || '').trim();
       if (!item_code || !name || !size) continue;
-      if (seen.has(item_code)) continue;
+      if (seen.has(item_code)) { dupesInFile.push(item_code); continue; }
       seen.add(item_code);
       const MAX = 9999900;
       rows.push({
@@ -79,7 +87,7 @@ export default async function handler(req, res) {
         srp: srp <= MAX ? srp : 0,
         selling_price: selling_price <= MAX ? selling_price : 0,
         unit_cost: unit_cost <= MAX ? unit_cost : 0,
-        status, stock: 1, drive_url, tab,
+        status, stock: status === 'Sold' ? 0 : 1, drive_url, tab,
       });
     }
 
@@ -97,12 +105,19 @@ export default async function handler(req, res) {
       inserted += Array.isArray(out) ? out.length : 0;
     }
 
+    // Duplicate transparency (spec §7): never silently discard
+    const skippedExisting = rows.length - inserted;
     await fetch(`${SUPABASE_URL}/rest/v1/sync_log`, {
       method: 'POST', headers: H,
-      body: JSON.stringify({ sync_type: 'sheet_import', total: rows.length, synced: inserted, triggered_by: 'admin', notes: 'insert-only import (DB is source of truth)' }),
+      body: JSON.stringify({ sync_type: 'sheet_import', total: rows.length, synced: inserted, triggered_by: 'admin', notes: `insert-only · ${skippedExisting} already in DB kept as-is · ${dupesInFile.length} duplicate codes inside sheet${dupesInFile.length ? ' (' + dupesInFile.slice(0, 20).join(', ') + (dupesInFile.length > 20 ? '…' : '') + ')' : ''}` }),
     }).catch(() => {});
 
-    return res.status(200).json({ ok: true, parsed: rows.length, imported: inserted });
+    return res.status(200).json({
+      ok: true, parsed: rows.length, imported: inserted,
+      already_in_db: skippedExisting,
+      duplicates_in_sheet: dupesInFile.slice(0, 50),
+      duplicates_in_sheet_count: dupesInFile.length,
+    });
   } catch (e) {
     return res.status(500).json({ error: String(e && e.message || e) });
   }

@@ -74,8 +74,10 @@ export default async function handler(req, res) {
     const products = [];
     for (const r of rows) {
       const status = (r.status || '').toUpperCase().trim();
-      const isSoldOut = status.includes('SOLD') || status === 'MISSING';
-      if (isSoldOut) continue;
+      // 6-state model: only Available items are sellable. Reserved/Sold/Returned/
+      // Damaged/Archived never reach the public store.
+      const notSellable = status.includes('SOLD') || ['MISSING', 'RESERVED', 'RETURNED', 'DAMAGED', 'ARCHIVED'].includes(status);
+      if (notSellable) continue;
       const price = r.selling_price || r.srp || 0;
       if (!price) continue;
       if ((r.stock ?? 1) <= 0) continue;
@@ -97,7 +99,9 @@ export default async function handler(req, res) {
           return Math.round(((sp - pp) / sp) * 100);
         })(),
         tab: r.tab || '2025',
-        brand: detectBrand(r.name || '', r.sku || ''),
+        brand: r.brand || detectBrand(r.name || '', r.sku || ''),
+        condition: r.condition || 'New',
+        category: r.category || 'Sneakers',
         unitCost: r.unit_cost || null, // admin only
         edited: !!(r.updated_at && r.created_at && r.updated_at !== r.created_at),
       });
