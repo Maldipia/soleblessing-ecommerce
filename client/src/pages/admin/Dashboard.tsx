@@ -15,7 +15,7 @@ import AdminSettings from "./Settings";
 import { useInventory, refreshInventory } from "@/hooks/useInventory";
 import AdminPromos from "./Promos";
 
-type Section = "overview"|"products"|"orders"|"promos"|"settings"|"analytics"|"system";
+type Section = "overview"|"products"|"orders"|"reports"|"promos"|"settings"|"analytics"|"system";
 
 const ADMIN_KEY = "sb_admin_v1";
 const fmt = (c: number) => `₱${(c/100).toLocaleString("en-PH")}`;
@@ -294,6 +294,185 @@ function ProductModal({ product, onClose, onSave }: { product?: any; onClose:()=
   );
 }
 
+// ─── SVG area chart (daily sales) ───────────────────────────────────────
+function AreaChart({data,labels}:{data:number[];labels:string[]}){
+  const W=640,H=210,P=44;
+  const safe = data.length>=2?data:[...data,...data,0].slice(0,2);
+  const max=Math.max(...safe,1);
+  const pts=safe.map((v,i)=>[P+i*(W-P-12)/Math.max(safe.length-1,1), H-26-(v/max)*(H-56)] as [number,number]);
+  const line=pts.map((p,i)=>`${i?"L":"M"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join("");
+  const area=line+`L${pts[pts.length-1][0].toFixed(1)},${H-26}L${pts[0][0].toFixed(1)},${H-26}Z`;
+  const step=Math.max(1,Math.ceil(labels.length/8));
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
+      {[0,.5,1].map(f=>(<g key={f}>
+        <line x1={P} x2={W-12} y1={H-26-f*(H-56)} y2={H-26-f*(H-56)} stroke="#f0f0f0"/>
+        <text x={P-6} y={H-23-f*(H-56)} textAnchor="end" fontSize="9" fill="#9ca3af">₱{Math.round(max*f/100).toLocaleString("en-PH")}</text>
+      </g>))}
+      <defs><linearGradient id="sbag" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor="#8b7cf6" stopOpacity=".32"/><stop offset="100%" stopColor="#8b7cf6" stopOpacity="0"/>
+      </linearGradient></defs>
+      <path d={area} fill="url(#sbag)"/>
+      <path d={line} fill="none" stroke="#8b7cf6" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/>
+      {pts.map((p,i)=>safe[i]>0?<circle key={i} cx={p[0]} cy={p[1]} r="3" fill="#fff" stroke="#8b7cf6" strokeWidth="2"/>:null)}
+      {labels.map((l,i)=>i%step===0&&pts[i]?<text key={i} x={pts[i][0]} y={H-9} textAnchor="middle" fontSize="9" fill="#9ca3af">{l}</text>:null)}
+    </svg>
+  );
+}
+
+// ─── SVG donut (orders by channel) ──────────────────────────────────────
+function Donut({segs}:{segs:{label:string;value:number;color:string}[]}){
+  const total=segs.reduce((s,x)=>s+x.value,0);
+  const C=2*Math.PI*54; let acc=0;
+  return (
+    <div className="flex items-center gap-5 flex-wrap">
+      <svg viewBox="0 0 140 140" className="w-36 h-36 flex-shrink-0">
+        <circle cx="70" cy="70" r="54" fill="none" stroke="#f1f1f1" strokeWidth="17"/>
+        {segs.map((s,i)=>{const len=total?s.value/total*C:0;
+          const el=<circle key={i} cx="70" cy="70" r="54" fill="none" stroke={s.color} strokeWidth="17"
+            strokeDasharray={`${len} ${C-len}`} strokeDashoffset={-acc} transform="rotate(-90 70 70)" strokeLinecap="butt"/>;
+          acc+=len; return el;})}
+        <text x="70" y="66" textAnchor="middle" fontSize="22" fontWeight="900" fill="#0d2430">{total}</text>
+        <text x="70" y="82" textAnchor="middle" fontSize="9" fill="#9ca3af">Orders</text>
+      </svg>
+      <div className="space-y-2">
+        {segs.map(s=>(
+          <div key={s.label} className="flex items-center gap-2 text-xs">
+            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{background:s.color}}/>
+            <span className="text-gray-500">{s.label}</span>
+            <span className="font-bold text-[#0d2430]">{s.value}</span>
+            <span className="text-gray-400">({total?Math.round(s.value/total*100):0}%)</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Create Order (Manual) with item-code autofill ──────────────────────
+type OrderLine = {code:string;name:string;sku:string;size:string;price:string;cost:number|null;found:boolean};
+const BLANK_LINE: OrderLine = {code:"",name:"",sku:"",size:"",price:"",cost:null,found:false};
+
+function CreateOrderModal({inventory,onClose,onPlaced}:{inventory:any[];onClose:()=>void;onPlaced:()=>void}){
+  const [cust,setCust]=useState({name:"",contact:"",email:"",address:"",region:"",city:"",notes:""});
+  const [pm,setPm]=useState("cod");
+  const [shipFee,setShipFee]=useState("");
+  const [lines,setLines]=useState<OrderLine[]>([{...BLANK_LINE}]);
+  const [placing,setPlacing]=useState(false);
+
+  const lookup=(code:string)=> (inventory||[]).find((p:any)=>(p.itemCode||"").toUpperCase()===code.trim().toUpperCase());
+  const setLine=(i:number,patch:Partial<OrderLine>)=>setLines(ls=>ls.map((l,j)=>j===i?{...l,...patch}:l));
+  const onCode=(i:number,raw:string)=>{
+    const code=raw.toUpperCase();
+    const hit=code&&code!=="PO"?lookup(code):null;
+    if(hit) setLine(i,{code,name:hit.name,sku:hit.sku||"",size:hit.size||"",
+      price:String(Math.round((hit.sellingPrice||hit.srp||0)/100)),cost:hit.unitCost||null,found:true});
+    else setLine(i,{code,found:false,cost:null});
+  };
+  const subtotal=lines.reduce((s,l)=>s+(Math.round(Number(l.price)*100)||0),0);
+  const fee=Math.round(Number(shipFee||0)*100)||0;
+
+  const place=async()=>{
+    const items=lines.filter(l=>l.name.trim()&&Number(l.price)>0).map(l=>({
+      id:l.found?l.code:(l.code.trim().toUpperCase()==="PO"?"PO":l.code.trim()),
+      name:l.name.trim(),sku:l.sku.trim(),size:l.size.trim(),
+      price:Math.round(Number(l.price)*100),qty:1,brand:"",imageUrl:"",
+    }));
+    if(!cust.name.trim()){toast.error("Customer name is required");return;}
+    if(!items.length){toast.error("Add at least one item with a name and price");return;}
+    setPlacing(true);
+    try{
+      const orderData:any={
+        order_number:`SB-${String(Math.floor(1e9+Math.random()*9e9))}`,
+        customer_name:cust.name.trim(),customer_email:cust.email.trim(),
+        contact_number:cust.contact.trim(),shipping_address:cust.address.trim(),
+        region:cust.region.trim(),city:cust.city.trim(),notes:cust.notes.trim(),
+        items,subtotal,shipping_fee:fee,discount_amount:0,total:subtotal+fee,
+        payment_method:pm,source:"manual",
+      };
+      const r=await fetch("/api/place-order",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({orderData})});
+      const out=await r.json().catch(()=>({} as any));
+      if(r.status===409&&out.error==="out_of_stock") throw new Error(`Out of stock: ${out.item_code} was just sold`);
+      if(!r.ok) throw new Error(out.error||"Order failed");
+      toast.success(`Order ${orderData.order_number} created`);
+      onPlaced(); onClose();
+    }catch(e:any){toast.error(e.message||"Order failed");}
+    finally{setPlacing(false);}
+  };
+
+  const inp="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#C9A84C]";
+  return (
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="bg-white rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+        <div className="bg-[#050f12] px-6 py-4 flex items-center justify-between flex-shrink-0">
+          <div>
+            <p className="text-[10px] font-bold tracking-[.15em] uppercase text-[#C9A84C]">Create Order — Manual</p>
+            <p className="text-sm font-black text-white">FB / Walk-in / Phone order → same system as website</p>
+          </div>
+          <button onClick={onClose} className="text-white/40 hover:text-white"><X className="h-5 w-5"/></button>
+        </div>
+        <div className="p-6 space-y-5 overflow-y-auto">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <input className={inp} placeholder="Customer name *" value={cust.name} onChange={e=>setCust({...cust,name:e.target.value})}/>
+            <input className={inp} placeholder="Contact number" value={cust.contact} onChange={e=>setCust({...cust,contact:e.target.value})}/>
+            <input className={inp} placeholder="Email (optional)" value={cust.email} onChange={e=>setCust({...cust,email:e.target.value})}/>
+            <input className={`${inp} col-span-2`} placeholder="Delivery address" value={cust.address} onChange={e=>setCust({...cust,address:e.target.value})}/>
+            <select className={inp} value={pm} onChange={e=>setPm(e.target.value)}>
+              <option value="cod">COD</option><option value="gcash">GCash</option><option value="maya">Maya</option>
+              <option value="bdo">BDO</option><option value="bpi">BPI</option><option value="bank">Bank Transfer</option>
+            </select>
+            <input className={inp} placeholder="Region" value={cust.region} onChange={e=>setCust({...cust,region:e.target.value})}/>
+            <input className={inp} placeholder="City" value={cust.city} onChange={e=>setCust({...cust,city:e.target.value})}/>
+            <input className={inp} placeholder="Notes / special request" value={cust.notes} onChange={e=>setCust({...cust,notes:e.target.value})}/>
+          </div>
+
+          <div>
+            <div className="grid grid-cols-[110px_1fr_90px_64px_90px] gap-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1 px-0.5">
+              <span>Item code</span><span>Model</span><span>SKU</span><span>Size</span><span>Price ₱</span>
+            </div>
+            {lines.map((l,i)=>(
+              <div key={i} className="mb-2">
+                <div className="grid grid-cols-[110px_1fr_90px_64px_90px_28px] gap-2 items-center">
+                  <input className={`${inp} font-mono font-bold ${l.found?"border-green-400 bg-green-50":""}`} placeholder="Code / PO"
+                    value={l.code} onChange={e=>onCode(i,e.target.value)}/>
+                  <input className={`${inp} ${l.found?"bg-green-50":""}`} placeholder="Model name" value={l.name} onChange={e=>setLine(i,{name:e.target.value})}/>
+                  <input className={`${inp} ${l.found?"bg-green-50":""}`} placeholder="SKU" value={l.sku} onChange={e=>setLine(i,{sku:e.target.value})}/>
+                  <input className={`${inp} ${l.found?"bg-green-50":""}`} placeholder="—" value={l.size} onChange={e=>setLine(i,{size:e.target.value})}/>
+                  <input className={inp} placeholder="0" inputMode="decimal" value={l.price} onChange={e=>setLine(i,{price:e.target.value})}/>
+                  <button onClick={()=>setLines(ls=>ls.length>1?ls.filter((_,j)=>j!==i):ls)} className="text-gray-300 hover:text-red-500"><X className="h-4 w-4"/></button>
+                </div>
+                <p className={`text-[10px] mt-0.5 font-semibold ${l.found?"text-green-600":l.code&&l.code!=="PO"?"text-amber-600":"text-gray-300"}`}>
+                  {l.found?`✓ Found in inventory — auto-filled${l.cost?` · cost ${fmt(l.cost)} snapshots to this order`:""}`
+                   :l.code.trim().toUpperCase()==="PO"?"⏳ Pre-order — type details manually, no stock deducted"
+                   :l.code?"Code not in available stock — treated as pre-order/manual line":""}
+                </p>
+              </div>
+            ))}
+            <button onClick={()=>setLines(ls=>[...ls,{...BLANK_LINE}])} className="text-xs font-bold text-[#C9A84C] hover:opacity-70">+ Add item</button>
+          </div>
+
+          <div className="flex items-center justify-between border-t border-gray-100 pt-4">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-gray-500">Shipping ₱</span>
+              <input className={`${inp} w-24`} placeholder="0" inputMode="decimal" value={shipFee} onChange={e=>setShipFee(e.target.value)}/>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Total</p>
+              <p className="text-2xl font-black text-[#0d2430]">{fmt(subtotal+fee)}</p>
+            </div>
+          </div>
+          <button onClick={place} disabled={placing}
+            className="w-full bg-[#0d2430] text-white py-3.5 text-sm font-bold rounded-xl hover:bg-[#122d3a] disabled:opacity-50">
+            {placing?"Placing order…":"Place Order — deduct stock & mirror to Google Sheet"}
+          </button>
+          <p className="text-[10px] text-gray-400 text-center">Atomic: stock is reserved instantly, the order mirrors to the ORDER sheet, and you can generate the invoice from the Orders tab.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Dashboard ─────────────────────────────────────────────────────
 export default function AdminDashboard() {
   const [,setLocation] = useLocation();
@@ -503,6 +682,113 @@ export default function AdminDashboard() {
     };
   },[inventory,inventoryGrouped,sbOrders]);
 
+  // ── Overview: date range, KPIs, chart, channels, activity ──
+  const [createOrder,setCreateOrder]=useState(false);
+  const [rangeDays,setRangeDays]=useState<number>(7);
+  const DAY=864e5;
+  const rangeOrders=useMemo(()=>sbOrders.filter(o=>o.status!=="cancelled"&&(!rangeDays||+new Date(o.created_at)>=Date.now()-rangeDays*DAY)),[sbOrders,rangeDays]);
+  const prevOrders=useMemo(()=>{
+    if(!rangeDays)return [] as any[];
+    const end=Date.now()-rangeDays*DAY,start=end-rangeDays*DAY;
+    return sbOrders.filter(o=>{if(o.status==="cancelled")return false;const t=+new Date(o.created_at);return t>=start&&t<end;});
+  },[sbOrders,rangeDays]);
+  const kpi=useMemo(()=>{
+    const sum=(os:any[])=>os.reduce((s,o)=>s+(o.total||0),0);
+    const cnt=(os:any[])=>os.reduce((s,o)=>s+((o.items||[]).reduce((a:number,i:any)=>a+(i.qty||1),0)),0);
+    const key=(o:any)=>(o.contact_number||o.customer_name||"").trim().toLowerCase();
+    const before=new Set(sbOrders.filter(o=>rangeDays&&+new Date(o.created_at)<Date.now()-rangeDays*DAY).map(key));
+    const newCust=rangeDays
+      ?new Set(rangeOrders.filter(o=>key(o)&&!before.has(key(o))).map(key)).size
+      :new Set(sbOrders.map(key).filter(Boolean)).size;
+    const delta=(a:number,b:number)=>b>0?Math.round(((a-b)/b)*100):null;
+    return {orders:rangeOrders.length,dOrders:delta(rangeOrders.length,prevOrders.length),
+      sales:sum(rangeOrders),dSales:delta(sum(rangeOrders),sum(prevOrders)),
+      items:cnt(rangeOrders),dItems:delta(cnt(rangeOrders),cnt(prevOrders)),
+      newCust,aov:rangeOrders.length?Math.round(sum(rangeOrders)/rangeOrders.length):0};
+  },[rangeOrders,prevOrders,sbOrders,rangeDays]);
+  const daily=useMemo(()=>{
+    const days=rangeDays||90;
+    const buckets:number[]=Array(days).fill(0);const labels:string[]=[];
+    for(let i=0;i<days;i++) labels.push(new Date(Date.now()-(days-1-i)*DAY).toLocaleDateString("en-PH",{month:"short",day:"numeric"}));
+    sbOrders.forEach(o=>{if(o.status==="cancelled")return;
+      const idx=days-1-Math.floor((Date.now()-+new Date(o.created_at))/DAY);
+      if(idx>=0&&idx<days)buckets[idx]+=o.total||0;});
+    return {buckets,labels};
+  },[sbOrders,rangeDays]);
+  const channelSegs=useMemo(()=>{
+    const c={website:0,sheet:0,manual:0};
+    rangeOrders.forEach(o=>{const s=o.source||"website";if(s==="sheet_import")c.sheet++;else if(s==="manual")c.manual++;else c.website++;});
+    return [
+      {label:"Website",value:c.website,color:"#8b7cf6"},
+      {label:"FB Form",value:c.sheet,color:"#3b82f6"},
+      {label:"Manual",value:c.manual,color:"#9ca3af"},
+    ].filter(s=>s.value>0||s.label!=="Manual");
+  },[rangeOrders]);
+  const activity=useMemo(()=>{
+    const ev:any[]=[];
+    sbOrders.slice(0,40).forEach(o=>{
+      ev.push({t:+new Date(o.created_at),icon:"🛒",text:`New order ${o.order_number}`,
+        sub:`${o.source==="sheet_import"?"FB Form":o.source==="manual"?"Manual":"Website"} · ${fmt(o.total)}`});
+      if(o.payment_status==="submitted")ev.push({t:+new Date(o.updated_at||o.created_at),icon:"💳",text:`Payment proof — ${o.order_number}`,sub:"awaiting verification"});
+      if(o.status==="shipped"&&o.tracking_reference)ev.push({t:+new Date(o.updated_at||o.created_at),icon:"🚚",text:`${o.order_number} shipped`,sub:[o.courier,o.tracking_reference].filter(Boolean).join(" · ")});
+    });
+    return ev.sort((a,b)=>b.t-a.t).slice(0,7);
+  },[sbOrders]);
+
+  // ── Sales & Reports: line-level P&L from cost snapshots ──
+  const reportLines=useMemo(()=>{
+    const out:any[]=[];
+    sbOrders.forEach(o=>{if(o.status==="cancelled")return;
+      (o.items||[]).forEach((it:any,idx:number)=>out.push({
+        oid:o.id,order:o.order_number,month:String(o.created_at||"").slice(0,7),
+        src:o.source||"website",code:String(it.id||"").trim(),name:it.name||"",size:it.size||"",
+        qty:it.qty||1,price:it.price||0,cost:typeof it.cost==="number"?it.cost:null,idx,created:o.created_at,
+      }));});
+    return out;
+  },[sbOrders]);
+  const repTotals=useMemo(()=>{
+    const t={rev:0,cogs:0,costedRev:0,lines:reportLines.length,costed:0};
+    reportLines.forEach(l=>{t.rev+=l.price*l.qty;if(l.cost&&l.cost>0){t.cogs+=l.cost*l.qty;t.costedRev+=l.price*l.qty;t.costed++;}});
+    return t;
+  },[reportLines]);
+  const monthly=useMemo(()=>{
+    const m=new Map<string,any>();
+    reportLines.forEach(l=>{
+      const r=m.get(l.month)||{month:l.month,orders:new Set<string>(),rev:0,cogs:0,costedRev:0,lines:0,costed:0};
+      r.orders.add(l.order);r.rev+=l.price*l.qty;r.lines++;
+      if(l.cost&&l.cost>0){r.cogs+=l.cost*l.qty;r.costedRev+=l.price*l.qty;r.costed++;}
+      m.set(l.month,r);});
+    return Array.from(m.values()).sort((a,b)=>b.month.localeCompare(a.month));
+  },[reportLines]);
+  const bySrc=useMemo(()=>{
+    const m=new Map<string,any>();
+    reportLines.forEach(l=>{
+      const k=l.src==="sheet_import"?"FB Form":l.src==="manual"?"Manual":"Website";
+      const r=m.get(k)||{src:k,rev:0,cogs:0,costedRev:0,lines:0,costed:0};
+      r.rev+=l.price*l.qty;r.lines++;
+      if(l.cost&&l.cost>0){r.cogs+=l.cost*l.qty;r.costedRev+=l.price*l.qty;r.costed++;}
+      m.set(k,r);});
+    return Array.from(m.values()).sort((a,b)=>b.rev-a.rev);
+  },[reportLines]);
+  const missingCost=useMemo(()=>reportLines.filter(l=>!(l.cost&&l.cost>0)).sort((a,b)=>+new Date(b.created)-+new Date(a.created)),[reportLines]);
+  const [costDraft,setCostDraft]=useState<Record<string,string>>({});
+  const [missingShown,setMissingShown]=useState(20);
+  const saveLineCost=async(l:any)=>{
+    const pesos=costDraft[`${l.oid}:${l.idx}`];
+    const v=Math.round(parseFloat(pesos||"")*100);
+    if(!v||v<=0){toast.error("Enter a valid cost in pesos");return;}
+    const o=sbOrders.find(x=>x.id===l.oid);if(!o)return;
+    const items=[...(o.items||[])];
+    items[l.idx]={...items[l.idx],cost:v,cost_source:"manual"};
+    try{
+      await sb.update("sb_orders",`id=eq.${l.oid}`,{items,updated_at:new Date().toISOString()});
+      toast.success(`Cost saved — ${l.order}`);
+      setCostDraft(d=>{const n={...d};delete n[`${l.oid}:${l.idx}`];return n;});
+      loadOrders();
+    }catch(e:any){toast.error("Save failed: "+(e.message||e));}
+  };
+  const pct=(num:number,den:number)=>den>0?Math.round(num/den*100):0;
+
   const [uploadingRow,setUploadingRow]=useState<string|null>(null);
   const uploadPhoto = async (p:any, file:File) => {
     if(!/^image\/(jpeg|png|webp)$/.test(file.type)){toast.error("JPEG/PNG/WebP only");return;}
@@ -623,13 +909,14 @@ export default function AdminDashboard() {
   };
 
   const NAV = [
-    {id:"overview" as Section, icon:LayoutDashboard, label:"Overview"},
-    {id:"products"  as Section, icon:Package,        label:"Products"},
+    {id:"overview" as Section, icon:LayoutDashboard, label:"Dashboard"},
     {id:"orders"    as Section, icon:ShoppingCart,   label:"Orders"},
-    {id:"promos"    as Section, icon:Tag,            label:"Promo Codes"},
-    {id:"settings"  as Section, icon:Settings,       label:"Settings"},
+    {id:"products"  as Section, icon:Package,        label:"Products & Inventory"},
+    {id:"reports"   as Section, icon:TrendingUp,     label:"Sales & Reports"},
+    {id:"promos"    as Section, icon:Tag,            label:"Vouchers & Promos"},
     {id:"analytics" as Section, icon:BarChart3,      label:"Analytics"},
     {id:"system"    as Section, icon:Database,       label:"System"},
+    {id:"settings"  as Section, icon:Settings,       label:"Settings"},
   ];
 
   // ─── Login ──────────────────────────────────────────────────────────────
@@ -673,12 +960,17 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-[#F7F4EF] flex">
       {qrModal?.open && <QRModal itemCode={qrModal.itemCode} name={qrModal.name} onClose={()=>setQrModal(null)}/>}
       {productModal.open&&<ProductModal product={productModal.product} onClose={()=>setProductModal({open:false})} onSave={()=>{setProductModal({open:false});loadProducts();}}/>}
+      {createOrder&&<CreateOrderModal inventory={inventory||[]} onClose={()=>setCreateOrder(false)} onPlaced={()=>{loadOrders();refetchInv();refreshInventory().catch(()=>{});}}/>}
 
       {/* Sidebar */}
       <aside className={`${sidebarOpen?"w-56":"w-14"} flex-shrink-0 bg-[#050f12] flex flex-col transition-all duration-300 sticky top-0 h-screen overflow-y-auto`}>
-        <div className="px-4 py-5 flex items-center gap-3 border-b border-white/[.06]">
-          <Shield className="h-5 w-5 text-[#C9A84C] flex-shrink-0"/>
-          {sidebarOpen&&<span className="font-black text-sm tracking-[.1em] text-white uppercase">SoleBlessing</span>}
+        <div className="px-4 py-4 flex items-center gap-3 border-b border-white/[.06]">
+          <img src="/logo-soleblessing.png" alt="SoleBlessing" className="h-9 w-9 object-contain flex-shrink-0"
+            onError={e=>{(e.target as HTMLImageElement).style.display="none";}}/>
+          {sidebarOpen&&<div className="leading-tight">
+            <div className="font-black text-sm tracking-[.08em] text-white uppercase">SoleBlessing</div>
+            <div className="text-[8px] tracking-[.22em] text-white/30 uppercase">Sneakers · Fashion · Lifestyle</div>
+          </div>}
         </div>
         <nav className="flex-1 py-4 px-2">
           {NAV.map(n=>(
@@ -708,10 +1000,23 @@ export default function AdminDashboard() {
       <div className="flex-1 overflow-auto">
         {/* Top bar */}
         <div className="bg-white border-b border-gray-100 px-8 py-4 flex items-center justify-between sticky top-0 z-10">
+          {section==="overview"?(
+            <div className="leading-tight">
+              <h1 className="text-lg font-black text-[#0d2430] tracking-tight">
+                {(()=>{const h=new Date().getHours();return h<12?"Good Morning!":h<18?"Good Afternoon!":"Good Evening!";})()}
+              </h1>
+              <p className="text-[11px] text-gray-400">SoleBlessing Operations Dashboard</p>
+            </div>
+          ):(
           <h1 className="text-lg font-black text-[#0d2430] tracking-tight capitalize">
-            {section==="overview"?"Dashboard":section==="promos"?"Promo Codes":section==="analytics"?"Analytics":section==="system"?"System":section.charAt(0).toUpperCase()+section.slice(1)}
+            {section==="promos"?"Vouchers & Promos":section==="reports"?"Sales & Reports":section==="analytics"?"Analytics":section==="system"?"System":section.charAt(0).toUpperCase()+section.slice(1)}
           </h1>
+          )}
           <div className="flex items-center gap-3">
+            <button onClick={()=>setCreateOrder(true)}
+              className="flex items-center gap-2 bg-[#C9A84C] text-[#050f12] px-4 py-2 text-xs font-bold rounded-lg hover:opacity-90">
+              <Plus className="h-3.5 w-3.5"/> Create Order
+            </button>
             {section==="products"&&(
               <button onClick={()=>setProductModal({open:true})}
                 className="flex items-center gap-2 bg-[#C9A84C] text-[#050f12] px-4 py-2 text-xs font-bold rounded-lg hover:opacity-90">
@@ -734,101 +1039,180 @@ export default function AdminDashboard() {
           {/* ── OVERVIEW ── */}
           {section==="overview"&&(
             <div className="space-y-6">
-              {/* ── Total Assets hero card ── */}
-              <div className="bg-[#050f12] rounded-2xl p-6 flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] font-bold tracking-[.18em] uppercase text-[#C9A84C] mb-1">Total Inventory Cost</p>
-                  <div className="text-4xl font-black text-white mb-1">{stats.totalAssets>0?fmt(stats.totalAssets):"—"}</div>
-                  <p className="text-xs text-white/40">{stats.totalUnits} units · {stats.total} SKUs</p>
+              {/* Date range */}
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div className="flex gap-1.5">
+                  {[{d:7,l:"Last 7 days"},{d:30,l:"30 days"},{d:90,l:"90 days"},{d:0,l:"All time"}].map(r=>(
+                    <button key={r.d} onClick={()=>setRangeDays(r.d)}
+                      className={`px-3.5 py-1.5 text-xs font-bold rounded-lg border transition-colors ${rangeDays===r.d?"bg-[#0d2430] text-white border-[#0d2430]":"bg-white text-gray-500 border-gray-200 hover:border-gray-300"}`}>
+                      {r.l}
+                    </button>
+                  ))}
                 </div>
-                <div className="text-right space-y-1.5">
-                  <div>
-                    <p className="text-[10px] text-white/30 uppercase tracking-wider">Retail Value</p>
-                    <p className="text-lg font-bold text-white/70">{fmt(stats.retailValue)}</p>
-                  </div>
-                  {stats.potentialProfit > 0 && (
-                    <div>
-                      <p className="text-[10px] text-white/30 uppercase tracking-wider">Potential Profit</p>
-                      <p className="text-sm font-bold text-[#C9A84C]">{fmt(stats.potentialProfit)}</p>
-                    </div>
-                  )}
-                </div>
+                <span className="text-[11px] text-gray-400">vs the previous {rangeDays||"—"} days</span>
               </div>
 
-              {/* ── Stat cards grid ── */}
+              {/* KPI cards */}
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 {[
-                  {label:"SKUs",        value:stats.total,                             icon:Package,       color:"text-blue-600",   bg:"bg-blue-50"},
-                  {label:"Units",       value:stats.totalUnits,                        icon:Tag,           color:"text-indigo-600", bg:"bg-indigo-50"},
-                  {label:"Low Stock",   value:stats.lowStock+stats.outStock,           icon:AlertTriangle, color:"text-amber-600",  bg:"bg-amber-50"},
-                  {label:"Orders",      value:stats.totalOrders,                       icon:ShoppingCart,  color:"text-purple-600", bg:"bg-purple-50"},
-                  {label:"Revenue",     value:fmt(stats.revenue),                      icon:TrendingUp,    color:"text-green-600",  bg:"bg-green-50"},
+                  {label:"Total Orders", value:String(kpi.orders), d:kpi.dOrders, icon:ShoppingCart, color:"text-purple-600", bg:"bg-purple-50"},
+                  {label:"Total Sales",  value:fmt(kpi.sales),     d:kpi.dSales,  icon:TrendingUp,   color:"text-green-600",  bg:"bg-green-50"},
+                  {label:"Items Sold",   value:String(kpi.items),  d:kpi.dItems,  icon:Package,      color:"text-blue-600",   bg:"bg-blue-50"},
+                  {label:"New Customers",value:String(kpi.newCust),d:null,        icon:Tag,          color:"text-indigo-600", bg:"bg-indigo-50"},
+                  {label:"Avg Order Value",value:fmt(kpi.aov),     d:null,        icon:BarChart3,    color:"text-amber-600",  bg:"bg-amber-50"},
                 ].map(s=>(
                   <div key={s.label} className="bg-white border border-gray-100 rounded-xl p-5">
                     <div className={`w-9 h-9 ${s.bg} rounded-lg flex items-center justify-center mb-3`}>
                       <s.icon className={`h-4 w-4 ${s.color}`}/>
                     </div>
-                    <div className="text-2xl font-black text-[#0d2430] mb-0.5">{s.value}</div>
+                    <div className="text-xl font-black text-[#0d2430] mb-0.5 truncate">{s.value}</div>
                     <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{s.label}</div>
+                    {s.d!=null&&<div className={`text-[10px] font-bold mt-1 ${s.d>=0?"text-green-600":"text-red-500"}`}>{s.d>=0?"↑":"↓"} {Math.abs(s.d)}% vs prev</div>}
                   </div>
                 ))}
               </div>
-              <div className="grid md:grid-cols-2 gap-6">
-                <div className="bg-white border border-gray-100 rounded-xl p-6">
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xs font-bold uppercase tracking-wider text-[#0d2430]">⚠ Low Stock</h2>
-                    <button onClick={()=>setSection("products")} className="text-xs text-[#C9A84C] font-semibold">View All →</button>
+
+              {/* Sales chart + channel donut */}
+              <div className="grid lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 bg-white border border-gray-100 rounded-xl p-6">
+                  <div className="flex justify-between items-center mb-3">
+                    <h2 className="text-xs font-bold uppercase tracking-wider text-[#0d2430]">📈 Sales Overview</h2>
+                    <span className="text-[10px] text-gray-400">{rangeDays?`last ${rangeDays} days`:"last 90 days"} · daily revenue</span>
                   </div>
-                  <div className="divide-y divide-gray-50">
-                    {inventoryGrouped.filter(p=>p.totalStock<=1).slice(0,6).map(p=>(
-                      <div key={p.sku} className="py-3 flex items-center justify-between">
-                        <div><div className="text-sm font-medium text-[#0d2430] leading-tight">{p.name}</div>
-                          <div className="text-[10px] text-gray-400 font-mono">{p.sku}</div></div>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${p.totalStock===0?"bg-red-100 text-red-700":"bg-amber-100 text-amber-700"}`}>
-                          {p.totalStock===0?"Out":"Last Unit"}
-                        </span>
-                      </div>
-                    ))}
-                    {inventoryGrouped.filter(p=>p.totalStock<=1).length===0&&<div className="py-6 text-center text-sm text-gray-400">All stocked ✓</div>}
-                  </div>
+                  <AreaChart data={daily.buckets} labels={daily.labels}/>
                 </div>
                 <div className="bg-white border border-gray-100 rounded-xl p-6">
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xs font-bold uppercase tracking-wider text-[#0d2430]">Recent Orders</h2>
-                    <button onClick={()=>setSection("orders")} className="text-xs text-[#C9A84C] font-semibold">View All →</button>
+                  <h2 className="text-xs font-bold uppercase tracking-wider text-[#0d2430] mb-4">Orders by Channel</h2>
+                  <Donut segs={channelSegs}/>
+                </div>
+              </div>
+
+              {/* Recent orders + quick actions / low stock */}
+              <div className="grid lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 bg-white border border-gray-100 rounded-xl p-6">
+                  <div className="flex justify-between items-center mb-3">
+                    <h2 className="text-xs font-bold uppercase tracking-wider text-[#0d2430]">🧾 Recent Orders</h2>
+                    <button onClick={()=>setSection("orders")} className="text-xs text-[#C9A84C] font-semibold">View All Orders →</button>
                   </div>
-                  <div className="divide-y divide-gray-50">
-                    {sbOrders.slice(0,5).map(o=>(
-                      <div key={o.id} className="py-3 flex justify-between items-center">
-                        <div><div className="text-xs font-bold text-[#0d2430]">{o.order_number}</div>
-                          <div className="text-[10px] text-gray-400">{o.customer_name} · {fmtDate(o.created_at)}</div></div>
-                        <div className="text-right">
-                          <div className="text-sm font-black text-[#0d2430]">{fmt(o.total)}</div>
-                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${STATUS_COLOR[o.status]||"bg-gray-100 text-gray-600"}`}>{o.status}</span>
+                  <table className="w-full text-sm">
+                    <thead><tr className="text-[10px] uppercase tracking-wider text-gray-400 text-left">
+                      <th className="py-2 font-semibold">Order #</th><th className="font-semibold">Channel</th>
+                      <th className="font-semibold">Customer</th><th className="font-semibold text-right">Amount</th>
+                      <th className="font-semibold text-right">Status</th></tr></thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {sbOrders.slice(0,6).map(o=>(
+                        <tr key={o.id} className="hover:bg-gray-50/50 cursor-pointer" onClick={()=>setSection("orders")}>
+                          <td className="py-2.5 font-bold text-[#0d2430] text-xs">{o.order_number}</td>
+                          <td><span className="text-[10px] font-bold">{(o.source||"website")==="sheet_import"?"📋 FB Form":(o.source==="manual"?"✍️ Manual":"🌐 Website")}</span></td>
+                          <td className="text-xs text-gray-500">{o.customer_name}</td>
+                          <td className="text-right font-black text-[#0d2430] text-xs">{fmt(o.total)}</td>
+                          <td className="text-right"><span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${STATUS_COLOR[o.status]||"bg-gray-100 text-gray-600"}`}>{o.status}</span></td>
+                        </tr>
+                      ))}
+                      {sbOrders.length===0&&<tr><td colSpan={5} className="py-6 text-center text-sm text-gray-400">No orders yet</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="space-y-6">
+                  <div className="bg-[#050f12] rounded-xl p-5">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-white mb-3">⚡ Quick Actions</h3>
+                    <div className="space-y-2">
+                      {[
+                        {label:"➕ Create Order (Manual)",fn:()=>setCreateOrder(true)},
+                        {label:"📦 Add / Update Product",fn:()=>{setSection("products");setProductModal({open:true});}},
+                        {label:"🏷️ Create Promo / Voucher",fn:()=>setSection("promos")},
+                        {label:"🗃️ Manage Inventory",fn:()=>setSection("products")},
+                        {label:"🧾 Generate / Send Invoice",fn:()=>setSection("orders")},
+                        {label:"📄 Scan Courier Receipt",fn:()=>setSection("orders")},
+                      ].map(a=>(
+                        <button key={a.label} onClick={a.fn}
+                          className="w-full text-left bg-white/[.06] border border-white/[.08] rounded-lg px-3.5 py-2.5 text-xs text-white/80 font-semibold hover:bg-white/[.12] transition-colors">
+                          {a.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="bg-white border border-gray-100 rounded-xl p-5">
+                    <div className="flex justify-between items-center mb-2">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-[#0d2430]">⚠️ Low Stock</h3>
+                      <button onClick={()=>setSection("products")} className="text-[10px] text-[#C9A84C] font-semibold">View →</button>
+                    </div>
+                    <div className="divide-y divide-gray-50">
+                      {inventoryGrouped.filter(p=>p.totalStock<=1).slice(0,5).map(p=>(
+                        <div key={p.sku} className="py-2 flex items-center justify-between gap-2">
+                          <div className="text-xs font-medium text-[#0d2430] leading-tight truncate">{p.name}</div>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 ${p.totalStock===0?"bg-red-100 text-red-700":"bg-amber-100 text-amber-700"}`}>
+                            {p.totalStock===0?"Out":"Last pair"}
+                          </span>
                         </div>
-                      </div>
-                    ))}
-                    {sbOrders.length===0&&<div className="py-6 text-center text-sm text-gray-400">No orders yet</div>}
+                      ))}
+                      {inventoryGrouped.filter(p=>p.totalStock<=1).length===0&&<div className="py-4 text-center text-xs text-gray-400">All stocked ✓</div>}
+                    </div>
                   </div>
                 </div>
               </div>
-              <div className="bg-[#050f12] rounded-xl p-6">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-white mb-4">Quick Access</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {[
-                    {label:"Inventory Sheet",href:"https://docs.google.com/spreadsheets/d/1WZttK5ZsPhnBz91JmBb-V4GCs-42uXjTUXz67V5sSDI/edit",icon:"📊"},
-                    {label:"SB ORDER Sheet",href:"https://docs.google.com/spreadsheets/d/13eM-zpN--AVOwN4uFUSVeQX0e6YA922VzgjOomhfk-Y/edit",icon:"📋"},
-                    {label:"Payment Proofs",href:"https://drive.google.com/drive/folders/1MMLgawQE5KKQQqufa2Leoka5zdXV6qIY",icon:"💾"},
-                    {label:"Supabase DB",href:"https://supabase.com/dashboard/project/akualfrqzaierqsfcnkp",icon:"🗄️"},
-                    {label:"Vercel Deploy",href:"https://vercel.com/maldipias-projects/soleblessing-ecommerce",icon:"▲"},
-                    {label:"Payment Portal",href:"/upload-payment",icon:"💳"},
-                  ].map(l=>(
-                    <a key={l.label} href={l.href} target={l.href.startsWith("http")?"_blank":"_self"} rel="noopener noreferrer"
-                      className="bg-white/[.05] border border-white/[.07] rounded-lg p-4 hover:bg-white/[.09] transition-colors flex items-start gap-3">
-                      <span className="text-xl">{l.icon}</span>
-                      <span className="text-xs text-white/60 font-medium">{l.label}</span>
-                    </a>
-                  ))}
+
+              {/* Inventory investment strip */}
+              <div className="bg-[#050f12] rounded-xl px-6 py-4 flex items-center justify-between flex-wrap gap-4">
+                <div>
+                  <p className="text-[10px] font-bold tracking-[.18em] uppercase text-[#C9A84C]">Inventory Investment</p>
+                  <p className="text-2xl font-black text-white">{stats.totalAssets>0?fmt(stats.totalAssets):"—"} <span className="text-xs font-medium text-white/40">· {stats.totalUnits} pairs · {stats.total} models</span></p>
+                </div>
+                <div className="flex gap-8 text-right">
+                  <div><p className="text-[10px] text-white/30 uppercase tracking-wider">Retail Value</p><p className="text-base font-bold text-white/80">{fmt(stats.retailValue)}</p></div>
+                  {stats.potentialProfit>0&&<div><p className="text-[10px] text-white/30 uppercase tracking-wider">Potential Profit</p><p className="text-base font-bold text-[#C9A84C]">{fmt(stats.potentialProfit)}</p></div>}
+                  <button onClick={()=>setSection("reports")} className="self-center bg-[#C9A84C] text-[#050f12] px-4 py-2 text-xs font-bold rounded-lg hover:opacity-90">Sales Report →</button>
+                </div>
+              </div>
+
+              {/* Operations hub + activity */}
+              <div className="grid lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 bg-white border border-gray-100 rounded-xl p-6">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#0d2430] mb-4">🧰 Operations Hub</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {[
+                      {icon:"📦",label:"Inventory",sub:"Stock, photos, QR codes",fn:()=>setSection("products")},
+                      {icon:"🧾",label:"Invoices",sub:"Generate & change invoices",fn:()=>setSection("orders")},
+                      {icon:"🚚",label:"Fulfillment",sub:"Courier, tracking, receipts",fn:()=>setSection("orders")},
+                      {icon:"📊",label:"Reports",sub:"Sales, profit, margins",fn:()=>setSection("reports")},
+                      {icon:"💳",label:"Payments",sub:"Verify payment proofs",fn:()=>setSection("orders")},
+                      {icon:"⚙️",label:"Settings",sub:"Store, shipping & more",fn:()=>setSection("settings")},
+                    ].map(h=>(
+                      <button key={h.label} onClick={h.fn}
+                        className="text-left border border-gray-100 rounded-xl p-4 hover:border-[#C9A84C]/50 hover:bg-[#C9A84C]/[.04] transition-colors">
+                        <div className="text-xl mb-1.5">{h.icon}</div>
+                        <div className="text-xs font-bold text-[#0d2430]">{h.label}</div>
+                        <div className="text-[10px] text-gray-400 leading-tight mt-0.5">{h.sub}</div>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-4 pt-4 border-t border-gray-50 flex flex-wrap gap-2">
+                    {[
+                      {label:"📊 Inventory Sheet",href:"https://docs.google.com/spreadsheets/d/1WZttK5ZsPhnBz91JmBb-V4GCs-42uXjTUXz67V5sSDI/edit"},
+                      {label:"📋 SB ORDER Sheet",href:"https://docs.google.com/spreadsheets/d/13eM-zpN--AVOwN4uFUSVeQX0e6YA922VzgjOomhfk-Y/edit"},
+                      {label:"💾 Payment Proofs",href:"https://drive.google.com/drive/folders/1MMLgawQE5KKQQqufa2Leoka5zdXV6qIY"},
+                      {label:"🗄️ Supabase",href:"https://supabase.com/dashboard/project/akualfrqzaierqsfcnkp"},
+                      {label:"▲ Vercel",href:"https://vercel.com/maldipias-projects/soleblessing-ecommerce"},
+                    ].map(l=>(
+                      <a key={l.label} href={l.href} target="_blank" rel="noopener noreferrer"
+                        className="text-[10px] font-semibold text-gray-400 border border-gray-200 rounded-full px-3 py-1 hover:text-[#0d2430] hover:border-gray-300">{l.label}</a>
+                    ))}
+                  </div>
+                </div>
+                <div className="bg-white border border-gray-100 rounded-xl p-6">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#0d2430] mb-3">🕐 Recent Activity</h3>
+                  <div className="divide-y divide-gray-50">
+                    {activity.map((a,i)=>(
+                      <div key={i} className="py-2.5 flex items-start gap-2.5">
+                        <span className="text-base leading-none mt-0.5">{a.icon}</span>
+                        <div className="min-w-0">
+                          <div className="text-xs font-semibold text-[#0d2430] truncate">{a.text}</div>
+                          <div className="text-[10px] text-gray-400">{a.sub} · {new Date(a.t).toLocaleDateString("en-PH",{month:"short",day:"numeric"})}</div>
+                        </div>
+                      </div>
+                    ))}
+                    {activity.length===0&&<div className="py-4 text-center text-xs text-gray-400">No activity yet</div>}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1326,6 +1710,135 @@ export default function AdminDashboard() {
                   <span className="text-gray-400">Total Revenue</span>
                   <span className="font-black text-[#0d2430]">{fmt(stats.revenue)}</span>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── SALES & REPORTS ── */}
+          {section==="reports"&&(
+            <div className="space-y-6">
+              {/* P&L cards */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-white border border-gray-100 rounded-xl p-5">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Revenue (items)</p>
+                  <p className="text-2xl font-black text-[#0d2430]">{fmt(repTotals.rev)}</p>
+                  <p className="text-[10px] text-gray-400">{repTotals.lines} lines · all time · excl. shipping</p>
+                </div>
+                <div className="bg-white border-l-4 border border-gray-100 border-l-amber-400 rounded-xl p-5">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">COGS (known)</p>
+                  <p className="text-2xl font-black text-[#0d2430]">{fmt(repTotals.cogs)}</p>
+                  <p className="text-[10px] font-bold text-amber-600">{repTotals.costed}/{repTotals.lines} lines costed ({pct(repTotals.costed,repTotals.lines)}%)</p>
+                </div>
+                <div className="bg-white border-l-4 border border-gray-100 border-l-green-500 rounded-xl p-5">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Gross Profit</p>
+                  <p className="text-2xl font-black text-green-600">{fmt(repTotals.costedRev-repTotals.cogs)}</p>
+                  <p className="text-[10px] text-gray-400">on costed lines only</p>
+                </div>
+                <div className="bg-white border border-gray-100 rounded-xl p-5">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Margin</p>
+                  <p className="text-2xl font-black text-[#0d2430]">{repTotals.costedRev>0?Math.round((repTotals.costedRev-repTotals.cogs)/repTotals.costedRev*100):0}%</p>
+                  <p className="text-[10px] text-gray-400">of costed revenue</p>
+                </div>
+              </div>
+
+              {missingCost.length>0&&(
+                <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-3.5 flex items-center justify-between flex-wrap gap-2">
+                  <p className="text-xs font-semibold text-amber-800">
+                    ⚠️ {missingCost.length} order lines have no unit cost — profit is understated. Fill them below and the report updates instantly.
+                  </p>
+                  <button onClick={()=>{document.getElementById("missing-cost-list")?.scrollIntoView({behavior:"smooth"});}}
+                    className="bg-amber-500 text-white text-xs font-bold px-4 py-1.5 rounded-lg hover:bg-amber-600">Fill costs ↓</button>
+                </div>
+              )}
+
+              {/* Monthly table */}
+              <div className="bg-white border border-gray-100 rounded-xl p-6 overflow-x-auto">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[#0d2430] mb-4">📅 Monthly Performance</h3>
+                <table className="w-full text-sm min-w-[560px]">
+                  <thead><tr className="text-[10px] uppercase tracking-wider text-gray-400 text-left">
+                    <th className="py-2 font-semibold">Month</th><th className="font-semibold text-right">Orders</th>
+                    <th className="font-semibold text-right">Revenue</th><th className="font-semibold text-right">COGS</th>
+                    <th className="font-semibold text-right">Profit</th><th className="font-semibold text-right">Margin</th>
+                    <th className="font-semibold text-right">Costed</th></tr></thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {monthly.map(m=>{
+                      const profit=m.costedRev-m.cogs;
+                      const cov=pct(m.costed,m.lines);
+                      return (
+                        <tr key={m.month}>
+                          <td className="py-2.5 font-bold text-[#0d2430] text-xs">{m.month?new Date(m.month+"-01").toLocaleDateString("en-PH",{month:"short",year:"numeric"}):"—"}</td>
+                          <td className="text-right text-xs text-gray-500">{m.orders.size}</td>
+                          <td className="text-right font-bold text-[#0d2430] text-xs">{fmt(m.rev)}</td>
+                          <td className="text-right text-xs text-gray-500">{m.cogs>0?fmt(m.cogs):"—"}</td>
+                          <td className={`text-right font-bold text-xs ${profit>0?"text-green-600":"text-gray-400"}`}>{m.cogs>0?fmt(profit):"—"}</td>
+                          <td className="text-right text-xs text-gray-500">{m.costedRev>0?Math.round(profit/m.costedRev*100)+"%":"—"}</td>
+                          <td className="text-right"><span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${cov>=70?"bg-green-100 text-green-700":cov>=30?"bg-amber-100 text-amber-700":"bg-red-100 text-red-600"}`}>{cov}%</span></td>
+                        </tr>
+                      );})}
+                  </tbody>
+                </table>
+                <p className="text-[10px] text-gray-400 mt-3">Revenue = item lines only (shipping excluded). Profit uses the cost snapshot saved on each line at sale time — "Costed %" shows how complete each month's profit figure is.</p>
+              </div>
+
+              {/* Channel split */}
+              <div className="bg-white border border-gray-100 rounded-xl p-6 overflow-x-auto">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[#0d2430] mb-4">📣 By Sales Channel</h3>
+                <table className="w-full text-sm min-w-[480px]">
+                  <thead><tr className="text-[10px] uppercase tracking-wider text-gray-400 text-left">
+                    <th className="py-2 font-semibold">Channel</th><th className="font-semibold text-right">Lines</th>
+                    <th className="font-semibold text-right">Revenue</th><th className="font-semibold text-right">COGS</th>
+                    <th className="font-semibold text-right">Profit</th><th className="font-semibold text-right">Costed</th></tr></thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {bySrc.map(c=>(
+                      <tr key={c.src}>
+                        <td className="py-2.5 font-bold text-[#0d2430] text-xs">{c.src==="Website"?"🌐 Website":c.src==="FB Form"?"📋 FB Form":"✍️ Manual"}</td>
+                        <td className="text-right text-xs text-gray-500">{c.lines}</td>
+                        <td className="text-right font-bold text-[#0d2430] text-xs">{fmt(c.rev)}</td>
+                        <td className="text-right text-xs text-gray-500">{c.cogs>0?fmt(c.cogs):"—"}</td>
+                        <td className="text-right font-bold text-xs text-green-600">{c.cogs>0?fmt(c.costedRev-c.cogs):"—"}</td>
+                        <td className="text-right text-xs text-gray-500">{pct(c.costed,c.lines)}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Missing-cost worklist */}
+              <div id="missing-cost-list" className="bg-white border border-gray-100 rounded-xl p-6">
+                <div className="flex justify-between items-center mb-1">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#0d2430]">✏️ Lines Missing Unit Cost ({missingCost.length})</h3>
+                </div>
+                <p className="text-[10px] text-gray-400 mb-4">Pre-orders and old codes have no inventory match — type the acquisition cost once (₱) and it's saved to the order permanently. Newest first.</p>
+                <div className="divide-y divide-gray-50">
+                  {missingCost.slice(0,missingShown).map(l=>{
+                    const k=`${l.oid}:${l.idx}`;
+                    const isPO=!l.code||l.code.toUpperCase()==="PO";
+                    return (
+                      <div key={k} className="py-2.5 flex items-center gap-3 flex-wrap">
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${isPO?"bg-amber-100 text-amber-700":"bg-gray-100 text-gray-500"}`}>{isPO?"PRE-ORDER":l.code}</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-semibold text-[#0d2430] truncate">{l.name||"(no name)"} {l.size&&<span className="text-gray-400">· {l.size}</span>}</div>
+                          <div className="text-[10px] text-gray-400">{l.order} · sold {fmt(l.price)}</div>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <span className="text-xs text-gray-400">cost ₱</span>
+                          <input className="w-24 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-[#C9A84C]"
+                            placeholder="0" inputMode="decimal" value={costDraft[k]||""}
+                            onChange={e=>setCostDraft(d=>({...d,[k]:e.target.value}))}
+                            onKeyDown={e=>{if(e.key==="Enter")saveLineCost(l);}}/>
+                          <button onClick={()=>saveLineCost(l)} disabled={!costDraft[k]}
+                            className="bg-[#0d2430] text-white text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-[#122d3a] disabled:opacity-30">Save</button>
+                        </div>
+                      </div>
+                    );})}
+                  {missingCost.length===0&&<div className="py-6 text-center text-sm text-gray-400">Every line has a cost — report is 100% accurate 🎉</div>}
+                </div>
+                {missingCost.length>missingShown&&(
+                  <button onClick={()=>setMissingShown(n=>n+30)}
+                    className="mt-3 w-full border border-gray-200 rounded-lg py-2 text-xs font-bold text-gray-500 hover:bg-gray-50">
+                    Show {Math.min(30,missingCost.length-missingShown)} more ({missingCost.length-missingShown} left)
+                  </button>
+                )}
               </div>
             </div>
           )}

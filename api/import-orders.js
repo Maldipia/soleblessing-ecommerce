@@ -73,6 +73,16 @@ export default async function handler(req, res) {
       if (item && last) last.items.push({ id: item, name: (r[27] || '').trim(), sku: (r[28] || '').trim(), size: (r[29] || '').trim(), price: peso(r[31]), qty: 1, brand: '', imageUrl: '' });
     }
 
+    // Snapshot acquisition cost onto each line whose code matches inventory (immutable COGS)
+    const costMap = {};
+    try {
+      const invRes = await fetch(`${SUPABASE_URL}/rest/v1/sb_inventory?select=item_code,unit_cost&unit_cost=gt.0&limit=5000`, { headers: H });
+      if (invRes.ok) for (const r of await invRes.json()) costMap[r.item_code] = r.unit_cost;
+    } catch { /* cost enrichment is best-effort */ }
+    for (const o of orders.values())
+      for (const it of o.items)
+        if (it.cost == null && costMap[it.id]) { it.cost = costMap[it.id]; it.cost_source = 'inventory'; }
+
     const payload = [];
     for (const [oid, o] of orders) {
       if (!o.name && !o.items.length) continue;
