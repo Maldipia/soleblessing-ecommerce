@@ -82,7 +82,7 @@ export default async function handler(req, res) {
       let created = null;
       const m = o.ts.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
       if (m) created = `${m[3]}-${m[1]}-${m[2]}T${String(m[4]).padStart(2, '0')}:${m[5]}:00+08:00`;
-      const notes = [o.req && ('Request: ' + o.req), o.notes, o.fb && o.fb !== o.name && ('FB: ' + o.fb), o.invoice && ('Invoice: ' + o.invoice)].filter(Boolean).join(' | ');
+      const notes = [o.req && ('Request: ' + o.req), o.notes, o.fb && o.fb !== o.name && ('FB: ' + o.fb)].filter(Boolean).join(' | ');
       const rec = {
         order_number: oid, customer_name: o.name, customer_email: o.email || null,
         contact_number: o.contact, shipping_address: o.addr, items: o.items,
@@ -90,6 +90,7 @@ export default async function handler(req, res) {
         payment_method: o.pm || 'unknown', notes: notes || null,
         status, payment_status: o.pay === 'paid' ? 'verified' : 'pending',
         courier: o.courier || null, tracking_reference: o.track || null,
+        invoice_url: (o.invoice && o.invoice.indexOf('http') === 0) ? o.invoice : null,
         region: o.region || null, city: o.city || null, source: 'sheet_import',
       };
       rec.created_at = created || new Date().toISOString(); // uniform keys — PostgREST bulk insert requires it
