@@ -872,6 +872,22 @@ export default function AdminDashboard() {
     }catch(e:any){toast.error(e.message||"Invoice generation failed");}
     finally{setInvBusy(null);}
   };
+  const [sendBusy,setSendBusy]=useState<string|null>(null);
+  const sendInvoice = async (o:any, resend=false) => {
+    if(!o.customer_email){toast.error("No email on this order — add it first");return;}
+    if(resend && !confirm("Email the invoice to "+o.customer_email+" again?")) return;
+    setSendBusy(o.id);
+    try{
+      const pw=(()=>{try{return sessionStorage.getItem("sb_admin_pw")||""}catch{return ""}})();
+      const r=await fetch("/api/send-invoice",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({password:pw,order_number:o.order_number})});
+      const out=await r.json().catch(()=>({} as any));
+      if(!r.ok) throw new Error(out.error||"Send failed");
+      toast.success("Invoice emailed to "+(out.email||o.customer_email));
+      loadOrders();
+    }catch(e:any){toast.error(e.message||"Send failed");}
+    finally{setSendBusy(null);}
+  };
   const [receiptScan,setReceiptScan]=useState<any>(null);
   const [receiptBusy,setReceiptBusy]=useState(false);
   const scanReceipt = async (file:File) => {
@@ -1633,13 +1649,25 @@ export default function AdminDashboard() {
                           className="text-[11px] font-bold text-emerald-700 border border-emerald-300 px-2 py-0.5 rounded-lg hover:bg-emerald-50">Verify payment</button>
                       )}
                       {o.invoice_url
-                        ? <span className="flex items-center gap-1">
+                        ? <span className="flex items-center gap-1 flex-wrap">
                             <a href={o.invoice_url} target="_blank" rel="noopener noreferrer"
                               className="text-[11px] font-bold text-[#8a6d25] border border-[#C9A84C] px-2 py-0.5 rounded-lg hover:bg-[#C9A84C]/10 flex items-center gap-1">
                               <ExternalLink className="h-3 w-3"/> Invoice</a>
                             <button onClick={()=>generateInvoice(o,true)} disabled={invBusy===o.id} title="Create a new invoice and replace the link"
                               className="text-[11px] font-bold text-gray-500 border border-gray-200 px-2 py-0.5 rounded-lg hover:border-[#C9A84C] hover:text-[#8a6d25] disabled:opacity-50">
                               {invBusy===o.id?"…":"↻ Change"}</button>
+                            {o.invoice_sent_at
+                              ? <span className="flex items-center gap-1">
+                                  <span className="text-[11px] font-bold bg-emerald-500 text-white px-2.5 py-0.5 rounded-lg">
+                                    ✓ Invoice sent {fmtDate(o.invoice_sent_at)}</span>
+                                  <button onClick={()=>sendInvoice(o,true)} disabled={sendBusy===o.id} title="Email the invoice again"
+                                    className="text-[11px] font-bold text-gray-400 border border-gray-200 px-2 py-0.5 rounded-lg hover:text-emerald-700 hover:border-emerald-300 disabled:opacity-50">
+                                    {sendBusy===o.id?"…":"↻"}</button>
+                                </span>
+                              : <button onClick={()=>sendInvoice(o)} disabled={sendBusy===o.id}
+                                  title={o.customer_email?`Email the invoice to ${o.customer_email}`:"No email on this order"}
+                                  className="text-[11px] font-bold border border-emerald-500 text-emerald-700 px-2.5 py-0.5 rounded-lg hover:bg-emerald-50 disabled:opacity-50">
+                                  {sendBusy===o.id?"Sending…":"📧 Send invoice"}</button>}
                           </span>
                         : <button onClick={()=>generateInvoice(o)} disabled={invBusy===o.id}
                             className="text-[11px] font-bold bg-[#C9A84C] text-[#0d2430] px-2.5 py-0.5 rounded-lg hover:opacity-90 disabled:opacity-50">
