@@ -35,13 +35,26 @@ export default async function handler(req, res) {
         return res.status(429).json({ error: 'ran recently — wait a few minutes' });
     }
 
-    const TABS = ['STRAIGHT PAYMENT', 'COD', 'COP', 'LAY AWAY', 'WALK-IN'];
+    // Payment tabs by gid (export?gid works reliably server-side; gviz does not)
+    const TABS = [
+      { name: 'STRAIGHT PAYMENT', gid: '0' },
+      { name: 'COD', gid: '212574803' },
+      { name: 'COP', gid: '868762773' },
+      { name: 'LAY AWAY', gid: '550187666' },
+      { name: 'WALK-IN', gid: '829108774' },
+      { name: 'WALK IN', gid: '346150009' },
+    ];
     const texts = await Promise.all(TABS.map(t =>
-      fetch(`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(t)}`)
+      fetch(`https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${t.gid}`)
         .then(r => r.ok ? r.text() : '').catch(() => '')));
     if (!texts.some(Boolean)) return res.status(502).json({ error: 'order sheet fetch failed' });
 
-    const rows = texts.flatMap(t => t ? parseCSV(t).slice(1) : []);
+    const tabCounts = {};
+    const rows = texts.flatMap((t, i) => {
+      const rs = t ? parseCSV(t).slice(1) : [];
+      tabCounts[TABS[i].name] = rs.length;
+      return rs;
+    });
     const orders = new Map(); let last = null;
     for (const r of rows) {
       const oid = (r[2] || '').trim();
@@ -112,7 +125,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({ sync_type: 'order_import', total: payload.length, synced: inserted, triggered_by: 'admin', notes: 'SB ORDER sheet -> sb_orders (insert-only)' }),
     }).catch(() => {});
 
-    return res.status(200).json({ ok: true, parsed: payload.length, imported: inserted });
+    return res.status(200).json({ ok: true, parsed: payload.length, imported: inserted, tabs: tabCounts });
   } catch (e) {
     return res.status(500).json({ error: String(e && e.message || e) });
   }
