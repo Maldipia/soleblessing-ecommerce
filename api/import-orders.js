@@ -92,7 +92,7 @@ export default async function handler(req, res) {
         courier: o.courier || null, tracking_reference: o.track || null,
         region: o.region || null, city: o.city || null, source: 'sheet_import',
       };
-      if (created) rec.created_at = created;
+      rec.created_at = created || new Date().toISOString(); // uniform keys — PostgREST bulk insert requires it
       payload.push(rec);
     }
 
