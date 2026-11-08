@@ -7,7 +7,7 @@ import {
   Shield, ChevronRight, Lock, LogOut, Zap, ExternalLink,
   Search, RefreshCw, AlertTriangle, TrendingUp, Plus,
   Edit2, Trash2, X, Save, Eye, Settings, Tag,
-  Download, QrCode, Copy,
+  Download, QrCode, Copy, Database, History,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
@@ -15,7 +15,7 @@ import AdminSettings from "./Settings";
 import { useInventory, refreshInventory } from "@/hooks/useInventory";
 import AdminPromos from "./Promos";
 
-type Section = "overview"|"products"|"orders"|"promos"|"settings"|"analytics";
+type Section = "overview"|"products"|"orders"|"promos"|"settings"|"analytics"|"system";
 
 const ADMIN_KEY = "sb_admin_v1";
 const fmt = (c: number) => `₱${(c/100).toLocaleString("en-PH")}`;
@@ -322,6 +322,45 @@ export default function AdminDashboard() {
   const [expandedSizeId, setExpandedSizeId] = useState<string|null>(null);
 
   const { data: inventory, isLoading: invLoading, refetch: refetchInv } = useInventory() as any;
+  const [sysRaw,setSysRaw]=useState<any[]|null>(null);
+  const [sysLog,setSysLog]=useState<any[]>([]);
+  const [sysLoading,setSysLoading]=useState(false);
+  const loadSystem = async () => {
+    setSysLoading(true);
+    try{
+      const [raw,log] = await Promise.all([
+        sb.select("sb_inventory","select=item_code,name,sku,size,srp,selling_price,unit_cost,status,stock,tab,updated_at"),
+        sb.select("sync_log","select=created_at,synced,total,notes&order=created_at.desc&limit=5"),
+      ]);
+      setSysRaw(Array.isArray(raw)?raw:[]);
+      setSysLog(Array.isArray(log)?log:[]);
+    }catch(e:any){toast.error("System load failed: "+(e.message||e));}
+    finally{setSysLoading(false);}
+  };
+  useEffect(()=>{ if(section==="system") loadSystem(); },[section]);
+  const sysStats = useMemo(()=>{
+    const raw = sysRaw||[];
+    const isSold=(st:string)=>{const u=(st||"").toUpperCase();return u.includes("SOLD")||u==="MISSING";};
+    const hiddenNoPrice = raw.filter(r=>!isSold(r.status)&&!(r.selling_price||r.srp)).length;
+    const blankStatus = raw.filter(r=>!(r.status||"").trim()).length;
+    const liveList = inventory||[];
+    const missingPhoto = liveList.filter((p:any)=>!p.imageUrl).length;
+    const coverage = liveList.length?Math.round(((liveList.length-missingPhoto)/liveList.length)*100):0;
+    return { totalRows:raw.length, live:liveList.length, missingPhoto, coverage, hiddenNoPrice, blankStatus };
+  },[sysRaw,inventory]);
+  const backupCSV = () => {
+    const raw = sysRaw||[];
+    if(!raw.length){toast.error("Load system data first");return;}
+    const cols=["item_code","name","sku","size","srp","selling_price","unit_cost","status","stock","tab","updated_at"];
+    const esc=(v:any)=>{const t=String(v??"");return /[",\n]/.test(t)?('"'+t.replace(/"/g,'""')+'"'):t;};
+    const csv=[cols.join(","),...raw.map((r:any)=>cols.map(c=>esc(r[c])).join(","))].join("\n");
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+    a.download=`sb_inventory_backup_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    toast.success(`Backup downloaded — ${raw.length} rows`);
+  };
+
   const syncInventory = async () => {
     setSyncing(true);
     try {
@@ -514,6 +553,7 @@ export default function AdminDashboard() {
     {id:"promos"    as Section, icon:Tag,            label:"Promo Codes"},
     {id:"settings"  as Section, icon:Settings,       label:"Settings"},
     {id:"analytics" as Section, icon:BarChart3,      label:"Analytics"},
+    {id:"system"    as Section, icon:Database,       label:"System"},
   ];
 
   // ─── Login ──────────────────────────────────────────────────────────────
@@ -593,7 +633,7 @@ export default function AdminDashboard() {
         {/* Top bar */}
         <div className="bg-white border-b border-gray-100 px-8 py-4 flex items-center justify-between sticky top-0 z-10">
           <h1 className="text-lg font-black text-[#0d2430] tracking-tight capitalize">
-            {section==="overview"?"Dashboard":section==="promos"?"Promo Codes":section==="analytics"?"Analytics":section.charAt(0).toUpperCase()+section.slice(1)}
+            {section==="overview"?"Dashboard":section==="promos"?"Promo Codes":section==="analytics"?"Analytics":section==="system"?"System":section.charAt(0).toUpperCase()+section.slice(1)}
           </h1>
           <div className="flex items-center gap-3">
             {section==="products"&&(
@@ -1125,6 +1165,86 @@ export default function AdminDashboard() {
                 <div className="mt-4 pt-4 border-t border-gray-100 flex justify-between text-sm">
                   <span className="text-gray-400">Total Revenue</span>
                   <span className="font-black text-[#0d2430]">{fmt(stats.revenue)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {section==="system"&&(
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-gray-400">Database health · Supabase is the single source of truth</p>
+                <div className="flex gap-2">
+                  <button onClick={()=>syncInventory().then(loadSystem)} disabled={syncing}
+                    className="flex items-center gap-1.5 bg-[#C9A84C] text-[#0d2430] text-xs font-bold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-50">
+                    <RefreshCw className={`h-3.5 w-3.5 ${syncing?"animate-spin":""}`}/> Import from Sheets
+                  </button>
+                  <button onClick={backupCSV} disabled={sysLoading||!sysRaw}
+                    className="flex items-center gap-1.5 bg-[#0d2430] text-white text-xs font-bold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-50">
+                    <Download className="h-3.5 w-3.5"/> Backup CSV
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="bg-[#f8f6f1] rounded-xl p-4">
+                  <p className="text-[10px] font-bold tracking-wider text-gray-400 uppercase">Products live</p>
+                  <p className="text-2xl font-black text-[#0d2430]">{sysStats.live}</p>
+                  <p className="text-[11px] text-gray-400">{sysLoading?"loading rows…":`${sysStats.totalRows} rows total`}</p>
+                </div>
+                <div className="bg-[#f8f6f1] rounded-xl p-4">
+                  <p className="text-[10px] font-bold tracking-wider text-gray-400 uppercase">Photo coverage</p>
+                  <p className={`text-2xl font-black ${sysStats.coverage<60?"text-amber-600":"text-[#0d2430]"}`}>{sysStats.coverage}%</p>
+                  <p className="text-[11px] text-gray-400">of live products</p>
+                </div>
+                <div className="bg-[#f8f6f1] rounded-xl p-4">
+                  <p className="text-[10px] font-bold tracking-wider text-gray-400 uppercase">Last import</p>
+                  <p className="text-sm font-black text-[#0d2430] mt-1.5">{sysLog[0]?new Date(sysLog[0].created_at).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}):"—"}</p>
+                  <p className="text-[11px] text-gray-400">{sysLog[0]?`+${sysLog[0].synced||0} new of ${sysLog[0].total||0}`:"no runs yet"}</p>
+                </div>
+                <div className="bg-[#f8f6f1] rounded-xl p-4">
+                  <p className="text-[10px] font-bold tracking-wider text-gray-400 uppercase">Last order</p>
+                  <p className="text-sm font-black text-[#0d2430] mt-1.5">{sbOrders[0]?new Date(sbOrders[0].created_at).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}):"—"}</p>
+                  <p className="text-[11px] text-gray-400">DB write confirmed</p>
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="bg-white border border-gray-100 rounded-xl p-5">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#0d2430] mb-4 flex items-center gap-2">
+                    <AlertTriangle className="h-3.5 w-3.5 text-amber-600"/> Data quality
+                  </h3>
+                  <div className="flex justify-between items-center py-2 border-b border-gray-50 text-sm">
+                    <span className="text-gray-500">Missing photo (live products)</span>
+                    <div className="flex items-center gap-3">
+                      <span className="font-black text-amber-600">{sysStats.missingPhoto}</span>
+                      {sysStats.missingPhoto>0&&<button onClick={()=>{setImageFilter("none");setSection("products");}}
+                        className="text-[11px] font-bold text-[#8a6d25] border border-[#C9A84C] px-2.5 py-1 rounded-lg hover:bg-[#C9A84C]/10">Show in Products</button>}
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-gray-50 text-sm">
+                    <span className="text-gray-500">No price · hidden from site</span>
+                    <span className="font-black text-[#0d2430]">{sysStats.hiddenNoPrice}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 text-sm">
+                    <span className="text-gray-500">Blank status</span>
+                    <span className="font-black text-[#0d2430]">{sysStats.blankStatus}</span>
+                  </div>
+                  <p className="text-[11px] text-gray-400 mt-3">Fix no-price and blank-status rows by setting a sale price or status — they appear on the site automatically once valid.</p>
+                </div>
+
+                <div className="bg-white border border-gray-100 rounded-xl p-5">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#0d2430] mb-4 flex items-center gap-2">
+                    <History className="h-3.5 w-3.5"/> Sheet imports
+                  </h3>
+                  {sysLog.length===0&&<p className="text-sm text-gray-400">{sysLoading?"Loading…":"No import runs logged yet"}</p>}
+                  {sysLog.map((l:any,i:number)=>(
+                    <div key={i} className="flex justify-between items-center py-2 border-b border-gray-50 last:border-0 text-sm">
+                      <span className="text-gray-500">{new Date(l.created_at).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}</span>
+                      <span className={`font-bold ${(l.synced||0)>0?"text-emerald-700":"text-gray-400"}`}>+{l.synced||0} new of {l.total||0}</span>
+                    </div>
+                  ))}
+                  <p className="text-[11px] text-gray-400 mt-3">Imports only add new item codes from the 2025 + 2024 sheet tabs — your DB edits are never overwritten.</p>
                 </div>
               </div>
             </div>
