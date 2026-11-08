@@ -568,7 +568,8 @@ export default function AdminDashboard() {
     }catch(err:any){toast.error("Save failed: "+(err.message||err));}
   };
   const [invBusy,setInvBusy]=useState<string|null>(null);
-  const generateInvoice = async (o:any) => {
+  const generateInvoice = async (o:any, regenerate=false) => {
+    if(regenerate && !confirm("Create a new invoice for "+o.order_number+"? The link on the order (and column O in the sheet) will point to the new one.")) return;
     setInvBusy(o.id);
     try{
       const pw=(()=>{try{return sessionStorage.getItem("sb_admin_pw")||""}catch{return ""}})();
@@ -576,7 +577,7 @@ export default function AdminDashboard() {
         body:JSON.stringify({password:pw,order_number:o.order_number})});
       const out=await r.json().catch(()=>({} as any));
       if(!r.ok) throw new Error(out.error||"Invoice generation failed");
-      toast.success("Invoice created — link saved on the order");
+      toast.success(regenerate?"New invoice created — link updated":"Invoice created — link saved on the order");
       loadOrders();
     }catch(e:any){toast.error(e.message||"Invoice generation failed");}
     finally{setInvBusy(null);}
@@ -1171,9 +1172,14 @@ export default function AdminDashboard() {
                           className="text-[11px] font-bold text-emerald-700 border border-emerald-300 px-2 py-0.5 rounded-lg hover:bg-emerald-50">Verify payment</button>
                       )}
                       {o.invoice_url
-                        ? <a href={o.invoice_url} target="_blank" rel="noopener noreferrer"
-                            className="text-[11px] font-bold text-[#8a6d25] border border-[#C9A84C] px-2 py-0.5 rounded-lg hover:bg-[#C9A84C]/10 flex items-center gap-1">
-                            <ExternalLink className="h-3 w-3"/> Invoice</a>
+                        ? <span className="flex items-center gap-1">
+                            <a href={o.invoice_url} target="_blank" rel="noopener noreferrer"
+                              className="text-[11px] font-bold text-[#8a6d25] border border-[#C9A84C] px-2 py-0.5 rounded-lg hover:bg-[#C9A84C]/10 flex items-center gap-1">
+                              <ExternalLink className="h-3 w-3"/> Invoice</a>
+                            <button onClick={()=>generateInvoice(o,true)} disabled={invBusy===o.id} title="Create a new invoice and replace the link"
+                              className="text-[11px] font-bold text-gray-500 border border-gray-200 px-2 py-0.5 rounded-lg hover:border-[#C9A84C] hover:text-[#8a6d25] disabled:opacity-50">
+                              {invBusy===o.id?"…":"↻ Change"}</button>
+                          </span>
                         : <button onClick={()=>generateInvoice(o)} disabled={invBusy===o.id}
                             className="text-[11px] font-bold bg-[#C9A84C] text-[#0d2430] px-2.5 py-0.5 rounded-lg hover:opacity-90 disabled:opacity-50">
                             {invBusy===o.id?"Generating…":"Generate invoice"}</button>}
