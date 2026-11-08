@@ -505,20 +505,28 @@ function parseLabel(raw:string, fxRate:number){
   else if (adiSku && out.brand==="Adidas") out.sku = adiSku[1];
   else if (nbSku && out.brand==="New Balance") out.sku = nbSku[1];
   else if (adiSku) out.sku = adiSku[1];
-  // Model: longest line that isn't codes/sizes/origin boilerplate
+  // Model: best line that isn't codes/sizes/colorways/origin boilerplate.
+  // Colorway lines (FTWWHT/FTWWHT, BLACK / LAVA GLOW) lose to slash-free lines.
   const lines = text.split(/\n+/).map(s=>s.trim()).filter(Boolean);
-  const modelLine = lines.filter(l=>{
+  const candidates = lines.filter(l=>{
     const u=l.toUpperCase();
     if (u.length<4||u.length>40) return false;
-    if (/MADE IN|FABRIQU|INDONESIA|VIETNAM|CHINA|UPC|PRICE|US\b|UK\b|EUR|\bCM\b|\d{6,}/.test(u)) return false;
-    return /[A-Z]{3,}/.test(u) && !/^\d/.test(l);
-  }).sort((a,b)=>b.length-a.length)[0] || "";
+    if (/MADE IN|FABRIQU|INDONESIA|VIETNAM|CHINA|UPC|PRICE|\bUS\b|\bUK\b|EUR|\bCM\b|\d{6,}/.test(u)) return false;
+    if (/^(ORIGINALS?|SPORTSWEAR|PERFORMANCE|EQUIPMENT|AUTHENTICS?|CLASSICS?|NIKE|ADIDAS|ASICS|PUMA|VANS|CONVERSE|NEW BALANCE|JORDAN)$/.test(u)) return false; // brand taglines aren't models
+    return /[A-Z]{3,}/i.test(u) && !/^\d/.test(l);
+  });
+  const score=(l:string)=>((l.match(/\//g)||[]).length?0:100)+l.length;
+  const modelLine = candidates.sort((a,b)=>score(b)-score(a))[0] || "";
   out.model = modelLine;
-  // Gender / youth markers
-  const isW = /WMNS|WOMEN/.test(U); const isY = /\bGS\b|\bPS\b|\bTD\b|\(J\)|_J\b|\bJ\b.*(US|SIZE)|JUNIOR|YOUTH/.test(U);
+  // Gender / youth markers — the model line itself counts ("X_PLR J" = junior)
+  const MU = modelLine.toUpperCase();
+  const isW = /WMNS|WOMEN/.test(U);
+  const isY = /\bGS\b|\bPS\b|\bTD\b|\(J\)|JUNIOR|YOUTH/.test(U) || /\bJ$|\bJR$/.test(MU.trim());
   // Sizes — accept fractions and decimals
   const frac=(s:string)=>s.replace(/\s*1\/2|½/,".5").replace(/\s*2\/3|⅔/,".7").replace(/\s*1\/3|⅓/,".3").replace(",",".");
-  const us = U.match(/\bUS\D{0,3}(\d{1,2}(?:[.,]5|\s?1\/2|½)?)/) || U.match(/\b(\d{1,2}(?:[.,]5|\s?1\/2|½)?)\s*(?:US|M\b|W\b)/);
+  const us = U.match(/\bUS\D{0,3}(\d{1,2}(?:[.,]5|\s?1\/2|½)?)/)
+    || U.match(/\b(\d{1,2}(?:[.,]5|\s?1\/2|½)?)\s*(?:US|M\b|W\b)/)
+    || U.match(/(?:^|\s)(\d{1,2}(?:[.,]5|\s?1\/2|½)?)\s+(?:UK|EUR|F)\b/m); // bare "6.5  UK 4" layout
   const eur = U.match(/\b(?:EUR?|F)\W{0,2}(\d{2}(?:[.,]\d|\s?[12]\/3|⅔|½|\s?1\/2)?)/);
   const cm = U.match(/\b(\d{2}(?:[.,]5)?)\s?CM\b/) || U.match(/\bCM\W{0,2}(\d{2}(?:[.,]5)?)/) || U.match(/\bJP\W{0,2}(\d{2}(?:[.,]5)?)/);
   if (us) out.usSize = frac(us[1]) + (isY?"Y":isW?"W":"M");
