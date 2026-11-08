@@ -1,5 +1,5 @@
-// Public checkout endpoint — creates an order (and records promo usage) using the
-// service role server-side, so the public anon key never needs write access to orders.
+// Public checkout endpoint — atomic order placement via Postgres RPC:
+// stock decrement + order insert + promo usage + loyalty points in ONE transaction.
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://akualfrqzaierqsfcnkp.supabase.co';
 const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const H = { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' };
@@ -18,33 +18,20 @@ export default async function handler(req, res) {
   const { orderData, promo } = body || {};
   if (!orderData || !orderData.order_number || !orderData.customer_name)
     return res.status(400).json({ error: 'invalid order' });
+  delete orderData.id;
 
   try {
-    const clean = { ...orderData, status: 'pending' };
-    delete clean.id; // never trust a client-supplied id
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/sb_orders`, {
-      method: 'POST', headers: { ...H, Prefer: 'return=representation' }, body: JSON.stringify(clean),
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/sb_place_order`, {
+      method: 'POST', headers: H,
+      body: JSON.stringify({ order_data: orderData, promo: promo || null }),
     });
     const text = await r.text();
-    if (!r.ok) return res.status(r.status).json({ error: text });
-    const order = (JSON.parse(text || '[]'))[0] || null;
-
-    if (promo && order && order.id) {
-      try {
-        await fetch(`${SUPABASE_URL}/rest/v1/sb_promo_uses`, {
-          method: 'POST', headers: H,
-          body: JSON.stringify({
-            promo_id: promo.id, order_id: order.id, order_number: promo.orderNumber,
-            customer_name: promo.customerName, discount_applied: promo.discount,
-          }),
-        });
-        await fetch(`${SUPABASE_URL}/rest/v1/sb_promos?id=eq.${promo.id}`, {
-          method: 'PATCH', headers: H,
-          body: JSON.stringify({ uses_count: (promo.uses_count || 0) + 1, updated_at: new Date().toISOString() }),
-        });
-      } catch (e) { /* non-fatal */ }
+    if (!r.ok) {
+      const m = text.match(/OUT_OF_STOCK:([^"\\]+)/);
+      if (m) return res.status(409).json({ error: 'out_of_stock', item_code: m[1] });
+      return res.status(r.status).json({ error: text });
     }
-    return res.status(200).json({ order });
+    return res.status(200).json({ order: JSON.parse(text || 'null') });
   } catch (e) {
     return res.status(500).json({ error: String(e) });
   }

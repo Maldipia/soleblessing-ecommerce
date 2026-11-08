@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { usePaymentMethods, digitsOnly, maskAccount, maskName } from "@/hooks/usePaymentMethods";
 
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwha-_yAysVRVspY0z1XYcD3lz1ow1Z4704M-Eu0Moq4hXjeL6uB4bLiVEr3Fyw5uKPcg/exec";
 
 // Maps a payment-method id from sb_settings → its static QR image in /public.
 // Add an entry here only when the matching QR file actually exists.
@@ -28,6 +27,7 @@ export default function UploadPayment() {
   const [submitting, setSubmitting] = useState(false);
   const [progress, setProgress]     = useState(0);
   const [success, setSuccess]       = useState(false);
+  const [uploadError, setUploadError] = useState("");
   const [refId, setRefId]           = useState("");
   const [orderId, setOrderId]       = useState("");
   const [customerName, setCustomerName] = useState("");
@@ -76,7 +76,7 @@ export default function UploadPayment() {
       if (panel) { panel.style.animation = "none"; void panel.offsetHeight; panel.style.animation = "sbShake 0.4s ease"; }
       return;
     }
-    setSubmitting(true);
+    setSubmitting(true); setUploadError("");
     setProgress(0);
     const tick = setInterval(() => setProgress(p => { if (p >= 90) { clearInterval(tick); return 90; } return p + Math.random() * 15; }), 200);
     try {
@@ -87,8 +87,18 @@ export default function UploadPayment() {
         r.readAsDataURL(file);
       });
       const body = JSON.stringify({ orderId, customerName, amount, paymentMethod: method, referenceNumber: refNo, fileBase64: base64Data, mimeType: file.type, fileName: file.name });
-      await fetch(APPS_SCRIPT_URL, { method: "POST", body, headers: { "Content-Type": "text/plain;charset=utf-8" }, redirect: "follow" });
-    } catch (_) { /* GAS redirect is expected */ }
+      const r = await fetch("/api/upload-proof", { method: "POST", body, headers: { "Content-Type": "application/json" } });
+      if (!r.ok) {
+        const out = await r.json().catch(() => ({} as any));
+        clearInterval(tick); setSubmitting(false); setProgress(0);
+        setUploadError(out.error || "Upload failed — try again");
+        return;
+      }
+    } catch (_) {
+      clearInterval(tick); setSubmitting(false); setProgress(0);
+      setUploadError("Network error — try again");
+      return;
+    }
     clearInterval(tick);
     setProgress(100);
     setTimeout(() => { setRefId("SB-" + Date.now().toString(36).toUpperCase()); setSuccess(true); }, 400);
@@ -385,6 +395,7 @@ export default function UploadPayment() {
 
                 {submitting && <div className="sb-progress"><div className="sb-progress-fill" style={{width:`${progress}%`}}/></div>}
 
+                {uploadError && <div style={{color:"#f09595",fontSize:12,marginBottom:8,fontWeight:600}}>{uploadError}</div>}
                 <button className="sb-submit" disabled={submitting} onClick={handleSubmit}>
                   {submitting?"Submitting…":"Submit Payment Proof"}
                 </button>

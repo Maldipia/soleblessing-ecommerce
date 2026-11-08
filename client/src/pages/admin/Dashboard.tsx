@@ -543,7 +543,28 @@ export default function AdminDashboard() {
   };
   const updateOrderStatus = async (id:string,status:string) => {
     await sb.update("sb_orders",`id=eq.${id}`,{status,updated_at:new Date().toISOString()});
-    toast.success("Order updated"); loadOrders();
+    toast.success("Order updated"); loadOrders(); refetchInv();
+  };
+  const [shipEdit,setShipEdit]=useState<Record<string,{courier?:string;tracking_reference?:string}>>({});
+  const saveFulfillment = async (o:any) => {
+    const e = shipEdit[o.id]||{};
+    const payload:any = {
+      courier:(e.courier??o.courier)||null,
+      tracking_reference:(e.tracking_reference??o.tracking_reference)||null,
+      updated_at:new Date().toISOString(),
+    };
+    try{
+      await sb.update("sb_orders",`id=eq.${o.id}`,payload);
+      toast.success("Fulfillment saved");
+      setShipEdit(prev=>{const n={...prev}; delete n[o.id]; return n;});
+      loadOrders();
+    }catch(err:any){toast.error("Save failed: "+(err.message||err));}
+  };
+  const setPaymentStatus = async (o:any, ps:string) => {
+    try{
+      await sb.update("sb_orders",`id=eq.${o.id}`,{payment_status:ps,updated_at:new Date().toISOString()});
+      toast.success("Payment "+ps); loadOrders();
+    }catch(err:any){toast.error("Save failed: "+(err.message||err));}
   };
 
   const NAV = [
@@ -1112,6 +1133,26 @@ export default function AdminDashboard() {
                           <ExternalLink className="h-3 w-3"/> View Proof
                         </a>
                       )}
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${o.payment_status==="verified"?"bg-emerald-100 text-emerald-700":o.payment_status==="submitted"?"bg-blue-100 text-blue-700":"bg-gray-100 text-gray-500"}`}>
+                        pay: {o.payment_status||"pending"}
+                      </span>
+                      {o.payment_status==="submitted"&&(
+                        <button onClick={()=>setPaymentStatus(o,"verified")}
+                          className="text-[11px] font-bold text-emerald-700 border border-emerald-300 px-2 py-0.5 rounded-lg hover:bg-emerald-50">Verify payment</button>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-50">
+                      <span className="text-xs text-gray-500 font-medium">Ship:</span>
+                      <input placeholder="Courier (J&T, LBC…)" defaultValue={o.courier||""}
+                        onChange={e=>setShipEdit(prev=>({...prev,[o.id]:{...prev[o.id],courier:e.target.value}}))}
+                        className="w-32 border border-gray-200 rounded-lg px-2 py-1 text-xs outline-none focus:border-[#C9A84C]"/>
+                      <input placeholder="Tracking #" defaultValue={o.tracking_reference||""}
+                        onChange={e=>setShipEdit(prev=>({...prev,[o.id]:{...prev[o.id],tracking_reference:e.target.value}}))}
+                        className="w-40 border border-gray-200 rounded-lg px-2 py-1 text-xs outline-none focus:border-[#C9A84C] font-mono"/>
+                      <button onClick={()=>saveFulfillment(o)} disabled={!shipEdit[o.id]}
+                        className="text-[11px] font-bold bg-[#0d2430] text-white px-3 py-1 rounded-lg hover:opacity-90 disabled:opacity-40">Save</button>
+                      {o.courier&&o.tracking_reference&&!shipEdit[o.id]&&
+                        <span className="text-[11px] text-gray-400">{o.courier} · {o.tracking_reference}</span>}
                     </div>
                   </div>
                 ))}
