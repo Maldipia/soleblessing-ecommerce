@@ -16,6 +16,8 @@ function parseCSV(text) {
   if (cur || row.length) { row.push(cur); rows.push(row); }
   return rows;
 }
+const PLACEHOLDERS = new Set(['NOT YET','NOT SENT','N/A','NA','-','TBD','PENDING']);
+const clean = v => { const t = String(v || '').trim(); return PLACEHOLDERS.has(t.toUpperCase()) ? '' : t; };
 const peso = v => { const n = parseFloat(String(v || '').replace(/[₱,\s]/g, '')); return isNaN(n) ? 0 : Math.round(n * 100); };
 
 export default async function handler(req, res) {
@@ -47,7 +49,7 @@ export default async function handler(req, res) {
           name: (r[4] || '').trim() || (r[3] || '').trim(), addr: (r[5] || '').trim(),
           contact: (r[6] || '').trim(), pm: (r[7] || '').trim(), req: (r[8] || '').trim(),
           region: (r[9] || '').trim(), city: (r[10] || '').trim(), pay: (r[13] || '').trim().toLowerCase(),
-          invoice: (r[14] || '').trim(), courier: (r[16] || '').trim(), track: (r[17] || '').trim(),
+          invoice: (r[14] || '').trim(), courier: clean(r[16]), track: clean(r[17]),
           notes: (r[19] || '').trim(), items: [],
         });
         last = orders.get(oid);
