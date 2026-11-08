@@ -469,6 +469,8 @@ export default function AdminDashboard() {
     [sbProducts, productCategory, search]);
 
   const [channelFilter,setChannelFilter]=useState<"all"|"website"|"sheet_import">("all");
+  const [ordersShown,setOrdersShown]=useState(25);
+  useEffect(()=>{setOrdersShown(25);},[orderFilter,channelFilter]);
   const filteredOrders = useMemo(()=>
     sbOrders.filter(o=>(orderFilter==="all"||o.status===orderFilter)&&(channelFilter==="all"||(o.source||"website")===channelFilter)),
     [sbOrders,orderFilter,channelFilter]);
@@ -581,6 +583,37 @@ export default function AdminDashboard() {
       loadOrders();
     }catch(e:any){toast.error(e.message||"Invoice generation failed");}
     finally{setInvBusy(null);}
+  };
+  const [receiptScan,setReceiptScan]=useState<any>(null);
+  const [receiptBusy,setReceiptBusy]=useState(false);
+  const scanReceipt = async (file:File) => {
+    if(!/^image\/(jpeg|png|webp)$/.test(file.type)){toast.error("JPEG/PNG/WebP only");return;}
+    if(file.size>5*1024*1024){toast.error("Max 5MB");return;}
+    setReceiptBusy(true); setReceiptScan(null);
+    try{
+      const base64:string = await new Promise((ok,err)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(",")[1]);r.onerror=()=>err(new Error("read failed"));r.readAsDataURL(file);});
+      const pw=(()=>{try{return sessionStorage.getItem("sb_admin_pw")||""}catch{return ""}})();
+      const res=await fetch("/api/parse-shipping-receipt",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({password:pw,fileBase64:base64,mimeType:file.type})});
+      const out=await res.json().catch(()=>({} as any));
+      if(!res.ok) throw new Error(out.error||"Scan failed");
+      setReceiptScan({...out, chosen: out.match?.order_number || out.candidates?.[0]?.order_number || ""});
+      if(!out.text_found) toast.info("Couldn't read much text — try a sharper photo");
+    }catch(e:any){toast.error(e.message||"Scan failed");}
+    finally{setReceiptBusy(false);}
+  };
+  const confirmReceipt = async () => {
+    const rs=receiptScan; if(!rs?.chosen){toast.error("Pick an order first");return;}
+    if(!rs.tracking && !confirm("No tracking number was detected — save courier and receipt anyway?")) return;
+    try{
+      await sb.update("sb_orders",`order_number=eq.${encodeURIComponent(rs.chosen)}`,{
+        courier: rs.courier||null, tracking_reference: rs.tracking||null,
+        shipping_receipt_url: rs.receipt_url||null,
+        status: "shipped", updated_at: new Date().toISOString(),
+      });
+      toast.success(`Saved to ${rs.chosen} — marked shipped`);
+      setReceiptScan(null); loadOrders();
+    }catch(e:any){toast.error("Save failed: "+(e.message||e));}
   };
   const setPaymentStatus = async (o:any, ps:string) => {
     try{
@@ -1109,7 +1142,12 @@ export default function AdminDashboard() {
                   ))}
                 </div>
                 <span className="text-xs text-gray-400">{filteredOrders.length} orders</span>
-                <button onClick={loadOrders} className="ml-auto flex items-center gap-2 border border-gray-200 bg-white text-[#0d2430] px-3 py-2 text-xs font-semibold rounded-lg hover:bg-gray-50">
+                <label className={`ml-auto flex items-center gap-2 bg-[#C9A84C] text-[#0d2430] px-3 py-2 text-xs font-bold rounded-lg cursor-pointer hover:opacity-90 ${receiptBusy?"opacity-50 pointer-events-none":""}`}>
+                  <Download className="h-3.5 w-3.5 rotate-180"/> {receiptBusy?"Scanning…":"Scan courier receipt"}
+                  <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+                    onChange={e=>{const f=e.target.files?.[0]; e.currentTarget.value=""; if(f) scanReceipt(f);}}/>
+                </label>
+                <button onClick={loadOrders} className="flex items-center gap-2 border border-gray-200 bg-white text-[#0d2430] px-3 py-2 text-xs font-semibold rounded-lg hover:bg-gray-50">
                   <RefreshCw className="h-3.5 w-3.5"/> Refresh
                 </button>
                 <a href="https://docs.google.com/spreadsheets/d/13eM-zpN--AVOwN4uFUSVeQX0e6YA922VzgjOomhfk-Y/edit" target="_blank" rel="noopener noreferrer"
@@ -1117,8 +1155,40 @@ export default function AdminDashboard() {
                   <ExternalLink className="h-3.5 w-3.5"/> Sheet archive
                 </a>
               </div>
+              {receiptScan&&(
+                <div className={`border rounded-xl p-4 mb-4 ${receiptScan.candidates?.length?"border-emerald-300 bg-emerald-50":"border-amber-300 bg-amber-50"}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-bold uppercase tracking-wider text-[#0d2430]">
+                      {receiptScan.candidates?.length?"Receipt scanned — match found":"Receipt scanned — no confident match"}
+                    </p>
+                    <button onClick={()=>setReceiptScan(null)} className="text-gray-400 hover:text-gray-600"><X className="h-4 w-4"/></button>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-[#0d2430] mb-3">
+                    <span>Courier: <b>{receiptScan.courier||"—"}</b></span>
+                    <span>Tracking: <b className="font-mono">{receiptScan.tracking||"not detected"}</b></span>
+                    <span className="col-span-2">{receiptScan.receipt_url&&<a href={receiptScan.receipt_url} target="_blank" rel="noopener noreferrer" className="text-[#8a6d25] font-semibold underline">View saved receipt</a>}</span>
+                  </div>
+                  {receiptScan.candidates?.length ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-gray-500">Attach to:</span>
+                      {receiptScan.candidates.map((c:any)=>(
+                        <button key={c.order_number} onClick={()=>setReceiptScan({...receiptScan,chosen:c.order_number})}
+                          className={`text-xs font-bold px-3 py-1.5 rounded-lg border ${receiptScan.chosen===c.order_number?"bg-[#0d2430] text-white border-[#0d2430]":"bg-white text-[#0d2430] border-gray-200 hover:border-[#C9A84C]"}`}>
+                          {c.order_number} · {c.customer_name} · {c.score}%
+                        </button>
+                      ))}
+                      <button onClick={confirmReceipt}
+                        className="ml-auto text-xs font-bold bg-emerald-600 text-white px-4 py-2 rounded-lg hover:opacity-90">
+                        Confirm — save tracking & mark shipped
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-amber-700">No open order matched the receiver on this receipt. Enter courier/tracking manually on the right order below.</p>
+                  )}
+                </div>
+              )}
               <div className="space-y-3">
-                {filteredOrders.map(o=>(
+                {filteredOrders.slice(0,ordersShown).map(o=>(
                   <div key={o.id} className="bg-white border border-gray-100 rounded-xl p-5">
                     <div className="flex items-start justify-between mb-3">
                       <div>
@@ -1200,6 +1270,12 @@ export default function AdminDashboard() {
                   </div>
                 ))}
                 {filteredOrders.length===0&&<div className="bg-white border border-gray-100 rounded-xl py-16 text-center text-sm text-gray-400">No orders found</div>}
+                {filteredOrders.length>ordersShown&&(
+                  <button onClick={()=>setOrdersShown(n=>n+50)}
+                    className="w-full border border-gray-200 bg-white text-[#0d2430] py-2.5 text-xs font-bold rounded-xl hover:bg-gray-50">
+                    Show more ({filteredOrders.length-ordersShown} remaining)
+                  </button>
+                )}
               </div>
             </div>
           )}
