@@ -24,8 +24,34 @@ export default async function handler(req, res) {
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }
   const { password, op, table, query = '', data } = body || {};
 
-  if (password !== ADMIN_PASSWORD) return res.status(401).json({ error: 'unauthorized' });
-  if (op === 'auth') return res.status(200).json({ ok: true });
+  // Staff admins (SA01…): scanner-only accounts defined in sb_settings.staff_admins.
+  // Each staff PIN can ONLY read + add inventory; added_by is stamped SERVER-SIDE
+  // from the authenticated PIN, so accountability can't be spoofed from the client.
+  let staff = null;
+  if (password !== ADMIN_PASSWORD) {
+    try {
+      const sres = await fetch(`${SUPABASE_URL}/rest/v1/sb_settings?key=eq.staff_admins&select=value`, {
+        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+      });
+      const [row] = sres.ok ? await sres.json() : [];
+      const list = row ? JSON.parse(row.value || '[]') : [];
+      staff = list.find(s => s && s.active !== false && String(s.pin) === String(password)) || null;
+    } catch { staff = null; }
+    if (!staff) return res.status(401).json({ error: 'unauthorized' });
+  }
+
+  if (op === 'auth') return res.status(200).json({ ok: true, role: staff ? staff.id : 'OWNER', color: staff ? staff.color : '#C9A84C' });
+
+  if (staff) {
+    // Least privilege: scanner needs exactly these and nothing else.
+    const allowedForStaff =
+      (table === 'sb_inventory' && (op === 'select' || op === 'insert'));
+    if (!allowedForStaff) return res.status(403).json({ error: 'staff accounts can only view and add inventory' });
+    if (op === 'insert' && data) {
+      const stamp = (r) => ({ ...r, added_by: staff.id, tab: 'SCAN' });
+      body.data = Array.isArray(data) ? data.map(stamp) : stamp(data);
+    }
+  }
   if (!ALLOWED.has(table)) return res.status(400).json({ error: 'table not allowed' });
 
   const method = op === 'select' ? 'GET' : (op === 'insert' || op === 'upsert') ? 'POST'
@@ -42,7 +68,7 @@ export default async function handler(req, res) {
   try {
     const r = await fetch(url, {
       method, headers,
-      body: (op === 'insert' || op === 'upsert' || op === 'update') ? JSON.stringify(data) : undefined,
+      body: (op === 'insert' || op === 'upsert' || op === 'update') ? JSON.stringify(body.data) : undefined,
     });
     const text = await r.text();
     if (!r.ok) return res.status(r.status).json({ error: text });

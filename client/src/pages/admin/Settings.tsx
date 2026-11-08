@@ -28,7 +28,31 @@ type Shipping = { free_threshold: number; flat_rate: number; couriers: string[] 
 type Socials = { facebook: string; instagram: string; tiktok: string; messenger: string };
 
 export default function AdminSettings() {
-  const [tab, setTab] = useState<"brand" | "payment" | "shipping" | "socials">("brand");
+  const [tab, setTab] = useState<"brand" | "payment" | "shipping" | "socials" | "staff">("brand");
+  // Staff admins — scanner-only accounts (SA01…) with per-person PINs for accountability
+  const [staff, setStaff] = useState<{id:string;pin:string;color:string;active:boolean}[]>([]);
+  const [staffLoaded, setStaffLoaded] = useState(false);
+  const [savingStaff, setSavingStaff] = useState(false);
+  const loadStaff = async () => {
+    try {
+      const rows = await sb.select("sb_settings", "key=eq.staff_admins&select=value");
+      setStaff(rows?.[0] ? JSON.parse(rows[0].value || "[]") : []);
+    } catch { /* owner-only view */ }
+    setStaffLoaded(true);
+  };
+  const saveStaff = async () => {
+    for (const s of staff) {
+      if (!/^\d{4,8}$/.test(s.pin)) { toast.error(`${s.id}: PIN must be 4–8 digits`); return; }
+    }
+    const pins = staff.map(s=>s.pin);
+    if (new Set(pins).size !== pins.length) { toast.error("Two staff admins share the same PIN"); return; }
+    setSavingStaff(true);
+    try {
+      await sb.upsert("sb_settings", "on_conflict=key", { key: "staff_admins", value: JSON.stringify(staff) });
+      toast.success("Staff admins saved");
+    } catch (e:any) { toast.error("Save failed: " + (e.message||e)); }
+    finally { setSavingStaff(false); }
+  };
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -140,6 +164,7 @@ export default function AdminSettings() {
     { id: "payment"  as const, label: "💳 Payment Methods"   },
     { id: "shipping" as const, label: "🚚 Shipping"          },
     { id: "socials"  as const, label: "📱 Social Media"      },
+    { id: "staff"    as const, label: "👥 Staff Admins"      },
   ];
 
   return (
@@ -433,6 +458,46 @@ export default function AdminSettings() {
       )}
 
       {/* ── SOCIALS ── */}
+      {tab === "staff" && (
+        <div className="bg-white border border-gray-100 rounded-xl p-6 max-w-2xl">
+          <div className="flex justify-between items-center mb-1">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[#0d2430]">👥 Staff Admins — scanner access only</h3>
+            {!staffLoaded&&<button onClick={loadStaff} className="text-xs font-bold text-[#C9A84C]">Load</button>}
+          </div>
+          <p className="text-[11px] text-gray-400 mb-4 leading-relaxed">
+            Each person logs in with their own PIN and can <b>only see Latest Inventory + scan boxes</b> — nothing else.
+            Every pair they add is stamped with their ID (color-coded), so if a record is wrong you know who's accountable.
+            The system stamps the ID server-side from the PIN used — it can't be faked.
+          </p>
+          {staffLoaded&&(
+            <div className="space-y-2.5">
+              {staff.map((s,i)=>(
+                <div key={s.id} className="flex items-center gap-3 border border-gray-100 rounded-xl px-4 py-3">
+                  <span className="text-[11px] font-black px-2.5 py-1 rounded-full text-white w-14 text-center" style={{background:s.color}}>{s.id}</span>
+                  <div className="flex-1">
+                    <label className="text-[9px] font-bold uppercase text-gray-400 block">PIN (4–8 digits)</label>
+                    <input value={s.pin} inputMode="numeric"
+                      onChange={e=>setStaff(st=>st.map((x,j)=>j===i?{...x,pin:e.target.value.replace(/\D/g,"").slice(0,8)}:x))}
+                      className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm font-mono w-32 outline-none focus:border-[#C9A84C]"/>
+                  </div>
+                  <label className="flex items-center gap-2 text-xs text-gray-500 font-semibold cursor-pointer">
+                    <input type="checkbox" checked={s.active!==false}
+                      onChange={e=>setStaff(st=>st.map((x,j)=>j===i?{...x,active:e.target.checked}:x))}/>
+                    Active
+                  </label>
+                </div>
+              ))}
+              <button onClick={saveStaff} disabled={savingStaff}
+                className="w-full bg-[#0d2430] text-white py-3 text-sm font-bold rounded-xl hover:bg-[#122d3a] disabled:opacity-50 flex items-center justify-center gap-2">
+                <Save className="h-4 w-4"/>{savingStaff?"Saving…":"Save Staff Admins"}
+              </button>
+              <p className="text-[10px] text-gray-400">Changing a PIN logs that person out on their next action. Untick Active to suspend access instantly.</p>
+            </div>
+          )}
+          {!staffLoaded&&<button onClick={loadStaff} className="w-full border border-gray-200 rounded-xl py-3 text-sm font-bold text-gray-500 hover:bg-gray-50">Load staff admins</button>}
+        </div>
+      )}
+
       {tab === "socials" && (
         <div className="bg-white border border-gray-100 rounded-xl p-6 space-y-5">
           <h3 className="text-sm font-bold text-[#0d2430] uppercase tracking-wide">Social Media Links</h3>

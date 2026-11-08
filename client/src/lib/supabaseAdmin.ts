@@ -24,7 +24,12 @@ export const sbAdmin = {
         body: JSON.stringify({ password, op: 'auth' }),
       });
       if (!res.ok) return false;
-      try { sessionStorage.setItem(PW_KEY, password); } catch {}
+      const out = await res.json().catch(() => ({} as any));
+      try {
+        sessionStorage.setItem(PW_KEY, password);
+        sessionStorage.setItem('sb_admin_role', out.role || 'OWNER');
+        sessionStorage.setItem('sb_admin_color', out.color || '#C9A84C');
+      } catch {}
       return true;
     } catch { return false; }
   },

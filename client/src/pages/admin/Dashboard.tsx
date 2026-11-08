@@ -113,7 +113,7 @@ function useAdminAuth() {
     } catch { return false; }
   });
   const logout = () => {
-    try { localStorage.removeItem(ADMIN_KEY); sessionStorage.removeItem(PW_KEY); } catch {}
+    try { localStorage.removeItem(ADMIN_KEY); sessionStorage.removeItem(PW_KEY); sessionStorage.removeItem("sb_admin_role"); sessionStorage.removeItem("sb_admin_color"); } catch {}
     window.location.reload();
   };
   return { isAdmin, logout };
@@ -482,6 +482,10 @@ type Intake = { code:string; brand:string; model:string; sku:string; usSize:stri
 const BLANK_INTAKE: Intake = { code:"", brand:"", model:"", sku:"", usSize:"", eurSize:"", cmSize:"", barcode:"", srp:"", cond:"Good", unitCost:"", selling:"" };
 const CONDS = ["Good","Stained","Missing pair","Unknown"];
 const normSBCode = (v:string)=>v.replace(/\s+/g,"").toUpperCase();
+// Accountability colors — who added each record (SA pins are server-verified)
+const BY_COLORS:Record<string,string>={SA01:"#e11d48",SA02:"#2563eb",SA03:"#059669",SA04:"#7c3aed",OWNER:"#C9A84C"};
+const getRole=()=>{try{return sessionStorage.getItem("sb_admin_role")||"OWNER"}catch{return "OWNER"}};
+const getRoleColor=()=>{try{return sessionStorage.getItem("sb_admin_color")||"#C9A84C"}catch{return "#C9A84C"}};
 
 function parseLabel(raw:string, fxRate:number){
   const text = raw.replace(/[|]/g," ");
@@ -635,7 +639,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
         brand:f.brand.trim()||null, condition:f.cond, category:"Sneakers",
         srp:Math.round(Number(f.srp)||0)*100, selling_price:Math.round(Number(f.selling)||0)*100,
         unit_cost:Math.round(Number(f.unitCost)||0)*100,
-        status:"Available", stock:1, tab:"SCAN", date_acquired:new Date().toISOString().slice(0,10),
+        status:"Available", stock:1, tab:"SCAN", added_by:getRole(), date_acquired:new Date().toISOString().slice(0,10),
       });
       // photo upload is best-effort
       if(photo){
@@ -770,7 +774,8 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
 export default function AdminDashboard() {
   const [,setLocation] = useLocation();
   const {isAdmin, logout} = useAdminAuth();
-  const [section, setSection] = useState<Section>("overview");
+  const ROLE=getRole(); const isStaff=ROLE.startsWith("SA");
+  const [section, setSection] = useState<Section>(()=>getRole().startsWith("SA")?"intake":"overview");
   const [search, setSearch] = useState("");
   const [syncing, setSyncing] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -869,7 +874,7 @@ export default function AdminDashboard() {
     catch(e){console.error(e);}
   };
 
-  useEffect(()=>{if(isAdmin){loadProducts();loadOrders();}}, [isAdmin]);
+  useEffect(()=>{if(isAdmin&&!isStaff){loadProducts();loadOrders();}}, [isAdmin]); // staff: scanner only — no order/product reads
 
   // Close size dropdown on outside click
   useEffect(()=>{
@@ -985,7 +990,7 @@ export default function AdminDashboard() {
   const [intakeShown,setIntakeShown]=useState(50);
   const loadIntake=async()=>{
     setIntakeLoading(true);
-    try{setIntakeRows(await sb.select("sb_inventory","select=item_code,name,brand,sku,size,size_eur,size_cm,barcode,srp,selling_price,status,condition,tab,created_at&order=created_at.desc&limit=1000"));}
+    try{setIntakeRows(await sb.select("sb_inventory","select=item_code,name,brand,sku,size,size_eur,size_cm,barcode,srp,selling_price,status,condition,tab,added_by,created_at&order=created_at.desc&limit=1000"));}
     catch(e:any){toast.error("Inventory load failed: "+(e.message||e));}
     finally{setIntakeLoading(false);}
   };
@@ -1326,7 +1331,7 @@ export default function AdminDashboard() {
           </div>}
         </div>
         <nav className="flex-1 py-4 px-2">
-          {NAV.map(n=>(
+          {NAV.filter(n=>!isStaff||n.id==="intake").map(n=>(
             <button key={n.id} onClick={()=>setSection(n.id)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-all ${section===n.id?"bg-[#C9A84C]/20 text-[#C9A84C]":"text-white/40 hover:text-white hover:bg-white/[.06]"}`}>
               <n.icon className="h-4 w-4 flex-shrink-0"/>
@@ -1366,24 +1371,25 @@ export default function AdminDashboard() {
           </h1>
           )}
           <div className="flex items-center gap-3">
-            <button onClick={()=>setCreateOrder(true)}
+            <span className="text-[10px] font-black px-2.5 py-1 rounded-full text-white" style={{background:getRoleColor()}}>{ROLE}</span>
+            {!isStaff&&<button onClick={()=>setCreateOrder(true)}
               className="flex items-center gap-2 bg-[#C9A84C] text-[#050f12] px-4 py-2 text-xs font-bold rounded-lg hover:opacity-90">
               <Plus className="h-3.5 w-3.5"/> Create Order
-            </button>
+            </button>}
             {section==="products"&&(
               <button onClick={()=>setProductModal({open:true})}
                 className="flex items-center gap-2 bg-[#C9A84C] text-[#050f12] px-4 py-2 text-xs font-bold rounded-lg hover:opacity-90">
                 <Plus className="h-3.5 w-3.5"/> Add Product
               </button>
             )}
-            <button onClick={()=>{syncInventory();}} disabled={syncing}
+            {!isStaff&&<button onClick={()=>{syncInventory();}} disabled={syncing}
               className="flex items-center gap-2 bg-[#0d2430] text-white px-4 py-2 text-xs font-semibold rounded-lg hover:bg-[#122d3a] disabled:opacity-50">
               <RefreshCw className={`h-3.5 w-3.5 ${syncing?"animate-spin":""}`}/> Sync Sheets
-            </button>
-            <button onClick={()=>setLocation("/upload-payment")}
+            </button>}
+            {!isStaff&&<button onClick={()=>setLocation("/upload-payment")}
               className="flex items-center gap-2 border border-gray-200 text-[#0d2430] px-4 py-2 text-xs font-semibold rounded-lg hover:bg-gray-50">
               <Zap className="h-3.5 w-3.5"/> Payment Portal
-            </button>
+            </button>}
           </div>
         </div>
 
@@ -2128,6 +2134,7 @@ export default function AdminDashboard() {
                     <th className="px-2 font-semibold">Barcode</th>
                     <th className="px-2 font-semibold bg-[#C9A84C]/10">SRP ₱</th>
                     <th className="px-2 font-semibold">Status</th>
+                    <th className="px-2 font-semibold">By</th>
                     <th className="px-2 font-semibold">Added</th>
                     <th className="px-2"></th>
                   </tr></thead>
@@ -2150,6 +2157,9 @@ export default function AdminDashboard() {
                           <td className="px-2 text-xs font-bold bg-[#C9A84C]/[.06]">{r.srp?((r.srp/100).toLocaleString("en-PH")):"—"}</td>
                           <td className="px-2"><span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${condCls}`}>{cond}</span>
                             {r.status==="Sold"&&<span className="ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-gray-800 text-white">Sold</span>}</td>
+                          <td className="px-2">{r.added_by
+                            ?<span className="text-[9px] font-black px-1.5 py-0.5 rounded-full text-white" style={{background:BY_COLORS[r.added_by]||"#6b7280"}}>{r.added_by}</span>
+                            :<span className="text-gray-300 text-[10px]">—</span>}</td>
                           <td className="px-2 text-[10px] text-gray-400 whitespace-nowrap">{r.created_at?fmtDate(r.created_at):"—"}</td>
                           <td className="px-2 whitespace-nowrap">
                             <button title="Edit in Products" onClick={()=>{setSearch(r.item_code);setSection("products");}} className="text-gray-400 hover:text-[#0d2430] mr-1"><Edit2 className="h-3.5 w-3.5"/></button>
@@ -2157,11 +2167,11 @@ export default function AdminDashboard() {
                           </td>
                         </tr>
                       );})}
-                    {!intakeLoading&&filteredIntake.length===0&&<tr><td colSpan={13} className="px-4 py-10 text-center text-sm text-gray-400">
+                    {!intakeLoading&&filteredIntake.length===0&&<tr><td colSpan={14} className="px-4 py-10 text-center text-sm text-gray-400">
                       {!intakeSearch&&intakeCond==="All"
                         ?<>Nothing scanned yet — hit <b>📷 SCAN SHOEBOX</b> to log your first pair.<br/><span className="text-[11px]">Everything else stays in Products &amp; Inventory.</span></>
                         :"No matches"}</td></tr>}
-                    {intakeLoading&&<tr><td colSpan={13} className="px-4 py-10 text-center text-sm text-gray-400">Loading…</td></tr>}
+                    {intakeLoading&&<tr><td colSpan={14} className="px-4 py-10 text-center text-sm text-gray-400">Loading…</td></tr>}
                   </tbody>
                 </table>
               </div>
