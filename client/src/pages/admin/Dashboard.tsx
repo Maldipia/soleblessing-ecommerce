@@ -543,7 +543,7 @@ function parseLabel(raw:string, fxRate:number){
   return out;
 }
 
-function ScanBoxModal({existingCodes,nextCode,onClose,onSaved}:{existingCodes:Set<string>;nextCode:string;onClose:()=>void;onSaved:()=>void}){
+function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existingCodes:Set<string>;allRows:any[];nextCode:string;onClose:()=>void;onSaved:()=>void}){
   const [f,setF]=useState<Intake>({...BLANK_INTAKE});
   const [fx,setFx]=useState(()=>{try{return Number(localStorage.getItem("sb_fx"))||56}catch{return 56}});
   const [phase,setPhase]=useState<"cam"|"form">("cam");
@@ -610,6 +610,17 @@ function ScanBoxModal({existingCodes,nextCode,onClose,onSaved}:{existingCodes:Se
 
   const codeNorm=normSBCode(f.code);
   const dup=codeNorm!==""&&existingCodes.has(codeNorm);
+  // "Already in the file?" — same barcode, or same SKU + size, flags a possible re-scan.
+  // Warning only: identical pairs legitimately exist as separate codes (1 code = 1 pair).
+  const dupHits=useMemo(()=>{
+    const hits:string[]=[];
+    const bc=f.barcode.trim(); const sku=f.sku.trim().toUpperCase(); const sz=f.usSize.trim().toUpperCase();
+    (allRows||[]).forEach((r:any)=>{
+      if(bc&&String(r.barcode||"")===bc) hits.push(`${r.item_code} (same barcode)`);
+      else if(sku&&sz&&String(r.sku||"").toUpperCase()===sku&&String(r.size||"").toUpperCase()===sz) hits.push(`${r.item_code} (same SKU + size)`);
+    });
+    return hits.slice(0,4);
+  },[f.barcode,f.sku,f.usSize,allRows]);
 
   const save=async()=>{
     if(!codeNorm){toast.error("Item code is required");return;}
@@ -624,7 +635,7 @@ function ScanBoxModal({existingCodes,nextCode,onClose,onSaved}:{existingCodes:Se
         brand:f.brand.trim()||null, condition:f.cond, category:"Sneakers",
         srp:Math.round(Number(f.srp)||0)*100, selling_price:Math.round(Number(f.selling)||0)*100,
         unit_cost:Math.round(Number(f.unitCost)||0)*100,
-        status:"Available", stock:1, tab:"2025", date_acquired:new Date().toISOString().slice(0,10),
+        status:"Available", stock:1, tab:"SCAN", date_acquired:new Date().toISOString().slice(0,10),
       });
       // photo upload is best-effort
       if(photo){
@@ -722,6 +733,13 @@ function ScanBoxModal({existingCodes,nextCode,onClose,onSaved}:{existingCodes:Se
               </div>
               {(f.cond==="Missing pair"||f.cond==="Unknown")&&<p className="text-[10px] text-red-500 font-semibold mt-1">⛔ held off the website until resolved</p>}
             </div>
+            {dupHits.length>0&&(
+              <div className="bg-amber-50 border border-amber-300 rounded-lg px-3 py-2">
+                <p className="text-[11px] font-bold text-amber-700">⚠️ Possibly already in the file:</p>
+                <p className="text-[10px] text-amber-700 font-mono">{dupHits.join(" · ")}</p>
+                <p className="text-[9px] text-amber-600">OK if this is a second identical pair — just make sure you're not re-scanning the same box.</p>
+              </div>
+            )}
             <button onClick={()=>setShowPrice(s=>!s)} className="text-[11px] font-bold text-gray-400">{showPrice?"▾":"▸"} Pricing (optional — no price = hidden from store)</button>
             {showPrice&&(
               <div className="grid grid-cols-3 gap-2">
@@ -963,10 +981,11 @@ export default function AdminDashboard() {
   const [intakeLoading,setIntakeLoading]=useState(false);
   const [intakeSearch,setIntakeSearch]=useState("");
   const [intakeCond,setIntakeCond]=useState("All");
+  const [intakeAll,setIntakeAll]=useState(false); // false = scanned pairs only (clean intake log)
   const [intakeShown,setIntakeShown]=useState(50);
   const loadIntake=async()=>{
     setIntakeLoading(true);
-    try{setIntakeRows(await sb.select("sb_inventory","select=item_code,name,brand,sku,size,size_eur,size_cm,barcode,srp,selling_price,status,condition,created_at&order=created_at.desc&limit=1000"));}
+    try{setIntakeRows(await sb.select("sb_inventory","select=item_code,name,brand,sku,size,size_eur,size_cm,barcode,srp,selling_price,status,condition,tab,created_at&order=created_at.desc&limit=1000"));}
     catch(e:any){toast.error("Inventory load failed: "+(e.message||e));}
     finally{setIntakeLoading(false);}
   };
@@ -977,13 +996,15 @@ export default function AdminDashboard() {
     return m?String(m+1).padStart(4,"0"):"0001";
   },[intakeRows]);
   const imgByCode=useMemo(()=>{const m=new Map<string,string>();(inventory||[]).forEach((p:any)=>{if(p.imageUrl)m.set(p.itemCode,p.imageUrl);});return m;},[inventory]);
+  const scannedCount=useMemo(()=>intakeRows.filter((r:any)=>r.tab==="SCAN").length,[intakeRows]);
   const filteredIntake=useMemo(()=>intakeRows.filter((r:any)=>{
+    if(!intakeAll&&r.tab!=="SCAN")return false; // intake log = scanned pairs only by default
     if(intakeCond!=="All"&&(r.condition||"Good")!==intakeCond&&!(intakeCond==="Good"&&(r.condition||"")==="New"))return false;
     if(!intakeSearch)return true;
     const q=intakeSearch.toLowerCase();
     return [r.item_code,r.name,r.brand,r.sku,r.size,r.size_eur,r.size_cm,r.barcode].some(v=>String(v||"").toLowerCase().includes(q));
-  }),[intakeRows,intakeSearch,intakeCond]);
-  useEffect(()=>{setIntakeShown(50);},[intakeSearch,intakeCond]);
+  }),[intakeRows,intakeSearch,intakeCond,intakeAll]);
+  useEffect(()=>{setIntakeShown(50);},[intakeSearch,intakeCond,intakeAll]);
   const intakeCSV=()=>{
     const cols=["item_code","brand","name","sku","size","size_eur","size_cm","barcode","srp","status","condition","created_at"];
     const esc=(v:any)=>{const t=String(v??"");return /[",\n]/.test(t)?('"'+t.replace(/"/g,'""')+'"'):t;};
@@ -1290,7 +1311,7 @@ export default function AdminDashboard() {
       {qrModal?.open && <QRModal itemCode={qrModal.itemCode} name={qrModal.name} onClose={()=>setQrModal(null)}/>}
       {productModal.open&&<ProductModal product={productModal.product} onClose={()=>setProductModal({open:false})} onSave={()=>{setProductModal({open:false});loadProducts();}}/>}
       {createOrder&&<CreateOrderModal inventory={inventory||[]} onClose={()=>setCreateOrder(false)} onPlaced={()=>{loadOrders();refetchInv();refreshInventory().catch(()=>{});}}/>}
-      {scanBox&&<ScanBoxModal existingCodes={existingCodes} nextCode={nextCode}
+      {scanBox&&<ScanBoxModal existingCodes={existingCodes} allRows={intakeRows} nextCode={nextCode}
         onClose={()=>setScanBox(false)}
         onSaved={()=>{loadIntake();refetchInv();refreshInventory().catch(()=>{});}}/>}
 
@@ -2077,6 +2098,10 @@ export default function AdminDashboard() {
                     className="border border-gray-200 rounded-lg px-2 text-xs outline-none">
                     {["All","Good","Stained","Missing pair","Unknown"].map(c=><option key={c}>{c}</option>)}
                   </select>
+                  <div className="flex rounded-lg border border-gray-200 overflow-hidden text-[11px] font-bold">
+                    <button onClick={()=>setIntakeAll(false)} className={`px-3 py-2 ${!intakeAll?"bg-[#0d2430] text-white":"text-gray-400"}`}>📷 Scanned ({scannedCount})</button>
+                    <button onClick={()=>setIntakeAll(true)} className={`px-3 py-2 ${intakeAll?"bg-[#0d2430] text-white":"text-gray-400"}`}>All items ({intakeRows.length})</button>
+                  </div>
                 </div>
                 <div className="flex gap-2">
                   <button onClick={()=>setScanBox(true)}
@@ -2092,9 +2117,9 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              <div className="bg-white border border-gray-100 rounded-xl overflow-x-auto">
+              <div className="bg-white border border-gray-100 rounded-xl overflow-auto max-h-[68vh]">
                 <table className="w-full text-sm min-w-[980px]">
-                  <thead><tr className="text-[10px] uppercase tracking-wider text-gray-400 text-left border-b border-gray-100">
+                  <thead className="sticky top-0 bg-white z-10 shadow-[0_1px_0_0_rgba(0,0,0,.06)]"><tr className="text-[10px] uppercase tracking-wider text-gray-400 text-left">
                     <th className="px-3 py-2.5 font-semibold">📸</th>
                     <th className="px-2 font-semibold">Item Code</th>
                     <th className="px-2 font-semibold">Brand</th>
@@ -2136,7 +2161,9 @@ export default function AdminDashboard() {
                         </tr>
                       );})}
                     {!intakeLoading&&filteredIntake.length===0&&<tr><td colSpan={13} className="px-4 py-10 text-center text-sm text-gray-400">
-                      {intakeRows.length===0?"No inventory yet — hit 📷 SCAN SHOEBOX to add your first pair":"No matches"}</td></tr>}
+                      {!intakeAll&&!intakeSearch&&intakeCond==="All"
+                        ?<>Nothing scanned yet — hit <b>📷 SCAN SHOEBOX</b> to log your first pair.<br/><span className="text-[11px]">Your {intakeRows.length} sheet-imported items live under "All items".</span></>
+                        :"No matches"}</td></tr>}
                     {intakeLoading&&<tr><td colSpan={13} className="px-4 py-10 text-center text-sm text-gray-400">Loading…</td></tr>}
                   </tbody>
                 </table>
