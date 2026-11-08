@@ -597,8 +597,19 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
       if(BD){try{const det=new BD({formats:["ean_13","upc_a","upc_e","ean_8","code_128"]});
         const codes=await det.detect(c);
         if(codes?.length)setF(p=>p.barcode?p:{...p,barcode:codes[0].rawValue});}catch{}}
-      const T=await import("tesseract.js");
-      const worker=await (T as any).createWorker("eng");
+      // OCR engine from CDN at runtime (audited live) — the bundled dynamic chunk
+      // didn't expose createWorker in production, so the script-tag path is the
+      // deterministic one. Cached by the browser after first load.
+      const T:any = await new Promise((ok,err)=>{
+        const w=window as any;
+        if(w.Tesseract) return ok(w.Tesseract);
+        const s=document.createElement("script");
+        s.src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js";
+        s.onload=()=>ok((window as any).Tesseract);
+        s.onerror=()=>err(new Error("OCR engine failed to load — check internet"));
+        document.head.appendChild(s);
+      });
+      const worker=await T.createWorker("eng");
       const {data}=await worker.recognize(c);
       await worker.terminate();
       const got=parseLabel(data.text||"",fx);
