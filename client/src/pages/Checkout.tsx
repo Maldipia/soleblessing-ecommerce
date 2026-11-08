@@ -138,7 +138,18 @@ export default function Checkout() {
           } : null,
         }),
       });
-      if (!placeRes.ok) throw new Error("place-order failed");
+      if (!placeRes.ok) {
+        const out = await placeRes.json().catch(() => ({} as any));
+        if (placeRes.status === 409 && out.error === "out_of_stock") {
+          const sold = items.find(i => i.id === out.item_code);
+          const soldName = sold ? `${sold.name} (size ${sold.size})` : `item ${out.item_code}`;
+          setError(`Sorry — ${soldName} just sold out. Remove it from your cart to continue.`);
+          try { const { refreshInventory } = await import("@/hooks/useInventory"); refreshInventory(); } catch {}
+          setSubmitting(false);
+          return;
+        }
+        throw new Error("place-order failed");
+      }
 
       clearCart();
       sessionStorage.setItem("sb_last_order", JSON.stringify({

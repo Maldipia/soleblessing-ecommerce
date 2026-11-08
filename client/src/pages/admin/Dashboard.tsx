@@ -1086,7 +1086,7 @@ export default function AdminDashboard() {
                 </button>
                 <a href="https://docs.google.com/spreadsheets/d/13eM-zpN--AVOwN4uFUSVeQX0e6YA922VzgjOomhfk-Y/edit" target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-2 bg-[#0d2430] text-white px-3 py-2 text-xs font-semibold rounded-lg hover:bg-[#122d3a]">
-                  <ExternalLink className="h-3.5 w-3.5"/> Sheets
+                  <ExternalLink className="h-3.5 w-3.5"/> Sheet archive
                 </a>
               </div>
               <div className="space-y-3">
