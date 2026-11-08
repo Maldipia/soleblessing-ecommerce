@@ -78,6 +78,9 @@ export default async function handler(req, res) {
       // Damaged/Archived never reach the public store.
       const notSellable = status.includes('SOLD') || ['MISSING', 'RESERVED', 'RETURNED', 'DAMAGED', 'ARCHIVED'].includes(status);
       if (notSellable) continue;
+      // Intake condition gate: Missing pair / Unknown are held off the store
+      const cond = (r.condition || '').toUpperCase().trim();
+      if (cond === 'MISSING PAIR' || cond === 'UNKNOWN') continue;
       const price = r.selling_price || r.srp || 0;
       if (!price) continue;
       if ((r.stock ?? 1) <= 0) continue;
@@ -102,6 +105,9 @@ export default async function handler(req, res) {
         brand: r.brand || detectBrand(r.name || '', r.sku || ''),
         condition: r.condition || 'New',
         category: r.category || 'Sneakers',
+        sizeEur: r.size_eur || '',
+        sizeCm: r.size_cm || '',
+        barcode: r.barcode || '',
         unitCost: r.unit_cost || null, // admin only
         edited: !!(r.updated_at && r.created_at && r.updated_at !== r.created_at),
       });

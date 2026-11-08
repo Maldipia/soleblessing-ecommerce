@@ -15,7 +15,7 @@ import AdminSettings from "./Settings";
 import { useInventory, refreshInventory } from "@/hooks/useInventory";
 import AdminPromos from "./Promos";
 
-type Section = "overview"|"products"|"orders"|"reports"|"promos"|"settings"|"analytics"|"system";
+type Section = "overview"|"products"|"orders"|"intake"|"reports"|"promos"|"settings"|"analytics"|"system";
 
 const ADMIN_KEY = "sb_admin_v1";
 const fmt = (c: number) => `₱${(c/100).toLocaleString("en-PH")}`;
@@ -473,6 +473,273 @@ function CreateOrderModal({inventory,onClose,onPlaced}:{inventory:any[];onClose:
   );
 }
 
+// ─── Shoebox Scanner — intake (approved design Nov 9 2026) ──────────────
+// Reads barcode (native BarcodeDetector, free) + label text (tesseract.js,
+// on-device, no API credits) and parses brand/model/SKU/sizes/SRP by PATTERN,
+// never by layout. Item code is manual-first; nothing saves without confirm.
+type Intake = { code:string; brand:string; model:string; sku:string; usSize:string; eurSize:string; cmSize:string;
+  barcode:string; srp:string; cond:string; unitCost:string; selling:string };
+const BLANK_INTAKE: Intake = { code:"", brand:"", model:"", sku:"", usSize:"", eurSize:"", cmSize:"", barcode:"", srp:"", cond:"Good", unitCost:"", selling:"" };
+const CONDS = ["Good","Stained","Missing pair","Unknown"];
+const normSBCode = (v:string)=>v.replace(/\s+/g,"").toUpperCase();
+
+function parseLabel(raw:string, fxRate:number){
+  const text = raw.replace(/[|]/g," ");
+  const U = text.toUpperCase();
+  const out:any = {};
+  // Brand + SKU patterns (pattern beats position — layouts differ per brand)
+  const nikeSku = U.match(/\b(\d{6})[-\s]?(\d{3})\b/);
+  const adiSku  = U.match(/\b([A-Z]{1,2}[0-9]{4,5})\b/);
+  const asicsSku= U.match(/\b(\d{4}[A-Z]\d{3})(?:[-\s]?(\d{3}))?\b/);
+  const nbSku   = U.match(/\b([MUW][A-Z]?\d{3,4}[A-Z]{0,4})\b/);
+  if (/JORDAN/.test(U)) out.brand="Jordan";
+  else if (/NIKE|WMNS/.test(U) || nikeSku) out.brand="Nike";
+  else if (/ADIDAS|ORIGINALS/.test(U)) out.brand="Adidas";
+  else if (/ASICS/.test(U) || asicsSku) out.brand="ASICS";
+  else if (/NEW BALANCE/.test(U)) out.brand="New Balance";
+  else if (/CONVERSE/.test(U)) out.brand="Converse";
+  else if (/VANS/.test(U)) out.brand="Vans";
+  else if (/PUMA/.test(U)) out.brand="Puma";
+  if (asicsSku && /ASICS|GEL|\d{4}[A-Z]\d{3}/.test(U)) out.sku = asicsSku[0].replace(/\s/g,"");
+  else if (nikeSku && out.brand!=="Adidas") out.sku = `${nikeSku[1]}-${nikeSku[2]}`;
+  else if (adiSku && out.brand==="Adidas") out.sku = adiSku[1];
+  else if (nbSku && out.brand==="New Balance") out.sku = nbSku[1];
+  else if (adiSku) out.sku = adiSku[1];
+  // Model: longest line that isn't codes/sizes/origin boilerplate
+  const lines = text.split(/\n+/).map(s=>s.trim()).filter(Boolean);
+  const modelLine = lines.filter(l=>{
+    const u=l.toUpperCase();
+    if (u.length<4||u.length>40) return false;
+    if (/MADE IN|FABRIQU|INDONESIA|VIETNAM|CHINA|UPC|PRICE|US\b|UK\b|EUR|\bCM\b|\d{6,}/.test(u)) return false;
+    return /[A-Z]{3,}/.test(u) && !/^\d/.test(l);
+  }).sort((a,b)=>b.length-a.length)[0] || "";
+  out.model = modelLine;
+  // Gender / youth markers
+  const isW = /WMNS|WOMEN/.test(U); const isY = /\bGS\b|\bPS\b|\bTD\b|\(J\)|_J\b|\bJ\b.*(US|SIZE)|JUNIOR|YOUTH/.test(U);
+  // Sizes — accept fractions and decimals
+  const frac=(s:string)=>s.replace(/\s*1\/2|½/,".5").replace(/\s*2\/3|⅔/,".7").replace(/\s*1\/3|⅓/,".3").replace(",",".");
+  const us = U.match(/\bUS\D{0,3}(\d{1,2}(?:[.,]5|\s?1\/2|½)?)/) || U.match(/\b(\d{1,2}(?:[.,]5|\s?1\/2|½)?)\s*(?:US|M\b|W\b)/);
+  const eur = U.match(/\b(?:EUR?|F)\W{0,2}(\d{2}(?:[.,]\d|\s?[12]\/3|⅔|½|\s?1\/2)?)/);
+  const cm = U.match(/\b(\d{2}(?:[.,]5)?)\s?CM\b/) || U.match(/\bCM\W{0,2}(\d{2}(?:[.,]5)?)/) || U.match(/\bJP\W{0,2}(\d{2}(?:[.,]5)?)/);
+  if (us) out.usSize = frac(us[1]) + (isY?"Y":isW?"W":"M");
+  if (eur) out.eurSize = frac(eur[1]);
+  if (cm) out.cmSize = frac(cm[1]);
+  // SRP from price sticker — any sign; ₱ as-is, $/€ converted, bare large number near PRICE
+  const php = text.match(/(?:₱|PHP)\s*([\d,]+(?:\.\d{2})?)/i);
+  const usd = text.match(/(?:\$|USD)\s*([\d,]+(?:\.\d{2})?)/i);
+  const near = text.match(/PRICE[^\d]{0,12}([\d,]+(?:\.\d{2})?)/i);
+  const num = (s:string)=>parseFloat(s.replace(/,/g,""));
+  if (php) out.srp = String(Math.round(num(php[1])));
+  else if (usd) out.srp = String(Math.round(num(usd[1])*fxRate));
+  else if (near && num(near[1])>100) out.srp = String(Math.round(num(near[1])));
+  return out;
+}
+
+function ScanBoxModal({existingCodes,nextCode,onClose,onSaved}:{existingCodes:Set<string>;nextCode:string;onClose:()=>void;onSaved:()=>void}){
+  const [f,setF]=useState<Intake>({...BLANK_INTAKE});
+  const [fx,setFx]=useState(()=>{try{return Number(localStorage.getItem("sb_fx"))||56}catch{return 56}});
+  const [phase,setPhase]=useState<"cam"|"form">("cam");
+  const [busy,setBusy]=useState("");
+  const [saving,setSaving]=useState(false);
+  const [photo,setPhoto]=useState<string|null>(null); // dataURL for upload
+  const [showPrice,setShowPrice]=useState(false);
+  const videoRef=(window as any).__sbVid||={current:null as HTMLVideoElement|null};
+  const streamRef=(window as any).__sbStream||={current:null as MediaStream|null};
+  const scanTimer=(window as any).__sbTimer||={current:0};
+
+  const stopCam=()=>{try{streamRef.current?.getTracks().forEach((t:any)=>t.stop());}catch{} streamRef.current=null;
+    if(scanTimer.current){clearInterval(scanTimer.current);scanTimer.current=0;}};
+  const startCam=async()=>{
+    try{
+      const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"},audio:false});
+      streamRef.current=s;
+      const v=document.getElementById("sb-scan-video") as HTMLVideoElement|null;
+      if(v){v.srcObject=s;await v.play();}
+      // live barcode loop (free, native)
+      const BD=(window as any).BarcodeDetector;
+      if(BD){
+        const det=new BD({formats:["ean_13","upc_a","upc_e","ean_8","code_128"]});
+        scanTimer.current=window.setInterval(async()=>{
+          const v2=document.getElementById("sb-scan-video") as HTMLVideoElement|null;
+          if(!v2||v2.readyState<2)return;
+          try{const codes=await det.detect(v2);
+            if(codes?.length){setF(p=>p.barcode?p:{...p,barcode:codes[0].rawValue});}}catch{}
+        },700);
+      }
+    }catch(e:any){toast.error("Camera blocked — allow camera access, or type the fields manually");setPhase("form");}
+  };
+  useEffect(()=>{ if(phase==="cam") startCam(); return stopCam; // eslint-disable-line
+  },[phase]);
+
+  const capture=async()=>{
+    const v=document.getElementById("sb-scan-video") as HTMLVideoElement|null;
+    if(!v||v.readyState<2){setPhase("form");return;}
+    const c=document.createElement("canvas");
+    c.width=v.videoWidth;c.height=v.videoHeight;
+    c.getContext("2d")!.drawImage(v,0,0);
+    setPhoto(c.toDataURL("image/jpeg",0.85));
+    stopCam();setPhase("form");
+    setBusy("Reading label…");
+    try{
+      const BD=(window as any).BarcodeDetector;
+      if(BD){try{const det=new BD({formats:["ean_13","upc_a","upc_e","ean_8","code_128"]});
+        const codes=await det.detect(c);
+        if(codes?.length)setF(p=>p.barcode?p:{...p,barcode:codes[0].rawValue});}catch{}}
+      const T=await import("tesseract.js");
+      const worker=await (T as any).createWorker("eng");
+      const {data}=await worker.recognize(c);
+      await worker.terminate();
+      const got=parseLabel(data.text||"",fx);
+      setF(p=>({...p,
+        brand:p.brand||got.brand||"", model:p.model||got.model||"", sku:p.sku||got.sku||"",
+        usSize:p.usSize||got.usSize||"", eurSize:p.eurSize||got.eurSize||"", cmSize:p.cmSize||got.cmSize||"",
+        srp:p.srp||got.srp||"",
+      }));
+      toast.success("Label read — check the green fields");
+    }catch(e:any){toast.info("Couldn't read text ("+(e.message||e)+") — fill fields manually");}
+    finally{setBusy("");}
+  };
+
+  const codeNorm=normSBCode(f.code);
+  const dup=codeNorm!==""&&existingCodes.has(codeNorm);
+
+  const save=async()=>{
+    if(!codeNorm){toast.error("Item code is required");return;}
+    if(dup){toast.error(`Code ${codeNorm} already exists — pick another`);return;}
+    if(!f.model.trim()&&!f.sku.trim()){toast.error("Give it at least a model or SKU");return;}
+    setSaving(true);
+    try{
+      const name=[f.brand&&!f.model.toUpperCase().includes(f.brand.toUpperCase())?f.brand:"",f.model].filter(Boolean).join(" ").trim()||f.sku;
+      await sb.insert("sb_inventory",{
+        item_code:codeNorm, name, sku:f.sku.trim(), size:f.usSize.trim(),
+        size_eur:f.eurSize.trim()||null, size_cm:f.cmSize.trim()||null, barcode:f.barcode.trim()||null,
+        brand:f.brand.trim()||null, condition:f.cond, category:"Sneakers",
+        srp:Math.round(Number(f.srp)||0)*100, selling_price:Math.round(Number(f.selling)||0)*100,
+        unit_cost:Math.round(Number(f.unitCost)||0)*100,
+        status:"Available", stock:1, tab:"2025", date_acquired:new Date().toISOString().slice(0,10),
+      });
+      // photo upload is best-effort
+      if(photo){
+        try{
+          const pw=(()=>{try{return sessionStorage.getItem("sb_admin_pw")||""}catch{return ""}})();
+          await fetch("/api/upload-image",{method:"POST",headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({password:pw,item_code:codeNorm,sku:f.sku.trim(),content_type:"image/jpeg",base64:photo.split(",")[1]})});
+        }catch{}
+      }
+      toast.success(`${codeNorm} saved — ${name}`);
+      onSaved();
+      // batch mode: straight back to camera for the next box
+      setF({...BLANK_INTAKE});setPhoto(null);setPhase("cam");
+    }catch(e:any){toast.error("Save failed: "+(e.message||e));}
+    finally{setSaving(false);}
+  };
+
+  const printQR=()=>{
+    const url=`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent("https://soleblessingofficial.com/inventory/"+codeNorm)}`;
+    const w=window.open("","_blank","width=320,height=420");
+    if(!w)return;
+    w.document.write(`<div style="font-family:sans-serif;text-align:center;padding:10px"><img src="${url}" onload="setTimeout(()=>window.print(),300)"/><div style="font-weight:800;font-size:18px;font-family:monospace">${codeNorm}</div><div style="font-size:12px">${f.brand} ${f.model}</div><div style="font-size:12px">${f.usSize}${f.eurSize?" · EU "+f.eurSize:""}</div></div>`);
+  };
+
+  const inp="w-full border border-gray-200 rounded-lg px-2.5 py-2 text-sm outline-none focus:border-[#C9A84C]";
+  const auto="bg-green-50 border-green-300";
+  return (
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-start md:items-center justify-center p-2 md:p-4 overflow-y-auto"
+      onClick={e=>{if(e.target===e.currentTarget){stopCam();onClose();}}}>
+      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden my-2">
+        <div className="bg-[#050f12] px-5 py-3.5 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-bold tracking-[.15em] uppercase text-[#C9A84C]">📦 Scan Shoebox</p>
+            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"}</p>
+          </div>
+          <button onClick={()=>{stopCam();onClose();}} className="text-white/40 hover:text-white"><X className="h-5 w-5"/></button>
+        </div>
+
+        {phase==="cam"&&(
+          <div className="p-4">
+            <div className="relative rounded-xl overflow-hidden bg-black aspect-[4/3]">
+              <video id="sb-scan-video" playsInline muted className="w-full h-full object-cover"/>
+              <div className="absolute inset-6 border-2 border-dashed border-[#C9A84C]/80 rounded-lg pointer-events-none"/>
+              {f.barcode&&<div className="absolute top-2 left-2 bg-green-500 text-white text-[10px] font-bold px-2 py-1 rounded">✓ barcode {f.barcode}</div>}
+            </div>
+            <button onClick={capture} className="mt-3 w-full bg-[#C9A84C] text-[#050f12] py-3.5 rounded-xl font-black text-sm">📸 CAPTURE LABEL</button>
+            <button onClick={()=>{stopCam();setPhase("form");}} className="mt-2 w-full border border-gray-200 py-2.5 rounded-xl text-xs font-semibold text-gray-500">Skip camera — type manually</button>
+          </div>
+        )}
+
+        {phase==="form"&&(
+          <div className="p-4 space-y-2.5">
+            {busy&&<div className="text-xs font-bold text-amber-600 bg-amber-50 rounded-lg px-3 py-2 animate-pulse">{busy}</div>}
+            <div>
+              <label className="text-[9px] font-bold uppercase tracking-wider text-amber-600">🟠 Item code — you enter</label>
+              <div className="flex gap-2">
+                <input className={`${inp} font-mono font-black text-lg ${dup?"border-red-400 bg-red-50":"border-amber-400 bg-amber-50"}`}
+                  value={f.code} onChange={e=>setF({...f,code:e.target.value})} placeholder={nextCode} autoFocus/>
+                <button onClick={()=>setF({...f,code:nextCode})} className="text-[10px] font-bold text-[#8a6d25] border border-[#C9A84C] rounded-lg px-2 whitespace-nowrap">use {nextCode}</button>
+              </div>
+              <p className={`text-[10px] font-semibold ${dup?"text-red-500":codeNorm?"text-green-600":"text-gray-400"}`}>
+                {dup?`✗ ${codeNorm} already exists`:codeNorm?`✓ ${codeNorm} is free`:"type the code on the box / your series"}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div><label className="text-[9px] font-bold uppercase text-gray-400">Brand</label>
+                <input className={`${inp} ${f.brand?auto:""}`} value={f.brand} onChange={e=>setF({...f,brand:e.target.value})}/></div>
+              <div><label className="text-[9px] font-bold uppercase text-gray-400">SKU</label>
+                <input className={`${inp} ${f.sku?auto:""}`} value={f.sku} onChange={e=>setF({...f,sku:e.target.value})}/></div>
+            </div>
+            <div><label className="text-[9px] font-bold uppercase text-gray-400">Model</label>
+              <input className={`${inp} ${f.model?auto:""}`} value={f.model} onChange={e=>setF({...f,model:e.target.value})}/></div>
+            <div className="grid grid-cols-3 gap-2">
+              <div><label className="text-[9px] font-bold uppercase text-gray-400">Size US</label>
+                <input className={`${inp} ${f.usSize?auto:""}`} value={f.usSize} onChange={e=>setF({...f,usSize:e.target.value})} placeholder="6.5W"/></div>
+              <div><label className="text-[9px] font-bold uppercase text-gray-400">EUR</label>
+                <input className={`${inp} ${f.eurSize?auto:""}`} value={f.eurSize} onChange={e=>setF({...f,eurSize:e.target.value})}/></div>
+              <div><label className="text-[9px] font-bold uppercase text-gray-400">CM</label>
+                <input className={`${inp} ${f.cmSize?auto:""}`} value={f.cmSize} onChange={e=>setF({...f,cmSize:e.target.value})}/></div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div><label className="text-[9px] font-bold uppercase text-gray-400">Barcode</label>
+                <input className={`${inp} font-mono text-xs ${f.barcode?auto:""}`} value={f.barcode} onChange={e=>setF({...f,barcode:e.target.value})}/></div>
+              <div><label className="text-[9px] font-bold uppercase text-gray-400">SRP ₱ {f.srp&&<button onClick={()=>setF({...f,srp:""})} className="text-red-400 font-bold">✕ clear</button>}</label>
+                <input className={`${inp} ${f.srp?auto:""}`} inputMode="numeric" value={f.srp} onChange={e=>setF({...f,srp:e.target.value})} placeholder="from sticker"/></div>
+            </div>
+            <div>
+              <label className="text-[9px] font-bold uppercase text-amber-600">🟠 Status</label>
+              <div className="grid grid-cols-4 gap-1.5">
+                {CONDS.map(c=>(
+                  <button key={c} onClick={()=>setF({...f,cond:c})}
+                    className={`py-2 rounded-lg text-[10px] font-bold border ${f.cond===c
+                      ?(c==="Good"?"bg-green-500 text-white border-green-500":c==="Stained"?"bg-amber-500 text-white border-amber-500":"bg-red-500 text-white border-red-500")
+                      :"border-gray-200 text-gray-500"}`}>{c}</button>
+                ))}
+              </div>
+              {(f.cond==="Missing pair"||f.cond==="Unknown")&&<p className="text-[10px] text-red-500 font-semibold mt-1">⛔ held off the website until resolved</p>}
+            </div>
+            <button onClick={()=>setShowPrice(s=>!s)} className="text-[11px] font-bold text-gray-400">{showPrice?"▾":"▸"} Pricing (optional — no price = hidden from store)</button>
+            {showPrice&&(
+              <div className="grid grid-cols-3 gap-2">
+                <div><label className="text-[9px] font-bold uppercase text-gray-400">Unit cost ₱</label>
+                  <input className={inp} inputMode="numeric" value={f.unitCost} onChange={e=>setF({...f,unitCost:e.target.value})}/></div>
+                <div><label className="text-[9px] font-bold uppercase text-gray-400">Selling ₱</label>
+                  <input className={inp} inputMode="numeric" value={f.selling} onChange={e=>setF({...f,selling:e.target.value})}/></div>
+                <div><label className="text-[9px] font-bold uppercase text-gray-400">$→₱ rate</label>
+                  <input className={inp} inputMode="numeric" value={fx} onChange={e=>{const v=Number(e.target.value)||0;setFx(v);try{localStorage.setItem("sb_fx",String(v))}catch{}}}/></div>
+              </div>
+            )}
+            <div className="flex gap-2 pt-1">
+              <button onClick={()=>{setF({...BLANK_INTAKE});setPhoto(null);setPhase("cam");}}
+                className="border border-gray-200 text-gray-500 rounded-xl px-3 text-xs font-bold">↺ rescan</button>
+              <button onClick={save} disabled={saving||dup}
+                className="flex-1 bg-[#0d2430] text-white py-3 rounded-xl font-black text-sm disabled:opacity-40">
+                {saving?"Saving…":"💾 SAVE PAIR & SCAN NEXT"}</button>
+              {codeNorm&&!dup&&<button onClick={printQR} className="border border-[#C9A84C] text-[#8a6d25] rounded-xl px-3 text-xs font-bold">🖨️ QR</button>}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Dashboard ─────────────────────────────────────────────────────
 export default function AdminDashboard() {
   const [,setLocation] = useLocation();
@@ -681,6 +948,41 @@ export default function AdminDashboard() {
       revenue: sbOrders.filter(o=>o.status!=="cancelled").reduce((s,o)=>s+o.total,0),
     };
   },[inventory,inventoryGrouped,sbOrders]);
+
+  // ── Shoebox intake / Latest Inventory ──
+  const [scanBox,setScanBox]=useState(false);
+  const [intakeRows,setIntakeRows]=useState<any[]>([]);
+  const [intakeLoading,setIntakeLoading]=useState(false);
+  const [intakeSearch,setIntakeSearch]=useState("");
+  const [intakeCond,setIntakeCond]=useState("All");
+  const [intakeShown,setIntakeShown]=useState(50);
+  const loadIntake=async()=>{
+    setIntakeLoading(true);
+    try{setIntakeRows(await sb.select("sb_inventory","select=item_code,name,brand,sku,size,size_eur,size_cm,barcode,srp,selling_price,status,condition,created_at&order=created_at.desc&limit=1000"));}
+    catch(e:any){toast.error("Inventory load failed: "+(e.message||e));}
+    finally{setIntakeLoading(false);}
+  };
+  useEffect(()=>{ if(section==="intake"&&!intakeRows.length) loadIntake(); },[section]); // eslint-disable-line
+  const existingCodes=useMemo(()=>new Set(intakeRows.map((r:any)=>normSBCode(String(r.item_code||"")))),[intakeRows]);
+  const nextCode=useMemo(()=>{
+    let m=0; intakeRows.forEach((r:any)=>{const c=String(r.item_code||"");if(/^\d+$/.test(c))m=Math.max(m,parseInt(c,10));});
+    return m?String(m+1).padStart(4,"0"):"0001";
+  },[intakeRows]);
+  const imgByCode=useMemo(()=>{const m=new Map<string,string>();(inventory||[]).forEach((p:any)=>{if(p.imageUrl)m.set(p.itemCode,p.imageUrl);});return m;},[inventory]);
+  const filteredIntake=useMemo(()=>intakeRows.filter((r:any)=>{
+    if(intakeCond!=="All"&&(r.condition||"Good")!==intakeCond&&!(intakeCond==="Good"&&(r.condition||"")==="New"))return false;
+    if(!intakeSearch)return true;
+    const q=intakeSearch.toLowerCase();
+    return [r.item_code,r.name,r.brand,r.sku,r.size,r.size_eur,r.size_cm,r.barcode].some(v=>String(v||"").toLowerCase().includes(q));
+  }),[intakeRows,intakeSearch,intakeCond]);
+  useEffect(()=>{setIntakeShown(50);},[intakeSearch,intakeCond]);
+  const intakeCSV=()=>{
+    const cols=["item_code","brand","name","sku","size","size_eur","size_cm","barcode","srp","status","condition","created_at"];
+    const esc=(v:any)=>{const t=String(v??"");return /[",\n]/.test(t)?('"'+t.replace(/"/g,'""')+'"'):t;};
+    const csv=[cols.join(","),...filteredIntake.map((r:any)=>cols.map(c=>esc(c==="srp"?(r.srp||0)/100:r[c])).join(","))].join("\n");
+    const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+    a.download=`sb_latest_inventory_${new Date().toISOString().slice(0,10)}.csv`;a.click();
+  };
 
   // ── Overview: date range, KPIs, chart, channels, activity ──
   const [createOrder,setCreateOrder]=useState(false);
@@ -930,6 +1232,7 @@ export default function AdminDashboard() {
     {id:"overview" as Section, icon:LayoutDashboard, label:"Dashboard"},
     {id:"orders"    as Section, icon:ShoppingCart,   label:"Orders"},
     {id:"products"  as Section, icon:Package,        label:"Products & Inventory"},
+    {id:"intake"    as Section, icon:QrCode,         label:"Latest Inventory"},
     {id:"reports"   as Section, icon:TrendingUp,     label:"Sales & Reports"},
     {id:"promos"    as Section, icon:Tag,            label:"Vouchers & Promos"},
     {id:"analytics" as Section, icon:BarChart3,      label:"Analytics"},
@@ -979,6 +1282,9 @@ export default function AdminDashboard() {
       {qrModal?.open && <QRModal itemCode={qrModal.itemCode} name={qrModal.name} onClose={()=>setQrModal(null)}/>}
       {productModal.open&&<ProductModal product={productModal.product} onClose={()=>setProductModal({open:false})} onSave={()=>{setProductModal({open:false});loadProducts();}}/>}
       {createOrder&&<CreateOrderModal inventory={inventory||[]} onClose={()=>setCreateOrder(false)} onPlaced={()=>{loadOrders();refetchInv();refreshInventory().catch(()=>{});}}/>}
+      {scanBox&&<ScanBoxModal existingCodes={existingCodes} nextCode={nextCode}
+        onClose={()=>setScanBox(false)}
+        onSaved={()=>{loadIntake();refetchInv();refreshInventory().catch(()=>{});}}/>}
 
       {/* Sidebar */}
       <aside className={`${sidebarOpen?"w-56":"w-14"} flex-shrink-0 bg-[#050f12] flex flex-col transition-all duration-300 sticky top-0 h-screen overflow-y-auto`}>
@@ -1027,7 +1333,7 @@ export default function AdminDashboard() {
             </div>
           ):(
           <h1 className="text-lg font-black text-[#0d2430] tracking-tight capitalize">
-            {section==="promos"?"Vouchers & Promos":section==="reports"?"Sales & Reports":section==="analytics"?"Analytics":section==="system"?"System":section.charAt(0).toUpperCase()+section.slice(1)}
+            {section==="promos"?"Vouchers & Promos":section==="reports"?"Sales & Reports":section==="intake"?"Latest Inventory":section==="analytics"?"Analytics":section==="system"?"System":section.charAt(0).toUpperCase()+section.slice(1)}
           </h1>
           )}
           <div className="flex items-center gap-3">
@@ -1745,6 +2051,94 @@ export default function AdminDashboard() {
                   <span className="font-black text-[#0d2430]">{fmt(stats.revenue)}</span>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* ── LATEST INVENTORY (shoebox intake log) ── */}
+          {section==="intake"&&(
+            <div className="space-y-4">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div className="flex gap-2 flex-wrap">
+                  <div className="relative">
+                    <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-300"/>
+                    <input value={intakeSearch} onChange={e=>setIntakeSearch(e.target.value)}
+                      placeholder="code / model / SKU / barcode / any size"
+                      className="pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-xs w-64 outline-none focus:border-[#C9A84C]"/>
+                  </div>
+                  <select value={intakeCond} onChange={e=>setIntakeCond(e.target.value)}
+                    className="border border-gray-200 rounded-lg px-2 text-xs outline-none">
+                    {["All","Good","Stained","Missing pair","Unknown"].map(c=><option key={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={()=>setScanBox(true)}
+                    className="flex items-center gap-2 bg-[#0d2430] text-white px-4 py-2 text-xs font-black rounded-lg hover:bg-[#122d3a]">
+                    📷 SCAN SHOEBOX
+                  </button>
+                  <button onClick={intakeCSV} className="flex items-center gap-1.5 border border-gray-200 text-gray-500 px-3 py-2 text-xs font-bold rounded-lg hover:bg-gray-50">
+                    <Download className="h-3.5 w-3.5"/> CSV
+                  </button>
+                  <button onClick={loadIntake} className="border border-gray-200 text-gray-500 px-3 py-2 text-xs font-bold rounded-lg hover:bg-gray-50">
+                    <RefreshCw className={`h-3.5 w-3.5 ${intakeLoading?"animate-spin":""}`}/>
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-white border border-gray-100 rounded-xl overflow-x-auto">
+                <table className="w-full text-sm min-w-[980px]">
+                  <thead><tr className="text-[10px] uppercase tracking-wider text-gray-400 text-left border-b border-gray-100">
+                    <th className="px-3 py-2.5 font-semibold">📸</th>
+                    <th className="px-2 font-semibold">Item Code</th>
+                    <th className="px-2 font-semibold">Brand</th>
+                    <th className="px-2 font-semibold">Model</th>
+                    <th className="px-2 font-semibold">SKU</th>
+                    <th className="px-2 font-semibold">Size US</th>
+                    <th className="px-2 font-semibold">EUR</th>
+                    <th className="px-2 font-semibold">CM</th>
+                    <th className="px-2 font-semibold">Barcode</th>
+                    <th className="px-2 font-semibold bg-[#C9A84C]/10">SRP ₱</th>
+                    <th className="px-2 font-semibold">Status</th>
+                    <th className="px-2 font-semibold">Added</th>
+                    <th className="px-2"></th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {filteredIntake.slice(0,intakeShown).map((r:any)=>{
+                      const cond=(r.condition==="New"?"Good":r.condition)||"Good";
+                      const condCls=cond==="Good"?"bg-green-100 text-green-700":cond==="Stained"?"bg-amber-100 text-amber-700":cond==="Missing pair"?"bg-red-100 text-red-600":"bg-gray-100 text-gray-500";
+                      const img=imgByCode.get(r.item_code);
+                      return (
+                        <tr key={r.item_code} className="hover:bg-gray-50/60">
+                          <td className="px-3 py-2">{img?<img src={img} className="w-8 h-8 rounded object-cover"/>:<span className="text-gray-300">—</span>}</td>
+                          <td className="px-2 font-mono font-black text-xs text-[#0d2430]">{r.item_code}</td>
+                          <td className="px-2 text-xs">{r.brand||"—"}</td>
+                          <td className="px-2 text-xs font-medium max-w-[180px] truncate">{r.name}</td>
+                          <td className="px-2 font-mono text-[11px] text-gray-500">{r.sku||"—"}</td>
+                          <td className="px-2 text-xs font-bold">{r.size||"—"}</td>
+                          <td className="px-2 text-xs text-gray-500">{r.size_eur||"—"}</td>
+                          <td className="px-2 text-xs text-gray-500">{r.size_cm||"—"}</td>
+                          <td className="px-2 font-mono text-[10px] text-gray-400">{r.barcode?("…"+String(r.barcode).slice(-6)):"—"}</td>
+                          <td className="px-2 text-xs font-bold bg-[#C9A84C]/[.06]">{r.srp?((r.srp/100).toLocaleString("en-PH")):"—"}</td>
+                          <td className="px-2"><span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${condCls}`}>{cond}</span>
+                            {r.status==="Sold"&&<span className="ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-gray-800 text-white">Sold</span>}</td>
+                          <td className="px-2 text-[10px] text-gray-400 whitespace-nowrap">{r.created_at?fmtDate(r.created_at):"—"}</td>
+                          <td className="px-2 whitespace-nowrap">
+                            <button title="Edit in Products" onClick={()=>{setSearch(r.item_code);setSection("products");}} className="text-gray-400 hover:text-[#0d2430] mr-1"><Edit2 className="h-3.5 w-3.5"/></button>
+                            <button title="QR sticker" onClick={()=>setQrModal({open:true,itemCode:r.item_code,name:r.name})} className="text-gray-400 hover:text-[#0d2430]"><QrCode className="h-3.5 w-3.5"/></button>
+                          </td>
+                        </tr>
+                      );})}
+                    {!intakeLoading&&filteredIntake.length===0&&<tr><td colSpan={13} className="px-4 py-10 text-center text-sm text-gray-400">
+                      {intakeRows.length===0?"No inventory yet — hit 📷 SCAN SHOEBOX to add your first pair":"No matches"}</td></tr>}
+                    {intakeLoading&&<tr><td colSpan={13} className="px-4 py-10 text-center text-sm text-gray-400">Loading…</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+              {filteredIntake.length>intakeShown&&(
+                <button onClick={()=>setIntakeShown(n=>n+50)} className="w-full border border-gray-200 rounded-lg py-2 text-xs font-bold text-gray-500 hover:bg-gray-50">
+                  Show 50 more ({filteredIntake.length-intakeShown} left)
+                </button>
+              )}
+              <p className="text-[10px] text-gray-400">Newest first. <b>Good/Stained</b> are sellable once priced · <b>Missing pair/Unknown</b> never reach the website · ✏️ opens the item in Products for full editing · QR reprints the box sticker.</p>
             </div>
           )}
 
