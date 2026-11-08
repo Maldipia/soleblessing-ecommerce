@@ -325,15 +325,21 @@ export default function AdminDashboard() {
   const [sysRaw,setSysRaw]=useState<any[]|null>(null);
   const [sysLog,setSysLog]=useState<any[]>([]);
   const [sysLoading,setSysLoading]=useState(false);
+  const [sysCounts,setSysCounts]=useState<any>({});
   const loadSystem = async () => {
     setSysLoading(true);
     try{
-      const [raw,log] = await Promise.all([
+      const [raw,log,loy,promos,reviews,wl,settings] = await Promise.all([
         sb.select("sb_inventory","select=item_code,name,sku,size,srp,selling_price,unit_cost,status,stock,tab,updated_at"),
         sb.select("sync_log","select=created_at,synced,total,notes&order=created_at.desc&limit=5"),
+        sb.select("sb_loyalty","select=id"), sb.select("sb_promos","select=id"),
+        sb.select("sb_reviews","select=id"), sb.select("sb_wishlist_log","select=id"),
+        sb.select("sb_settings","select=key"),
       ]);
       setSysRaw(Array.isArray(raw)?raw:[]);
       setSysLog(Array.isArray(log)?log:[]);
+      setSysCounts({loyalty:(loy||[]).length,promos:(promos||[]).length,reviews:(reviews||[]).length,
+        wishlist:(wl||[]).length,settings:(settings||[]).length});
     }catch(e:any){toast.error("System load failed: "+(e.message||e));}
     finally{setSysLoading(false);}
   };
@@ -462,9 +468,10 @@ export default function AdminDashboard() {
     }),
     [sbProducts, productCategory, search]);
 
+  const [channelFilter,setChannelFilter]=useState<"all"|"website"|"sheet_import">("all");
   const filteredOrders = useMemo(()=>
-    orderFilter==="all"?sbOrders:sbOrders.filter(o=>o.status===orderFilter),
-    [sbOrders,orderFilter]);
+    sbOrders.filter(o=>(orderFilter==="all"||o.status===orderFilter)&&(channelFilter==="all"||(o.source||"website")===channelFilter)),
+    [sbOrders,orderFilter,channelFilter]);
 
   const stats = useMemo(()=>{
     // Raw inventory items (each row = 1 unit in stock)
@@ -1080,6 +1087,12 @@ export default function AdminDashboard() {
                     ))}
                   </SelectContent>
                 </Select>
+                <div className="flex items-center gap-1">
+                  {([["all","All"],["website","🌐 Website"],["sheet_import","📋 FB Form"]] as const).map(([v,l])=>(
+                    <button key={v} onClick={()=>setChannelFilter(v)}
+                      className={`px-2.5 py-1.5 text-[11px] font-bold rounded-lg border ${channelFilter===v?"bg-[#0d2430] text-white border-[#0d2430]":"bg-white text-gray-500 border-gray-200 hover:border-gray-300"}`}>{l}</button>
+                  ))}
+                </div>
                 <span className="text-xs text-gray-400">{filteredOrders.length} orders</span>
                 <button onClick={loadOrders} className="ml-auto flex items-center gap-2 border border-gray-200 bg-white text-[#0d2430] px-3 py-2 text-xs font-semibold rounded-lg hover:bg-gray-50">
                   <RefreshCw className="h-3.5 w-3.5"/> Refresh
@@ -1098,6 +1111,9 @@ export default function AdminDashboard() {
                           <span className="font-black text-[#0d2430]">{o.order_number}</span>
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_COLOR[o.status]||"bg-gray-100 text-gray-600"}`}>{o.status}</span>
                           {o.promo_code&&<span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">🏷 {o.promo_code}</span>}
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${(o.source||"website")==="website"?"bg-blue-100 text-blue-700":"bg-amber-100 text-amber-700"}`}>
+                            {(o.source||"website")==="website"?"🌐 Website":"📋 FB Form"}
+                          </span>
                         </div>
                         <div className="text-xs text-gray-400 mt-0.5">{o.customer_name} · {o.contact_number} · {fmtDate(o.created_at)}</div>
                       </div>
@@ -1213,6 +1229,67 @@ export default function AdminDashboard() {
 
           {section==="system"&&(
             <div className="space-y-6">
+              {(()=>{  
+                const Card=({bg,border,title,titleC,num,numC,sub,onClick,href}:any)=>{
+                  const inner=(<>
+                    <p className="text-xs font-bold" style={{color:titleC}}>{title}</p>
+                    <p className="text-xl font-black leading-tight" style={{color:numC}}>{num}</p>
+                    <p className="text-[10px]" style={{color:numC}}>{sub}</p>
+                  </>);
+                  const cls="rounded-lg px-3 py-2.5 text-left w-full transition-transform hover:scale-[1.02]";
+                  const st={background:bg,border:`1px solid ${border}`};
+                  return href
+                    ? <a href={href} target="_blank" rel="noopener noreferrer" className={cls} style={st}>{inner}</a>
+                    : <button onClick={onClick} className={cls} style={st}>{inner}</button>;
+                };
+                const G=({label,color,children}:any)=>(
+                  <div>
+                    <p className="text-[10px] font-bold tracking-widest mb-1.5" style={{color}}>■ {label}</p>
+                    <div className="grid grid-cols-3 gap-2">{children}</div>
+                  </div>);
+                const SBURL="https://supabase.com/dashboard/project/akualfrqzaierqsfcnkp/editor";
+                const withPhoto=(inventory||[]).filter((p:any)=>p.imageUrl).length;
+                const rev=sbOrders.filter((o:any)=>o.status!=="cancelled").reduce((a:number,o:any)=>a+(o.total||0),0);
+                return(
+                <div className="bg-white border border-gray-100 rounded-2xl p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#0d2430]">Your database, mapped</h3>
+                    <span className="text-[10px] text-gray-400">live counts · click a card to open it</span>
+                  </div>
+                  <G label="CATALOG — what you sell" color="#8a6d25">
+                    <Card bg="#FBF6E9" border="#C9A84C" titleC="#0d2430" numC="#8a6d25" title="Inventory"
+                      num={sysStats.totalRows} sub={`${sysStats.live} live · source of truth`} onClick={()=>setSection("products")}/>
+                    <Card bg="#FBF6E9" border="#e6d9b3" titleC="#0d2430" numC="#8a6d25" title="Product photos"
+                      num={`${sysStats.coverage}%`} sub={`${withPhoto} of ${sysStats.live} live`} onClick={()=>{setImageFilter("none");setSection("products");}}/>
+                    <Card bg="#FBF6E9" border="#e6d9b3" titleC="#0d2430" numC="#BA7517" title="Custom listings"
+                      num={sbProducts.length} sub="not shown on site yet" onClick={()=>setSection("products")}/>
+                  </G>
+                  <G label="SALES — money moving" color="#0F6E56">
+                    <Card bg="#E1F5EE" border="#5DCAA5" titleC="#04342C" numC="#0F6E56" title="Orders"
+                      num={sbOrders.length} sub={`${fmt(rev)} · 2 channels`} onClick={()=>setSection("orders")}/>
+                    <Card bg="#E1F5EE" border="#9FE1CB" titleC="#04342C" numC="#0F6E56" title="Promo codes"
+                      num={sysCounts.promos??"…"} sub="+ usage log" onClick={()=>setSection("promos")}/>
+                    <Card bg="#E1F5EE" border="#9FE1CB" titleC="#04342C" numC="#0F6E56" title="Payment proofs"
+                      num="→" sub="attached on orders" onClick={()=>setSection("orders")}/>
+                  </G>
+                  <G label="CUSTOMERS — who buys" color="#534AB7">
+                    <Card bg="#EEEDFE" border="#AFA9EC" titleC="#26215C" numC="#534AB7" title="Loyalty members"
+                      num={sysCounts.loyalty??"…"} sub="+ points ledger" href={SBURL}/>
+                    <Card bg="#EEEDFE" border="#CECBF6" titleC="#26215C" numC="#534AB7" title="Reviews"
+                      num={sysCounts.reviews??"…"} sub="by product sku" href={SBURL}/>
+                    <Card bg="#EEEDFE" border="#CECBF6" titleC="#26215C" numC="#534AB7" title="Wishlist signals"
+                      num={sysCounts.wishlist??"…"} sub="analytics" href={SBURL}/>
+                  </G>
+                  <G label="SYSTEM — keeps it running" color="#5F5E5A">
+                    <Card bg="#F1EFE8" border="#D3D1C7" titleC="#2C2C2A" numC="#5F5E5A" title="Site settings"
+                      num={sysCounts.settings??"…"} sub="brand · payments · shipping" onClick={()=>setSection("settings")}/>
+                    <Card bg="#F1EFE8" border="#D3D1C7" titleC="#2C2C2A" numC="#5F5E5A" title="Import history"
+                      num={sysLog.length} sub="hourly auto-sync" onClick={()=>{}}/>
+                    <Card bg="#F1EFE8" border="#D3D1C7" titleC="#2C2C2A" numC="#B4B2A9" title="Peso views"
+                      num="SQL" sub="v_orders_pesos · v_sales_daily" href="https://supabase.com/dashboard/project/akualfrqzaierqsfcnkp/sql/new"/>
+                  </G>
+                </div>);
+              })()}
               <div className="flex items-center justify-between">
                 <p className="text-xs text-gray-400">Database health · Supabase is the single source of truth</p>
                 <div className="flex gap-2">
