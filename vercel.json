@@ -15,5 +15,15 @@
       "source": "/(.*)",
       "destination": "/index.html"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/import-orders",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/import-sheets",
+      "schedule": "30 * * * *"
+    }
   ]
 }

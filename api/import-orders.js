@@ -22,7 +22,7 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Cache-Control', 'no-store');
   if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+  if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).json({ error: 'POST or GET' });
   if (!SERVICE_KEY) return res.status(500).json({ error: 'service key missing' });
 
   try {
@@ -87,7 +87,19 @@ export default async function handler(req, res) {
       });
       if (!r.ok) return res.status(502).json({ error: await r.text(), imported: inserted });
       const out = await r.json();
-      inserted += Array.isArray(out) ? out.length : 0;
+      if (Array.isArray(out)) {
+        inserted += out.length;
+        // Newly imported orders came from the FB form channel — the sale already
+        // happened, so reserve/deduct their stock (clamped, never fails).
+        for (const o of out) {
+          if (o.status === 'cancelled') continue;
+          try {
+            await fetch(`${SUPABASE_URL}/rest/v1/rpc/sb_soft_decrement`, {
+              method: 'POST', headers: H, body: JSON.stringify({ p_items: o.items || [] }),
+            });
+          } catch (e) { /* non-fatal */ }
+        }
+      }
     }
 
     await fetch(`${SUPABASE_URL}/rest/v1/sync_log`, {
