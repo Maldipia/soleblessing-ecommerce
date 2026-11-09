@@ -2,6 +2,14 @@
   "buildCommand": "pnpm install && pnpm run build",
   "outputDirectory": "dist/public",
   "installCommand": "pnpm install",
+  "functions": {
+    "api/ocr-label.js": { "maxDuration": 60 },
+    "api/parse-shipping-receipt.js": { "maxDuration": 60 },
+    "api/generate-invoice.js": { "maxDuration": 60 },
+    "api/send-invoice.js": { "maxDuration": 60 },
+    "api/import-orders.js": { "maxDuration": 60 },
+    "api/import-sheets.js": { "maxDuration": 60 }
+  },
   "rewrites": [
     {
       "source": "/api/inventory",

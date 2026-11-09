@@ -35,6 +35,9 @@ export default async function handler(req, res) {
   }
   if (!authed) return res.status(401).json({ error: 'unauthorized' });
 
+  // Several admins capture within the same second — a small random stagger keeps
+  // their Drive writes from landing as one burst against the per-user rate bucket.
+  await new Promise(r => setTimeout(r, Math.floor(Math.random() * 1200)));
   // GAS web apps throw one-off errors on cold start — try twice before giving up.
   let lastErr = 'OCR failed';
   for (let att = 0; att < 2; att++) {
