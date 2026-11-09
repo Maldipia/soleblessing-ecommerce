@@ -494,10 +494,6 @@ function parseLabel(raw:string, fxRate:number){
   const U = text.toUpperCase();
   const UC = U.replace(/\b([A-Z]{1,2})([A-Z0-9]{4,6})\b/g, (m,p,t)=>p+t.replace(/O/g,"0").replace(/I/g,"1").replace(/S/g,"5"));
   const out:any = {};
-  // SoleBlessing's own yellow intake sticker carries the item code: a standalone
-  // 3-5 digit number near SOLE/BLESSING or a dd-mm-yyyy date → suggest as code.
-  const sticker = U.match(/(?:SOLE|BLESS|\d{2}-\d{2}-\d{4})[\s\S]{0,40}?\b(\d{3,5})\b/) || U.match(/\b(\d{3,5})\b[\s\S]{0,30}?(?:SOLE|BLESS)/);
-  if (sticker) out.code = sticker[1];
   // Barcode digits are PRINTED under the bars — read them when the camera API can't
   const bcd = U.replace(/[^0-9\n ]/g," ").match(/\b(\d[\d ]{10,15}\d)\b/g);
   if (bcd){
@@ -505,12 +501,14 @@ function parseLabel(raw:string, fxRate:number){
     if (clean.length) out.barcode = clean[clean.length-1];
   }
   // Brand + SKU patterns (pattern beats position — layouts differ per brand)
-  const nikeSku = U.match(/\b(\d{6})[-\s]?(\d{3})\b/);
-  const adiSku  = UC.match(/\b([A-Z]{1,2}[0-9]{4,5})\b/);
+  const nikeSkuOld = U.match(/\b(\d{6})[-\s]?(\d{3})\b/);                // 831217-011
+  const nikeSkuNew = UC.match(/\b([A-Z]{2}\d{4})[-\s](\d{3})\b/);        // DX4401 164, CJ0882 001
+  const adiSku  = UC.match(/\b([A-Z]{1,2}[0-9]{4,5})\b/);                // CQ2964, B37571, HQ4540
   const asicsSku= U.match(/\b(\d{4}[A-Z]\d{3})(?:[-\s]?(\d{3}))?\b/);
   const nbSku   = U.match(/\b([MUW][A-Z]?\d{3,4}[A-Z]{0,4})\b/);
   if (/JORDAN/.test(U)) out.brand="Jordan";
-  else if (/NIKE|WMNS/.test(U) || nikeSku) out.brand="Nike";
+  else if (/YEEZY|YZY|MADE BY ADIDAS/.test(U)) out.brand="Adidas";
+  else if (/NIKE|WMNS/.test(U) || nikeSkuOld) out.brand="Nike";
   else if (/ADIDAS|ORIGINALS/.test(U)) out.brand="Adidas";
   else if (/ASICS/.test(U) || asicsSku) out.brand="ASICS";
   else if (/NEW BALANCE/.test(U)) out.brand="New Balance";
@@ -518,17 +516,49 @@ function parseLabel(raw:string, fxRate:number){
   else if (/VANS/.test(U)) out.brand="Vans";
   else if (/PUMA/.test(U)) out.brand="Puma";
   if (asicsSku && /ASICS|GEL|\d{4}[A-Z]\d{3}/.test(U)) out.sku = asicsSku[0].replace(/\s/g,"");
-  else if (nikeSku && out.brand!=="Adidas") out.sku = `${nikeSku[1]}-${nikeSku[2]}`;
+  else if (nikeSkuNew && (out.brand==="Nike"||out.brand==="Jordan")) out.sku = `${nikeSkuNew[1]}-${nikeSkuNew[2]}`; // modern Nike/Jordan style codes
+  else if (nikeSkuOld && out.brand!=="Adidas") out.sku = `${nikeSkuOld[1]}-${nikeSkuOld[2]}`;
   else if (adiSku && out.brand==="Adidas") out.sku = adiSku[1];
   else if (nbSku && out.brand==="New Balance") out.sku = nbSku[1];
+  else if (nikeSkuNew) out.sku = `${nikeSkuNew[1]}-${nikeSkuNew[2]}`;
   else if (adiSku) out.sku = adiSku[1];
+  // SoleBlessing's own yellow intake sticker carries the item code — formats
+  // seen on real boxes: "8732", "AB 2915", "NC 45", "0036", "5108".
+  // A code is a WHOLE line of optional 1-3 letter prefix + 2-5 digits. Lines that
+  // are really the SKU repeated on the sticker (B37571, HQ4540) are excluded.
+  // Sticker layout runs date → SKU → code, so lines AFTER the SOLE/date line win.
+  {
+    const NOTPFX = new Set(["US","UK","EU","EUR","CM","BR","CHN","F","D","J","JP","PHP","SZ","QTY","PO","EAN","UPC","V"]);
+    const skuFlat = String(out.sku||"").replace(/[^A-Z0-9]/g,"");
+    const lines0 = U.split(/\n+/).map(s=>s.trim());
+    const cands:any[] = [];
+    lines0.forEach((l,i)=>{
+      const m = l.match(/^([A-Z]{1,3})[ .]{0,2}(\d{2,5})$/) || l.match(/^(\d{3,5})$/);
+      if(!m) return;
+      const pfx = m.length===3 ? m[1] : "";
+      const digits = m.length===3 ? m[2] : m[1];
+      if (pfx && NOTPFX.has(pfx)) return;
+      if (!pfx && !(digits.length>=3&&digits.length<=5)) return;
+      const code = pfx+digits;
+      const ocrN=(s:string)=>s.replace(/O/g,"0").replace(/I/g,"1").replace(/S/g,"5");
+      if (skuFlat && ocrN(code)===ocrN(skuFlat)) return; // that's the SKU (even OCR-garbled), not her code
+      cands.push({code, idx:i});
+    });
+    if (cands.length){
+      let ctxIdx = lines0.findIndex(l=>/SOLE|BLESS/.test(l));
+      if (ctxIdx<0) ctxIdx = lines0.findIndex(l=>/\d{2}[- .\/]\d{2}[- .\/]\d{4}/.test(l));
+      const cost=(c:any)=>{ if(ctxIdx<0) return 99; const d=Math.abs(c.idx-ctxIdx); return c.idx>=ctxIdx?d:d+1.5; };
+      cands.sort((a,b)=>cost(a)-cost(b) || ((b.code.match(/^[A-Z]/)?1:0)-(a.code.match(/^[A-Z]/)?1:0)));
+      out.code = cands[0].code;
+    }
+  }
   // Model: best line that isn't codes/sizes/colorways/origin boilerplate.
   // Colorway lines (FTWWHT/FTWWHT, BLACK / LAVA GLOW) lose to slash-free lines.
   const lines = text.split(/\n+/).map(s=>s.trim()).filter(Boolean);
   const candidates = lines.filter(l=>{
     const u=l.toUpperCase();
     if (u.length<4||u.length>40) return false;
-    if (/MADE IN|FABRIQU|INDONESIA|VIETNAM|CHINA|UPC|PRICE|\bUS\b|\bUK\b|EUR|\bCM\b|\d{6,}/.test(u)) return false;
+    if (/MADE IN|MADE BY|FABRIQU|HECHO|INDONESIA|VIETNAM|CHINA|UPC|EAN|PRICE|PHP|SOLARSOFT|CUSHION|UNISEX|SOLE|BLESS|\.COM|WWW\.|\d{2}[- .\/]\d{2}[- .\/]\d{4}|\bPO\b|\bUS\b|\bUK\b|EUR|\bCM\b|\d{6,}/.test(u)) return false;
     if (/^(ORIGINALS?|SPORTSWEAR|PERFORMANCE|EQUIPMENT|AUTHENTICS?|CLASSICS?|NIKE|ADIDAS|ASICS|PUMA|VANS|CONVERSE|NEW BALANCE|JORDAN)$/.test(u)) return false; // brand taglines aren't models
     return /[A-Z]{3,}/i.test(u) && !/^\d/.test(l);
   });
@@ -541,17 +571,28 @@ function parseLabel(raw:string, fxRate:number){
   const MU = modelLine.toUpperCase();
   const isW = /WMNS|WOMEN/.test(U);
   const isY = /\bGS\b|\bPS\b|\bTD\b|\(J\)|JUNIOR|YOUTH|INFANT/.test(U) || /\bJ$|\bJR$|\bC$|\bK$/.test(MU.trim());
-  // Sizes — accept fractions and decimals
+  // Sizes — accept fractions and decimals. Dual-row Nike/Jordan labels print
+  // "11 MENS … / 12.5 WMNS …" for the SAME shoe: the MENS row is the size.
   const frac=(s:string)=>s.replace(/\s*1\/2|½/,".5").replace(/\s*2\/3|⅔/,".7").replace(/\s*1\/3|⅓/,".3").replace(",",".");
-  const us = U.match(/\bUS\D{0,3}(\d{1,2}(?:[.,]5|\s?1\/2|½)?)/)
-    || U.match(/\b(\d{1,2}(?:[.,]5|\s?1\/2|½)?)\s*(?:US|M\b|W\b)/)
-    || U.match(/(?:^|\s)(\d{1,2}(?:[.,]5|\s?1\/2|½)?)\s+(?:UK|EUR|F)\b/m); // bare "6.5  UK 4" layout
+  // OCR splits superscript halves: "6 5 UK" is 6.5 — join digit-space-5 before a size word
+  const US2 = U.replace(/\b(\d{1,2}) 5(\s+(?:UK|EUR|F|CM|MENS|WMNS))/g, "$1.5$2");
+  const mens = US2.match(/\b(\d{1,2}(?:[.,]5|\s?1\/2|½)?)\s*\.?\s*MENS\b/);
+  const wmns = US2.match(/\b(\d{1,2}(?:[.,]5|\s?1\/2|½)?)\s*\.?\s*WMNS\b/);
+  const us = mens
+    || US2.match(/\bUS\D{0,3}(\d{1,2}(?:[.,]5|\s?1\/2|½)?)/)
+    || (wmns||null)
+    || US2.match(/\b(\d{1,2}(?:[.,]5|\s?1\/2|½)?)\s*(?:US|M\b|W\b)/)
+    // bare "6.5  UK 4" layout — only when UK is followed by ITS OWN number on
+    // the same line ("9 UK" alone is a UK size, not US)
+    || US2.match(/(?:^|\s)(\d{1,2}(?:[.,]5|\s?1\/2|½)?)\s+(?:UK[ \t]{0,2}\d|EUR[ \t]{0,2}\d|F[ \t]{0,2}\d)/m);
+  const usIsMens = !!mens, usIsWmns = !mens && !!wmns;
   const eur = U.match(/\b(?:EUR?|F)\W{0,2}(\d{2}(?:[.,]\d|\s?[12]\/3|⅔|½|\s?1\/2)?)/);
   const cm = U.match(/\b(\d{2}(?:[.,]5)?)\s?CM\b/) || U.match(/\bCM\W{0,2}(\d{2}(?:[.,]5)?)/) || U.match(/\bJP\W{0,2}(\d{2}(?:[.,]5)?)/);
-  // Adidas/Asian boxes print J / CHN in MILLIMETERS: "J 200" = 20cm
-  const jmm = U.match(/\b(?:J|JP|CHN)\W{0,2}([12]\d{2})\b/);
+  // Adidas/Asian boxes print J / CHN in MILLIMETERS: "J 220" = 22cm; some
+  // Yeezy restock labels print mondo alone as "265 (2.5)"
+  const jmm = U.match(/\b(?:J|JP|CHN)\W{0,2}([12]\d{2})\b/) || U.match(/\b(2\d{2})\s*\(/);
   if (!cm && jmm) out.cmSize = String(parseInt(jmm[1],10)/10);
-  if (us) out.usSize = frac(us[1]) + (isY?"Y":isW?"W":"M");
+  if (us) out.usSize = frac(us[1]) + (usIsMens?"M":usIsWmns?"W":isY?"Y":isW?"W":"M");
   if (eur) out.eurSize = frac(eur[1]);
   if (cm) out.cmSize = frac(cm[1]);
   // SRP from price sticker — any sign; ₱ as-is, $/€ converted, bare large number near PRICE
