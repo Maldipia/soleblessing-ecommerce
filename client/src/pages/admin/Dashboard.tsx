@@ -804,6 +804,10 @@ function ScanEditModal({row,onClose,onSaved}:{row:any;onClose:()=>void;onSaved:(
     if(f.size.trim()&&!(usN>=1&&usN<=16)){toast.error(`US ${f.size} can't be right — US sizes run 1–16`);return;}
     if(f.eur.trim()&&!(eN>=15&&eN<=50)){toast.error(`EUR ${f.eur} looks like the UK number — the EUR/F size on the box has 2 digits (e.g. 38)`);return;}
     if(f.cm.trim()&&!(cN>=10&&cN<=34)){toast.error(`CM ${f.cm} can't be right — J/CHN prints millimeters, 235 means 23.5 cm`);return;}
+    for(const [lbl,val] of [["SRP",f.srp],["Selling price",f.selling]] as const){
+      const n=Number(String(val||"").replace(/[,\s]/g,""));
+      if(val&&String(val).trim()&&!(n>=0&&n<=500000)){toast.error(`${lbl} ₱${val} can't be right — check the number (max ₱500,000)`);return;}
+    }
     setBusy(true);
     try{
       if(newCode!==row.item_code){
@@ -1028,6 +1032,13 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
       if(f.usSize.trim()&&!(usN>=1&&usN<=16)){toast.error(`US ${f.usSize} can't be right — US sizes run 1–16`);return;}
       if(f.eurSize.trim()&&!(eurN>=15&&eurN<=50)){toast.error(`EUR ${f.eurSize} looks like the UK number — the EUR/F size on the box has 2 digits (e.g. 38)`);return;}
       if(f.cmSize.trim()&&!(cmN>=10&&cmN<=34)){toast.error(`CM ${f.cmSize} can't be right — J/CHN prints millimeters, 235 means 23.5 cm`);return;}
+      // Price guard: a typo like 55000044 overflows the database integer and the
+      // save dies with a cryptic error. No pair costs more than ₱500,000.
+      const P_MAX=500000;
+      for(const [lbl,val] of [["SRP",f.srp],["Selling price",f.selling],["Unit cost",f.unitCost]] as const){
+        const n=Number(String(val||"").replace(/[,\s]/g,""));
+        if(val&&String(val).trim()&&!(n>=0&&n<=P_MAX)){toast.error(`${lbl} ₱${val} can't be right — check the number (max ₱500,000)`);return;}
+      }
     }
     setSaving(true);
     try{
@@ -1083,6 +1094,8 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
       const msg=String(e?.message||e);
       if(/duplicate key|uq_sb_inventory_norm_code/i.test(msg))
         toast.error(`${codeNorm} already exists (maybe spelled with a space) — use a different code`);
+      else if(/out of range|22003/i.test(msg))
+        toast.error("A price looks way too big — check SRP / selling price for extra digits");
       else toast.error("Save failed: "+msg);
     }
     finally{setSaving(false);}
@@ -1104,7 +1117,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
         <div className="bg-[#050f12] px-5 py-3.5 flex items-center justify-between">
           <div>
             <p className="text-[10px] font-bold tracking-[.15em] uppercase text-[#C9A84C]">📦 Scan Shoebox</p>
-            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v21</span></p>
+            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v22</span></p>
           </div>
           <button onClick={()=>{stopCam();onClose();}} className="text-white/40 hover:text-white"><X className="h-5 w-5"/></button>
         </div>
