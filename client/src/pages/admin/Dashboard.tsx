@@ -599,7 +599,7 @@ function parseLabel(raw:string, fxRate:number){
   out.model = modelLine;
   // Gender / youth markers — the model line itself counts ("X_PLR J" = junior, "SPEZIAL C" = children)
   const MU = modelLine.toUpperCase();
-  const isW = /WMNS|WOMEN/.test(U) || /\sW$/.test(MU.trim()); // adidas women's models end " W" (BRYONY W, GAZELLE W)
+  const isW = /WMNS|WOMEN/.test(U) || /\sW$/.test(MU.trim()) || /^W\s/.test(MU.trim()); // adidas end " W" (BRYONY W); Nike start "W " (W NIKE DUNK LOW)
   const isY = /\bGS\b|\bPS\b|\bTD\b|\(J\)|JUNIOR|YOUTH|INFANT/.test(U) || /\bJ$|\bJR$|\bC$|\bK$/.test(MU.trim());
   // Sizes — accept fractions and decimals. Dual-row Nike/Jordan labels print
   // "11 MENS … / 12.5 WMNS …" for the SAME shoe: the MENS row is the size.
@@ -608,14 +608,19 @@ function parseLabel(raw:string, fxRate:number){
   const US2 = U.replace(/\b(\d{1,2}) 5(\s+(?:UK|EUR|F|CM|MENS|WMNS))/g, "$1.5$2");
   const mens = US2.match(/\b(\d{1,2}(?:[.,]5|\s?1\/2|½)?)\s*\.?\s*MENS\b/);
   const wmns = US2.match(/\b(\d{1,2}(?:[.,]5|\s?1\/2|½)?)\s*\.?\s*WMNS\b/);
-  const us = mens
+  // Dual-row labels print the shoe's size on the TOP row and the conversion
+  // below (Pia: "always use the size above"). Women's boxes print WMNS first,
+  // men's print MENS first — text order follows the label top-down.
+  let primary = mens, primaryIsW = false;
+  if (mens && wmns && (wmns.index??0) < (mens.index??0)) { primary = wmns; primaryIsW = true; }
+  else if (!mens && wmns) { primary = wmns; primaryIsW = true; }
+  const us = primary
     || US2.match(/\bUS\D{0,3}(\d{1,2}(?:[.,]5|\s?1\/2|½)?)/)
-    || (wmns||null)
     || US2.match(/\b(\d{1,2}(?:[.,]5|\s?1\/2|½)?)\s*(?:US|M\b|W\b)/)
     // bare "6.5  UK 4" layout — only when UK is followed by ITS OWN number on
     // the same line ("9 UK" alone is a UK size, not US)
     || US2.match(/(?:^|\s)(\d{1,2}(?:[.,]5|\s?1\/2|½)?)\s+(?:UK[ \t]{0,2}\d|EUR[ \t]{0,2}\d|F[ \t]{0,2}\d)/m);
-  const usIsMens = !!mens, usIsWmns = !mens && !!wmns;
+  const usIsMens = !!primary && !primaryIsW, usIsWmns = !!primary && primaryIsW;
   const eur = U.match(/\b(?:EUR?|F)\W{0,2}(\d{2}(?:[.,]\d|\s?[12]\/3|⅔|½|\s?1\/2)?)/);
   const cm = U.match(/\b(\d{2}(?:[.,]5)?)\s?CM\b/) || U.match(/\bCM\W{0,2}(\d{2}(?:[.,]5)?)/) || U.match(/\bJP\W{0,2}(\d{2}(?:[.,]5)?)/);
   // Adidas/Asian boxes print J / CHN in MILLIMETERS: "J 220" = 22cm; some
@@ -1078,7 +1083,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
         <div className="bg-[#050f12] px-5 py-3.5 flex items-center justify-between">
           <div>
             <p className="text-[10px] font-bold tracking-[.15em] uppercase text-[#C9A84C]">📦 Scan Shoebox</p>
-            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v13</span></p>
+            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v14</span></p>
           </div>
           <button onClick={()=>{stopCam();onClose();}} className="text-white/40 hover:text-white"><X className="h-5 w-5"/></button>
         </div>
