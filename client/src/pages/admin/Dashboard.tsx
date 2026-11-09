@@ -578,7 +578,8 @@ function parseLabel(raw:string, fxRate:number){
     if (digits >= letters) return false;
     return /[A-Z]{3,}/i.test(u) && !/^\d/.test(l);
   });
-  const score=(l:string)=>((l.match(/\//g)||[]).length?0:100)+l.length;
+  // digits in a "model" line are usually a neighboring box's codes — penalize hard
+  const score=(l:string)=>((l.match(/\//g)||[]).length?0:100)+(l.match(/[A-Za-z]/g)||[]).length-3*(l.match(/\d/g)||[]).length;
   const modelRaw = candidates.sort((a,b)=>score(b)-score(a))[0] || "";
   // Strip OCR junk: [5k]-style brackets, stray symbols, duplicated trailing letters
   const modelLine = modelRaw.replace(/\[[^\]]*\]/g," ").replace(/[^A-Za-z0-9 .'\/_-]/g," ").replace(/\s{2,}/g," ").trim();
@@ -645,6 +646,21 @@ function parseLabel(raw:string, fxRate:number){
         out.eurSize=v[0].replace(",",".");
         if(v[1]&&!out.ukSize&&num(v[1])>=1&&num(v[1])<=15) out.ukSize=v[1].replace(",",".");
       }
+    }
+  }
+  // Sanity: a warehouse frame often catches NEIGHBORING boxes, so impossible
+  // or mutually inconsistent sizes get dropped (derivation refills from what's
+  // trustworthy). Kids sizes skip the cross-check (different scale).
+  {
+    const n=(s:any)=>parseFloat(String(s||"").replace(/[MWY]$/,""));
+    if(out.usSize&&!(n(out.usSize)>=1&&n(out.usSize)<=16)) delete out.usSize;
+    if(out.cmSize&&!(parseFloat(out.cmSize)>=15&&parseFloat(out.cmSize)<=34)) delete out.cmSize;
+    if(out.eurSize&&!(parseFloat(out.eurSize)>=15&&parseFloat(out.eurSize)<=50)) delete out.eurSize;
+    if(out.ukSize&&!(parseFloat(out.ukSize)>=1&&parseFloat(out.ukSize)<=15)) delete out.ukSize;
+    const usN=n(out.usSize);
+    if(!isNaN(usN)&&out.usSize&&!/Y$/.test(String(out.usSize))){
+      if(out.eurSize&&Math.abs(parseFloat(out.eurSize)-(4/3*usN+30.5))>2.6) delete out.eurSize;
+      if(out.cmSize&&Math.abs(parseFloat(out.cmSize)-(usN+17))>2.8) delete out.cmSize;
     }
   }
   // SRP from price sticker — any sign; ₱ as-is, $/€ converted, bare large number
@@ -733,9 +749,17 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
   const capture=async()=>{
     const v=document.getElementById("sb-scan-video") as HTMLVideoElement|null;
     if(!v||v.readyState<2){setPhase("form");return;}
+    // Crop to roughly what's inside the gold guide — shelves hold many boxes and
+    // OCR must only see the ONE label being aimed at. The preview is object-cover
+    // 4:3, so first take the visible center rect, then trim to the guide.
+    const vw=v.videoWidth, vh=v.videoHeight, ar=4/3;
+    let cw=vw, ch=vh;
+    if(vw/vh>ar) cw=Math.round(vh*ar); else ch=Math.round(vw/ar);
+    const gx=Math.round((vw-cw)/2+cw*0.06), gy=Math.round((vh-ch)/2+ch*0.10);
+    const gw=Math.round(cw*0.88), gh=Math.round(ch*0.80);
     const c=document.createElement("canvas");
-    c.width=v.videoWidth;c.height=v.videoHeight;
-    c.getContext("2d")!.drawImage(v,0,0);
+    c.width=gw;c.height=gh;
+    c.getContext("2d")!.drawImage(v,gx,gy,gw,gh,0,0,gw,gh);
     const shotUrl=c.toDataURL("image/jpeg",0.85);
     setPhoto(shotUrl);
     stopCam();setPhase("form");
@@ -888,7 +912,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
         <div className="bg-[#050f12] px-5 py-3.5 flex items-center justify-between">
           <div>
             <p className="text-[10px] font-bold tracking-[.15em] uppercase text-[#C9A84C]">📦 Scan Shoebox</p>
-            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v6</span></p>
+            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v7</span></p>
           </div>
           <button onClick={()=>{stopCam();onClose();}} className="text-white/40 hover:text-white"><X className="h-5 w-5"/></button>
         </div>
@@ -898,6 +922,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
             <div className="relative rounded-xl overflow-hidden bg-black aspect-[4/3]">
               <video id="sb-scan-video" playsInline muted className="w-full h-full object-cover"/>
               <div className="absolute inset-6 border-2 border-dashed border-[#C9A84C]/80 rounded-lg pointer-events-none"/>
+              <div className="absolute bottom-2 inset-x-0 text-center pointer-events-none"><span className="bg-black/60 text-[#C9A84C] text-[10px] font-bold px-2 py-1 rounded">fit ONE box label in the frame — fill it</span></div>
               {f.barcode&&<div className="absolute top-2 left-2 bg-green-500 text-white text-[10px] font-bold px-2 py-1 rounded">✓ barcode {f.barcode}</div>}
             </div>
             <button onClick={capture} className="mt-3 w-full bg-[#C9A84C] text-[#050f12] py-3.5 rounded-xl font-black text-sm">📸 CAPTURE LABEL</button>
