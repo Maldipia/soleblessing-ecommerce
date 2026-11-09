@@ -602,6 +602,9 @@ function parseLabel(raw:string, fxRate:number){
   // Yeezy restock labels print mondo alone as "265 (2.5)"
   const jmm = U.match(/\b(?:J|JP|CHN)\W{0,2}([12]\d{2})\b/) || U.match(/\b(2\d{2})\s*\(/);
   if (!cm && jmm) out.cmSize = String(parseInt(jmm[1],10)/10);
+  const uk = US2.match(/\bUK[ \t]{0,2}(\d{1,2}(?:[.,]5|\s?1\/2|½)?)\b/)
+    || US2.match(/\b(\d{1,2}(?:[.,]5|\s?1\/2|½)?)[ \t]{0,2}UK\b(?![ \t]{0,2}\d)/); // "9 UK" layout
+  if (uk) out.ukSize = frac(uk[1]);
   if (us) out.usSize = frac(us[1]) + (usIsMens?"M":usIsWmns?"W":isY?"Y":isW?"W":"M");
   if (eur) out.eurSize = frac(eur[1]);
   if (cm) out.cmSize = frac(cm[1]);
@@ -613,6 +616,34 @@ function parseLabel(raw:string, fxRate:number){
   if (php) out.srp = String(Math.round(num(php[1])));
   else if (usd) out.srp = String(Math.round(num(usd[1])*fxRate));
   else if (near && num(near[1])>100) out.srp = String(Math.round(num(near[1])));
+
+  // ── Size derivation from brand charts (researched + anchored on real boxes) ──
+  // J/CHN = CM (mondopoint) · F = EUR · D(adidas) = UK. Within a brand the
+  // scales are linear in US: EUR = 4/3·US + c, CM = US + k, US = UK + u.
+  // Anchors: Adidas US4→F36/J220, US5.5→F38/J235, UK9→EUR43⅓ · Nike US9→42.5/27cm,
+  // US11→45/29cm · ASICS US11→45/28.5. Estimates fill ONLY missing fields.
+  {
+    const CH:any = {
+      "Nike":{c:30.33,k:18,u:1}, "Jordan":{c:30.33,k:18,u:1}, "ASICS":{c:30.33,k:17.5,u:1},
+      "Adidas":{c:30.67,k:18,u:0.5}, "New Balance":{c:30.83,k:18,u:0.5},
+      "Converse":{c:30.33,k:17.5,u:1}, "Vans":{c:30.33,k:18,u:1}, "Puma":{c:30,k:17,u:1},
+    };
+    const ch = CH[out.brand||""] || {c:30.5,k:18,u:1};
+    const sfx = (out.usSize||"").match(/[MWY]$/)?.[0] || "M";
+    let usN = parseFloat(out.usSize||"");
+    const est:string[] = [];
+    if (sfx!=="Y"){ // kids scales are their own world — never estimated
+      const wAdj = sfx==="W" ? 1.5 : 0; // women's US runs ~1.5 above men's on the same last
+      if (isNaN(usN) && out.ukSize){ usN = Math.round((parseFloat(out.ukSize)+ch.u)*2)/2;
+        if(!isNaN(usN)){ out.usSize = String(usN)+sfx; est.push("US (from UK "+out.ukSize+")"); } }
+      if (!isNaN(usN)){
+        const usM = usN - wAdj; // charts are men's-lasted
+        if (!out.eurSize){ out.eurSize = String(Math.round(((4/3)*usM+ch.c)*10)/10); est.push("EUR"); }
+        if (!out.cmSize){ out.cmSize = String(Math.round((usM+ch.k)*2)/2); est.push("CM"); }
+      }
+    }
+    if (est.length) out.estimated = est;
+  }
   return out;
 }
 
@@ -697,7 +728,8 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
         barcode:p.barcode||got.barcode||"",
         srp:p.srp||got.srp||"",
       }));
-      toast.success("Label read — check the green fields");
+      if (got.estimated&&got.estimated.length) toast.success(`Label read — ${got.estimated.join(", ")} estimated from the ${got.brand||"brand"} size chart, check before save`);
+      else toast.success("Label read — check the green fields");
     }catch(e:any){toast.info("Couldn't read text ("+(e.message||e)+") — fill fields manually");}
     finally{setBusy("");}
   };
