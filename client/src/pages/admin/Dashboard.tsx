@@ -745,18 +745,21 @@ function parseLabel(raw:string, fxRate:number){
   // Anchors: Adidas US4→F36/J220, US5.5→F38/J235, UK9→EUR43⅓ · Nike US9→42.5/27cm,
   // US11→45/29cm · ASICS US11→45/28.5. Estimates fill ONLY missing fields.
   {
+    // Calibrated against the official adidas + Nike charts Pia supplied (Nov 9):
+    // adidas US4→UK3.5/EU36/22cm, US5.5→EU38/23.5cm, women = men +1;
+    // Nike US9→UK8/EU42.5/27.5cm, women = men +1.5. w = women's US offset.
     const CH:any = {
-      "Nike":{c:30.33,k:18,u:1}, "Jordan":{c:30.33,k:18,u:1}, "ASICS":{c:30.33,k:17.5,u:1},
-      "Adidas":{c:30.67,k:18,u:0.5}, "New Balance":{c:30.83,k:18,u:0.5},
-      "Converse":{c:30.33,k:17.5,u:1}, "Vans":{c:30.33,k:18,u:1}, "Puma":{c:30,k:17,u:1},
+      "Nike":{c:30.5,k:18.5,u:1,w:1.5}, "Jordan":{c:30.5,k:18.5,u:1,w:1.5}, "ASICS":{c:30.33,k:17.5,u:1,w:1.5},
+      "Adidas":{c:30.67,k:18,u:0.5,w:1}, "New Balance":{c:30.83,k:18,u:0.5,w:1.5},
+      "Converse":{c:30.33,k:17.5,u:1,w:1.5}, "Vans":{c:30.33,k:18,u:1,w:1.5}, "Puma":{c:30,k:17,u:1,w:1.5},
     };
-    const ch = CH[out.brand||""] || {c:30.5,k:18,u:1};
+    const ch = CH[out.brand||""] || {c:30.5,k:18,u:1,w:1.5};
     const sfx = (out.usSize||"").match(/[MWY]$/)?.[0] || "M";
     let usN = parseFloat(out.usSize||"");
     const est:string[] = [];
     if (sfx!=="Y"){ // kids scales are their own world — never estimated
-      const wAdj = sfx==="W" ? 1.5 : 0; // women's US runs ~1.5 above men's on the same last
-      if (isNaN(usN) && out.ukSize){ usN = Math.round((parseFloat(out.ukSize)+ch.u)*2)/2;
+      const wAdj = sfx==="W" ? ch.w : 0; // women's US offset over the men's last, per brand
+      if (isNaN(usN) && out.ukSize){ usN = Math.round((parseFloat(out.ukSize)+ch.u+wAdj)*2)/2;
         if(!isNaN(usN)){ out.usSize = String(usN)+sfx; est.push("US (from UK "+out.ukSize+")"); } }
       if (!isNaN(usN)){
         const usM = usN - wAdj; // charts are men's-lasted
@@ -1059,7 +1062,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
         <div className="bg-[#050f12] px-5 py-3.5 flex items-center justify-between">
           <div>
             <p className="text-[10px] font-bold tracking-[.15em] uppercase text-[#C9A84C]">📦 Scan Shoebox</p>
-            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v10</span></p>
+            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v11</span></p>
           </div>
           <button onClick={()=>{stopCam();onClose();}} className="text-white/40 hover:text-white"><X className="h-5 w-5"/></button>
         </div>
