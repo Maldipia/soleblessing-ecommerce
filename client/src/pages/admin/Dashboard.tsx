@@ -566,8 +566,14 @@ function parseLabel(raw:string, fxRate:number){
   // Model: best line that isn't codes/sizes/colorways/origin boilerplate.
   // Colorway lines (FTWWHT/FTWWHT, BLACK / LAVA GLOW) lose to slash-free lines.
   const lines = text.split(/\n+/).map(s=>s.trim()).filter(Boolean);
+  // SOLE sticker content (date, buyer name, town) is never product data — the
+  // factory label never prints the model right after a SOLE header (Pia:
+  // "if u read name dont count it")
+  const stickerZone = new Set<number>();
+  lines.forEach((l,i)=>{ if(/SOLE/i.test(l)){ for(let k=1;k<=3;k++) stickerZone.add(i+k); } });
   const candidates = lines.filter(l=>{
     const u=l.toUpperCase();
+    if (stickerZone.has(lines.indexOf(l))) return false;
     if (u.length<4||u.length>40) return false;
     if (/MADE IN|MADE BY|FABRIQU|HECHO|INDONESIA|VIETNAM|CHINA|UPC|EAN|PRICE|PHP|SOLARSOFT|CUSHION|UNISEX|SOLE|BLESS|\.COM|WWW\.|\d{2}[- .\/]\d{2}[- .\/]\d{4}|\bPO\b|\bUS\b|\bUK\b|EUR|\bCM\b|\d{6,}/.test(u)) return false;
     // brand taglines aren't models — also when OCR doubles them ("ORIGINALS ORIGINALS")
@@ -1083,7 +1089,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
         <div className="bg-[#050f12] px-5 py-3.5 flex items-center justify-between">
           <div>
             <p className="text-[10px] font-bold tracking-[.15em] uppercase text-[#C9A84C]">📦 Scan Shoebox</p>
-            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v15</span></p>
+            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v16</span></p>
           </div>
           <button onClick={()=>{stopCam();onClose();}} className="text-white/40 hover:text-white"><X className="h-5 w-5"/></button>
         </div>
