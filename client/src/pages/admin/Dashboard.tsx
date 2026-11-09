@@ -1092,7 +1092,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
         <div className="bg-[#050f12] px-5 py-3.5 flex items-center justify-between">
           <div>
             <p className="text-[10px] font-bold tracking-[.15em] uppercase text-[#C9A84C]">📦 Scan Shoebox</p>
-            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v17</span></p>
+            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v18</span></p>
           </div>
           <button onClick={()=>{stopCam();onClose();}} className="text-white/40 hover:text-white"><X className="h-5 w-5"/></button>
         </div>
@@ -1423,6 +1423,7 @@ export default function AdminDashboard() {
   const [intakeLoading,setIntakeLoading]=useState(false);
   const [intakeSearch,setIntakeSearch]=useState("");
   const [intakeCond,setIntakeCond]=useState("All");
+  const [intakeTab,setIntakeTab]=useState<"all"|"today"|"mine"|"unpriced">("all");
   const intakeAll=false; // Latest Inventory is the scan log ONLY — full stock lives in Products & Inventory
   const [intakeShown,setIntakeShown]=useState(50);
   const loadIntake=async()=>{
@@ -1439,14 +1440,24 @@ export default function AdminDashboard() {
   },[intakeRows]);
   const imgByCode=useMemo(()=>{const m=new Map<string,string>();(inventory||[]).forEach((p:any)=>{if(p.imageUrl)m.set(p.itemCode,p.imageUrl);});return m;},[inventory]);
   const scannedCount=useMemo(()=>intakeRows.filter((r:any)=>r.tab==="SCAN").length,[intakeRows]);
+  const isTodayRow=(r:any)=>{const d=new Date(r.created_at||0);const n=new Date();return d.getFullYear()===n.getFullYear()&&d.getMonth()===n.getMonth()&&d.getDate()===n.getDate();};
   const filteredIntake=useMemo(()=>intakeRows.filter((r:any)=>{
     if(!intakeAll&&r.tab!=="SCAN")return false; // intake log = scanned pairs only by default
+    if(intakeTab==="today"&&!isTodayRow(r))return false;
+    if(intakeTab==="mine"&&r.added_by!==getRole())return false;
+    if(intakeTab==="unpriced"&&(r.srp||r.selling_price))return false;
     if(intakeCond!=="All"&&(r.condition||"Good")!==intakeCond&&!(intakeCond==="Good"&&(r.condition||"")==="New"))return false;
     if(!intakeSearch)return true;
     const q=intakeSearch.toLowerCase();
     return [r.item_code,r.name,r.brand,r.sku,r.size,r.size_eur,r.size_cm,r.barcode].some(v=>String(v||"").toLowerCase().includes(q));
-  }),[intakeRows,intakeSearch,intakeCond,intakeAll]);
-  useEffect(()=>{setIntakeShown(50);},[intakeSearch,intakeCond,intakeAll]);
+  }),[intakeRows,intakeSearch,intakeCond,intakeAll,intakeTab]);
+  const intakeTabCounts=useMemo(()=>{const s=intakeRows.filter((r:any)=>r.tab==="SCAN");return {
+    all:s.length,
+    today:s.filter(isTodayRow).length,
+    mine:s.filter((r:any)=>r.added_by===getRole()).length,
+    unpriced:s.filter((r:any)=>!r.srp&&!r.selling_price).length,
+  };},[intakeRows]);
+  useEffect(()=>{setIntakeShown(50);},[intakeSearch,intakeCond,intakeAll,intakeTab]);
   const intakeCSV=()=>{
     const cols=["item_code","brand","name","sku","size","size_eur","size_cm","barcode","srp","status","condition","created_at"];
     const esc=(v:any)=>{const t=String(v??"");return /[",\n]/.test(t)?('"'+t.replace(/"/g,'""')+'"'):t;};
@@ -2557,6 +2568,15 @@ export default function AdminDashboard() {
           {/* ── LATEST INVENTORY (shoebox intake log) ── */}
           {section==="intake"&&(
             <div className="space-y-4">
+              {/* quick-nav tabs (Pia: "tab headers where i can choose recent add") */}
+              <div className="flex gap-1.5 overflow-x-auto pb-0.5 -mb-2">
+                {([["all","All"],["today","🆕 Today"],["mine","👤 Mine"],["unpriced","₱? Unpriced"]] as const).map(([k,lbl])=>(
+                  <button key={k} onClick={()=>setIntakeTab(k)}
+                    className={`px-3.5 py-2 rounded-full text-xs font-bold whitespace-nowrap border transition-colors ${intakeTab===k?"bg-[#0d2430] border-[#0d2430] text-white":"border-gray-200 text-gray-500 hover:border-gray-300 bg-white"}`}>
+                    {lbl} <span className={intakeTab===k?"text-[#C9A84C]":"text-gray-400"}>{intakeTabCounts[k]}</span>
+                  </button>
+                ))}
+              </div>
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div className="flex gap-2 flex-wrap">
                   <div className="relative flex-1 sm:flex-none min-w-[180px]">
