@@ -1011,6 +1011,17 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
     }
     setSaving(true);
     try{
+      // LIVE duplicate check — with 2–3 admins scanning at once, the list loaded
+      // at page-open can't see their newest saves, and a merge-save would silently
+      // overwrite a teammate's pair. Ask the database at the moment of saving.
+      try{
+        const liveRows=await sb.select("sb_inventory",`select=item_code,tab,added_by&item_code=eq.${encodeURIComponent(codeNorm)}`);
+        const live=Array.isArray(liveRows)?liveRows[0]:null;
+        if(live&&live.tab==="SCAN"){
+          toast.error(`${codeNorm} was just scanned by ${live.added_by||"another admin"} — use a different code`);
+          setSaving(false);return;
+        }
+      }catch{} // check is best-effort; the unique index still backstops below
       const name=[f.brand&&!f.model.toUpperCase().includes(f.brand.toUpperCase())?f.brand:"",f.model].filter(Boolean).join(" ").trim()||f.sku;
       // Upsert (merge): new code = insert; claiming an old-sheet code = that row
       // is updated in place and joins the scan log. Empty/zero fields are OMITTED
@@ -1042,7 +1053,12 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
       onSaved();
       // batch mode: straight back to camera for the next box
       setF({...BLANK_INTAKE});setPhoto(null);setPhase("cam");
-    }catch(e:any){toast.error("Save failed: "+(e.message||e));}
+    }catch(e:any){
+      const msg=String(e?.message||e);
+      if(/duplicate key|uq_sb_inventory_norm_code/i.test(msg))
+        toast.error(`${codeNorm} already exists (maybe spelled with a space) — use a different code`);
+      else toast.error("Save failed: "+msg);
+    }
     finally{setSaving(false);}
   };
 
@@ -1062,7 +1078,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
         <div className="bg-[#050f12] px-5 py-3.5 flex items-center justify-between">
           <div>
             <p className="text-[10px] font-bold tracking-[.15em] uppercase text-[#C9A84C]">📦 Scan Shoebox</p>
-            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v11</span></p>
+            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v12</span></p>
           </div>
           <button onClick={()=>{stopCam();onClose();}} className="text-white/40 hover:text-white"><X className="h-5 w-5"/></button>
         </div>
