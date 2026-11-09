@@ -747,14 +747,18 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
         if(codes?.length)setF(p=>p.barcode?p:{...p,barcode:codes[0].rawValue});}catch{}}
       // 1st choice: Google OCR through NSB SYSTEM (reads warehouse photos the
       // browser engine can't). Falls back to on-device OCR if unavailable.
-      let gasText="";
-      try{
-        const pw=(()=>{try{return sessionStorage.getItem("sb_admin_pw")||""}catch{return ""}})();
-        const gr=await fetch("/api/ocr-label",{method:"POST",headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({password:pw,base64:shotUrl.split(",")[1],mimeType:"image/jpeg"})});
-        const go=await gr.json().catch(()=>({} as any));
-        if(gr.ok&&go.text&&String(go.text).trim().length>8) gasText=String(go.text);
-      }catch{}
+      let gasText="",gasWhy="";
+      const pw=(()=>{try{return sessionStorage.getItem("sb_admin_pw")||""}catch{return ""}})();
+      for(let att=0;att<2&&!gasText;att++){ // GAS cold starts throw one-off errors — retry once
+        try{
+          const gr=await fetch("/api/ocr-label",{method:"POST",headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({password:pw,base64:shotUrl.split(",")[1],mimeType:"image/jpeg"})});
+          const go=await gr.json().catch(()=>({} as any));
+          if(gr.ok&&go.text&&String(go.text).trim().length>8) gasText=String(go.text);
+          else gasWhy=`HTTP ${gr.status}${go&&go.error?" · "+String(go.error).slice(0,80):""}`;
+        }catch(e:any){gasWhy=String(e?.message||e).slice(0,80);}
+      }
+      if(!gasText) toast.info(`Google OCR unavailable (${gasWhy||"no response"}) — using phone OCR`);
       if(gasText){
         const got=parseLabel(gasText,fx);
         setF(p=>({...p,
@@ -884,7 +888,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
         <div className="bg-[#050f12] px-5 py-3.5 flex items-center justify-between">
           <div>
             <p className="text-[10px] font-bold tracking-[.15em] uppercase text-[#C9A84C]">📦 Scan Shoebox</p>
-            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"}</p>
+            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v6</span></p>
           </div>
           <button onClick={()=>{stopCam();onClose();}} className="text-white/40 hover:text-white"><X className="h-5 w-5"/></button>
         </div>

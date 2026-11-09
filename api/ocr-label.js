@@ -6,6 +6,7 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const GAS_HOOK = process.env.GAS_ORDER_WEBHOOK || '';
 
 export const config = { maxDuration: 60, api: { bodyParser: { sizeLimit: '8mb' } } };
+export const maxDuration = 60;
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -34,17 +35,22 @@ export default async function handler(req, res) {
   }
   if (!authed) return res.status(401).json({ error: 'unauthorized' });
 
-  try {
-    const r = await fetch(GAS_HOOK, {
-      method: 'POST', redirect: 'follow',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'ocr_label', fileBase64: base64, mimeType }),
-    });
-    const text = await r.text();
-    let out; try { out = JSON.parse(text); } catch { out = { success: false, error: 'GAS returned non-JSON' }; }
-    if (!out.success) return res.status(422).json({ error: out.error || 'OCR failed' });
-    return res.status(200).json({ ok: true, text: out.text || '' });
-  } catch (e) {
-    return res.status(500).json({ error: String(e && e.message || e) });
+  // GAS web apps throw one-off errors on cold start — try twice before giving up.
+  let lastErr = 'OCR failed';
+  for (let att = 0; att < 2; att++) {
+    try {
+      const r = await fetch(GAS_HOOK, {
+        method: 'POST', redirect: 'follow',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'ocr_label', fileBase64: base64, mimeType }),
+      });
+      const text = await r.text();
+      let out; try { out = JSON.parse(text); } catch { out = { success: false, error: 'GAS returned non-JSON (' + r.status + ')' }; }
+      if (out.success) return res.status(200).json({ ok: true, text: out.text || '' });
+      lastErr = out.error || 'OCR failed';
+    } catch (e) {
+      lastErr = String(e && e.message || e);
+    }
   }
+  return res.status(422).json({ error: lastErr });
 }
