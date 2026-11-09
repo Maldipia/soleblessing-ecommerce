@@ -1078,7 +1078,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
         <div className="bg-[#050f12] px-5 py-3.5 flex items-center justify-between">
           <div>
             <p className="text-[10px] font-bold tracking-[.15em] uppercase text-[#C9A84C]">📦 Scan Shoebox</p>
-            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v12</span></p>
+            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v13</span></p>
           </div>
           <button onClick={()=>{stopCam();onClose();}} className="text-white/40 hover:text-white"><X className="h-5 w-5"/></button>
         </div>
@@ -2599,7 +2599,14 @@ export default function AdminDashboard() {
                           <td className="px-3 py-2">{img?<img src={img} className="w-8 h-8 rounded object-cover"/>:<span className="text-gray-300">—</span>}</td>
                           <td className="px-2 font-mono font-black text-xs text-[#0d2430]">{r.item_code}</td>
                           <td className="px-2 text-xs">{r.brand||"—"}</td>
-                          <td className="px-2 text-xs font-medium max-w-[180px] truncate">{r.name}</td>
+                          <td className="px-2 text-xs font-medium max-w-[180px] truncate">{(()=>{
+                            // the stored name is "Brand + Model" (the store needs it) — next to
+                            // the Brand column, show only the model part
+                            const nm=String(r.name||""), b=String(r.brand||"").trim();
+                            if(b&&nm.toLowerCase().startsWith(b.toLowerCase()+" ")) return nm.slice(b.length+1);
+                            if(b&&nm.toLowerCase()===b.toLowerCase()) return "—";
+                            return nm;
+                          })()}</td>
                           <td className="px-2 font-mono text-[11px] text-gray-500">{r.sku||"—"}</td>
                           <td className="px-2 text-xs font-bold">{r.size||"—"}</td>
                           <td className="px-2 text-xs text-gray-500">{r.size_eur||"—"}</td>
