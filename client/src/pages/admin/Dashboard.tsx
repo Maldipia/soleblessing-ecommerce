@@ -489,11 +489,24 @@ const getRoleColor=()=>{try{return sessionStorage.getItem("sb_admin_color")||"#C
 
 function parseLabel(raw:string, fxRate:number){
   const text = raw.replace(/[|]/g," ");
+  // OCR confuses O↔0 and I↔1 inside code-like tokens — build a normalized copy
+  // for SKU/barcode hunting (JI0457 read as "JIO4S7" still resolves).
   const U = text.toUpperCase();
+  const UC = U.replace(/\b([A-Z]{1,2})([A-Z0-9]{4,6})\b/g, (m,p,t)=>p+t.replace(/O/g,"0").replace(/I/g,"1").replace(/S/g,"5"));
   const out:any = {};
+  // SoleBlessing's own yellow intake sticker carries the item code: a standalone
+  // 3-5 digit number near SOLE/BLESSING or a dd-mm-yyyy date → suggest as code.
+  const sticker = U.match(/(?:SOLE|BLESS|\d{2}-\d{2}-\d{4})[\s\S]{0,40}?\b(\d{3,5})\b/) || U.match(/\b(\d{3,5})\b[\s\S]{0,30}?(?:SOLE|BLESS)/);
+  if (sticker) out.code = sticker[1];
+  // Barcode digits are PRINTED under the bars — read them when the camera API can't
+  const bcd = U.replace(/[^0-9\n ]/g," ").match(/\b(\d[\d ]{10,15}\d)\b/g);
+  if (bcd){
+    const clean = bcd.map(s=>s.replace(/\s/g,"")).filter(s=>s.length===12||s.length===13);
+    if (clean.length) out.barcode = clean[clean.length-1];
+  }
   // Brand + SKU patterns (pattern beats position — layouts differ per brand)
   const nikeSku = U.match(/\b(\d{6})[-\s]?(\d{3})\b/);
-  const adiSku  = U.match(/\b([A-Z]{1,2}[0-9]{4,5})\b/);
+  const adiSku  = UC.match(/\b([A-Z]{1,2}[0-9]{4,5})\b/);
   const asicsSku= U.match(/\b(\d{4}[A-Z]\d{3})(?:[-\s]?(\d{3}))?\b/);
   const nbSku   = U.match(/\b([MUW][A-Z]?\d{3,4}[A-Z]{0,4})\b/);
   if (/JORDAN/.test(U)) out.brand="Jordan";
@@ -520,12 +533,14 @@ function parseLabel(raw:string, fxRate:number){
     return /[A-Z]{3,}/i.test(u) && !/^\d/.test(l);
   });
   const score=(l:string)=>((l.match(/\//g)||[]).length?0:100)+l.length;
-  const modelLine = candidates.sort((a,b)=>score(b)-score(a))[0] || "";
+  const modelRaw = candidates.sort((a,b)=>score(b)-score(a))[0] || "";
+  // Strip OCR junk: [5k]-style brackets, stray symbols, duplicated trailing letters
+  const modelLine = modelRaw.replace(/\[[^\]]*\]/g," ").replace(/[^A-Za-z0-9 .'\/_-]/g," ").replace(/\s{2,}/g," ").trim();
   out.model = modelLine;
-  // Gender / youth markers — the model line itself counts ("X_PLR J" = junior)
+  // Gender / youth markers — the model line itself counts ("X_PLR J" = junior, "SPEZIAL C" = children)
   const MU = modelLine.toUpperCase();
   const isW = /WMNS|WOMEN/.test(U);
-  const isY = /\bGS\b|\bPS\b|\bTD\b|\(J\)|JUNIOR|YOUTH/.test(U) || /\bJ$|\bJR$/.test(MU.trim());
+  const isY = /\bGS\b|\bPS\b|\bTD\b|\(J\)|JUNIOR|YOUTH|INFANT/.test(U) || /\bJ$|\bJR$|\bC$|\bK$/.test(MU.trim());
   // Sizes — accept fractions and decimals
   const frac=(s:string)=>s.replace(/\s*1\/2|½/,".5").replace(/\s*2\/3|⅔/,".7").replace(/\s*1\/3|⅓/,".3").replace(",",".");
   const us = U.match(/\bUS\D{0,3}(\d{1,2}(?:[.,]5|\s?1\/2|½)?)/)
@@ -533,6 +548,9 @@ function parseLabel(raw:string, fxRate:number){
     || U.match(/(?:^|\s)(\d{1,2}(?:[.,]5|\s?1\/2|½)?)\s+(?:UK|EUR|F)\b/m); // bare "6.5  UK 4" layout
   const eur = U.match(/\b(?:EUR?|F)\W{0,2}(\d{2}(?:[.,]\d|\s?[12]\/3|⅔|½|\s?1\/2)?)/);
   const cm = U.match(/\b(\d{2}(?:[.,]5)?)\s?CM\b/) || U.match(/\bCM\W{0,2}(\d{2}(?:[.,]5)?)/) || U.match(/\bJP\W{0,2}(\d{2}(?:[.,]5)?)/);
+  // Adidas/Asian boxes print J / CHN in MILLIMETERS: "J 200" = 20cm
+  const jmm = U.match(/\b(?:J|JP|CHN)\W{0,2}([12]\d{2})\b/);
+  if (!cm && jmm) out.cmSize = String(parseInt(jmm[1],10)/10);
   if (us) out.usSize = frac(us[1]) + (isY?"Y":isW?"W":"M");
   if (eur) out.eurSize = frac(eur[1]);
   if (cm) out.cmSize = frac(cm[1]);
@@ -563,7 +581,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
     if(scanTimer.current){clearInterval(scanTimer.current);scanTimer.current=0;}};
   const startCam=async()=>{
     try{
-      const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"},audio:false});
+      const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment",width:{ideal:1920},height:{ideal:1080}},audio:false});
       streamRef.current=s;
       const v=document.getElementById("sb-scan-video") as HTMLVideoElement|null;
       if(v){v.srcObject=s;await v.play();}
@@ -610,12 +628,22 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
         document.head.appendChild(s);
       });
       const worker=await T.createWorker("eng");
-      const {data}=await worker.recognize(c);
+      // Preprocess for OCR: upscale + grayscale + contrast (phone photos of
+      // glossy labels read far better this way)
+      const p=document.createElement("canvas");
+      const sc=Math.min(2, 2600/Math.max(c.width,1));
+      p.width=Math.round(c.width*sc); p.height=Math.round(c.height*sc);
+      const pg=p.getContext("2d")!;
+      (pg as any).filter="grayscale(1) contrast(1.6) brightness(1.05)";
+      pg.imageSmoothingEnabled=true; pg.drawImage(c,0,0,p.width,p.height);
+      const {data}=await worker.recognize(p);
       await worker.terminate();
       const got=parseLabel(data.text||"",fx);
       setF(p=>({...p,
+        code:p.code||got.code||"",
         brand:p.brand||got.brand||"", model:p.model||got.model||"", sku:p.sku||got.sku||"",
         usSize:p.usSize||got.usSize||"", eurSize:p.eurSize||got.eurSize||"", cmSize:p.cmSize||got.cmSize||"",
+        barcode:p.barcode||got.barcode||"",
         srp:p.srp||got.srp||"",
       }));
       toast.success("Label read — check the green fields");
@@ -624,13 +652,21 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
   };
 
   const codeNorm=normSBCode(f.code);
-  const dup=codeNorm!==""&&existingCodes.has(codeNorm);
-  // "Already in the file?" — same barcode, or same SKU + size, flags a possible re-scan.
-  // Warning only: identical pairs legitimately exist as separate codes (1 code = 1 pair).
+  // Scanning builds the NEW inventory file (tab=SCAN). Rules (Pia, Nov 9):
+  //  - code already SCANNED → hard block (true duplicate in the new file)
+  //  - code only in the OLD sheet-imported data → CLAIM: saving updates that
+  //    record in place and pulls it into the scan log (treated as new inventory)
+  const scanCodes=useMemo(()=>new Set((allRows||[]).filter((r:any)=>r.tab==="SCAN").map((r:any)=>normSBCode(String(r.item_code||"")))),[allRows]);
+  const legacyRow=useMemo(()=>codeNorm?(allRows||[]).find((r:any)=>r.tab!=="SCAN"&&normSBCode(String(r.item_code||""))===codeNorm):null,[allRows,codeNorm]);
+  const dup=codeNorm!==""&&scanCodes.has(codeNorm);
+  const claim=!dup&&!!legacyRow;
+  // "Already in the file?" — checks the SCAN file only: same barcode or SKU+size
+  // flags a possible re-scan. Warning, not block (identical pairs = separate codes).
   const dupHits=useMemo(()=>{
     const hits:string[]=[];
     const bc=f.barcode.trim(); const sku=f.sku.trim().toUpperCase(); const sz=f.usSize.trim().toUpperCase();
     (allRows||[]).forEach((r:any)=>{
+      if(r.tab!=="SCAN")return;
       if(bc&&String(r.barcode||"")===bc) hits.push(`${r.item_code} (same barcode)`);
       else if(sku&&sz&&String(r.sku||"").toUpperCase()===sku&&String(r.size||"").toUpperCase()===sz) hits.push(`${r.item_code} (same SKU + size)`);
     });
@@ -639,19 +675,29 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
 
   const save=async()=>{
     if(!codeNorm){toast.error("Item code is required");return;}
-    if(dup){toast.error(`Code ${codeNorm} already exists — pick another`);return;}
+    if(dup){toast.error(`Code ${codeNorm} is already in the scan file — pick another`);return;}
     if(!f.model.trim()&&!f.sku.trim()){toast.error("Give it at least a model or SKU");return;}
     setSaving(true);
     try{
       const name=[f.brand&&!f.model.toUpperCase().includes(f.brand.toUpperCase())?f.brand:"",f.model].filter(Boolean).join(" ").trim()||f.sku;
-      await sb.insert("sb_inventory",{
+      // Upsert (merge): new code = insert; claiming an old-sheet code = that row
+      // is updated in place and joins the scan log. Empty/zero fields are OMITTED
+      // so a claim never wipes an existing cost or price with a blank.
+      const payload:any={
         item_code:codeNorm, name, sku:f.sku.trim(), size:f.usSize.trim(),
-        size_eur:f.eurSize.trim()||null, size_cm:f.cmSize.trim()||null, barcode:f.barcode.trim()||null,
-        brand:f.brand.trim()||null, condition:f.cond, category:"Sneakers",
-        srp:Math.round(Number(f.srp)||0)*100, selling_price:Math.round(Number(f.selling)||0)*100,
-        unit_cost:Math.round(Number(f.unitCost)||0)*100,
-        status:"Available", stock:1, tab:"SCAN", added_by:getRole(), date_acquired:new Date().toISOString().slice(0,10),
-      });
+        condition:f.cond, category:"Sneakers",
+        status:"Available", stock:1, tab:"SCAN", added_by:getRole(),
+        date_acquired:new Date().toISOString().slice(0,10),
+        updated_at:new Date().toISOString(),
+      };
+      if(f.eurSize.trim())payload.size_eur=f.eurSize.trim();
+      if(f.cmSize.trim())payload.size_cm=f.cmSize.trim();
+      if(f.barcode.trim())payload.barcode=f.barcode.trim();
+      if(f.brand.trim())payload.brand=f.brand.trim();
+      const srpC=Math.round(Number(f.srp)||0)*100; if(srpC>0)payload.srp=srpC;
+      const selC=Math.round(Number(f.selling)||0)*100; if(selC>0)payload.selling_price=selC;
+      const ucC=Math.round(Number(f.unitCost)||0)*100; if(ucC>0)payload.unit_cost=ucC;
+      await sb.upsert("sb_inventory","on_conflict=item_code",payload);
       // photo upload is best-effort
       if(photo){
         try{
@@ -660,7 +706,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
             body:JSON.stringify({password:pw,item_code:codeNorm,sku:f.sku.trim(),content_type:"image/jpeg",base64:photo.split(",")[1]})});
         }catch{}
       }
-      toast.success(`${codeNorm} saved — ${name}`);
+      toast.success(claim?`${codeNorm} claimed from old inventory — now in the scan file`:`${codeNorm} saved — ${name}`);
       onSaved();
       // batch mode: straight back to camera for the next box
       setF({...BLANK_INTAKE});setPhoto(null);setPhase("cam");
@@ -711,8 +757,10 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
                   value={f.code} onChange={e=>setF({...f,code:e.target.value})} placeholder={nextCode} autoFocus/>
                 <button onClick={()=>setF({...f,code:nextCode})} className="text-[10px] font-bold text-[#8a6d25] border border-[#C9A84C] rounded-lg px-2 whitespace-nowrap">use {nextCode}</button>
               </div>
-              <p className={`text-[10px] font-semibold ${dup?"text-red-500":codeNorm?"text-green-600":"text-gray-400"}`}>
-                {dup?`✗ ${codeNorm} already exists`:codeNorm?`✓ ${codeNorm} is free`:"type the code on the box / your series"}</p>
+              <p className={`text-[10px] font-semibold ${dup?"text-red-500":claim?"text-blue-600":codeNorm?"text-green-600":"text-gray-400"}`}>
+                {dup?`✗ ${codeNorm} already scanned — this is a duplicate in the new file`
+                 :claim?`↻ ${codeNorm} exists in OLD inventory (${String((legacyRow as any)?.name||"").slice(0,28)}) — saving claims it as new inventory`
+                 :codeNorm?`✓ ${codeNorm} is free`:"type the code on the box / your series"}</p>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div><label className="text-[9px] font-bold uppercase text-gray-400">Brand</label>

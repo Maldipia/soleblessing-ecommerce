@@ -45,9 +45,9 @@ export default async function handler(req, res) {
   if (staff) {
     // Least privilege: scanner needs exactly these and nothing else.
     const allowedForStaff =
-      (table === 'sb_inventory' && (op === 'select' || op === 'insert'));
+      (table === 'sb_inventory' && (op === 'select' || op === 'insert' || op === 'upsert'));
     if (!allowedForStaff) return res.status(403).json({ error: 'staff accounts can only view and add inventory' });
-    if (op === 'insert' && data) {
+    if ((op === 'insert' || op === 'upsert') && data) {
       const stamp = (r) => ({ ...r, added_by: staff.id, tab: 'SCAN' });
       body.data = Array.isArray(data) ? data.map(stamp) : stamp(data);
     }
