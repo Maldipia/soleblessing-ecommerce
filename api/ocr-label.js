@@ -48,6 +48,9 @@ export default async function handler(req, res) {
       let out; try { out = JSON.parse(text); } catch { out = { success: false, error: 'GAS returned non-JSON (' + r.status + ')' }; }
       if (out.success) return res.status(200).json({ ok: true, text: out.text || '' });
       lastErr = out.error || 'OCR failed';
+      // Drive is rate-limited: a second call only burns more quota — bail now,
+      // the client falls back to on-device OCR and the limit clears on its own.
+      if (/rate limit|quota/i.test(lastErr)) break;
     } catch (e) {
       lastErr = String(e && e.message || e);
     }
