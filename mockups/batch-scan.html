@@ -1,0 +1,143 @@
+<title>Batch Box Intake</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: three phone frames stacked — the full batch workflow, warehouse → desk → saved */
+:root{
+  --bg:#0b1417; --panel:#101d21; --card:#15262b; --line:#23383e;
+  --fg:#e8eef0; --mut:#7d949b; --gold:#C9A84C; --good:#34d399; --warn:#f59e0b; --bad:#f87171;
+  --ff:'Outfit',system-ui,sans-serif; --mono:'JetBrains Mono',ui-monospace,monospace;
+}
+:root{color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--ff);margin:0;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px}
+.wrap{max-width:430px;margin:0 auto;display:flex;flex-direction:column;gap:26px}
+h1{font-size:21px;margin:0;letter-spacing:.3px}
+h1 em{color:var(--gold);font-style:normal}
+.sub{color:var(--mut);font-size:12.5px;line-height:1.55;margin:6px 0 0}
+.step{color:var(--gold);font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;margin:0 0 6px}
+.phone{background:var(--panel);border:1px solid var(--line);border-radius:22px;overflow:hidden}
+.bar{background:#050f12;padding:12px 16px;display:flex;justify-content:space-between;align-items:center}
+.bar b{font-size:12px;letter-spacing:.08em;color:var(--gold)}
+.bar span{font-size:10px;color:var(--mut)}
+.inner{padding:14px 14px 18px;display:flex;flex-direction:column;gap:10px}
+.big{background:var(--gold);color:#050f12;border-radius:14px;padding:15px;text-align:center;font-weight:800;font-size:14px}
+.ghost{border:1px dashed var(--line);border-radius:14px;padding:13px;text-align:center;color:var(--mut);font-size:12px}
+.prog{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.prog .t{display:flex;justify-content:space-between;font-size:12px;font-weight:700}
+.prog .t span{color:var(--gold);font-family:var(--mono)}
+.rail{height:6px;background:#0a171b;border-radius:3px;margin-top:9px;overflow:hidden}
+.rail i{display:block;height:100%;width:62%;background:var(--gold);border-radius:3px}
+.hint{font-size:10.5px;color:var(--mut);margin-top:7px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:11px 12px;display:flex;gap:10px;align-items:flex-start}
+.card.flag{border-color:var(--warn)}
+.thumb{width:46px;height:46px;border-radius:9px;background:#1d6fb8;flex:none;display:flex;align-items:center;justify-content:center;font-size:19px}
+.meta{flex:1;min-width:0}
+.meta .code{font-family:var(--mono);font-weight:700;font-size:13px;color:var(--gold)}
+.meta .nm{font-size:12.5px;font-weight:700;margin:2px 0}
+.meta .sz{font-size:11px;color:var(--mut);font-family:var(--mono)}
+.meta .why{font-size:10.5px;color:var(--warn);margin-top:3px}
+.ok{flex:none;width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:15px;border:1px solid var(--line)}
+.ok.y{background:var(--good);border-color:var(--good);color:#04312a}
+.saveall{background:var(--good);color:#04312a;border-radius:14px;padding:14px;text-align:center;font-weight:800;font-size:14px}
+.sum{display:flex;gap:8px}
+.sum .s{flex:1;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center}
+.sum .n{font-size:20px;font-weight:800;font-family:var(--mono)}
+.sum .l{font-size:9.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.1em;margin-top:2px}
+.n.g{color:var(--good)}.n.w{color:var(--warn)}.n.gold{color:var(--gold)}
+.math{background:var(--card);border:1px solid var(--gold);border-radius:14px;padding:13px 15px;font-size:12.5px;line-height:1.65}
+.math b{color:var(--gold)}
+.foot{color:var(--mut);font-size:11px;text-align:center}
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;800&family=JetBrains+Mono:wght@400;700&display=swap">
+<div class="wrap">
+  <div>
+    <h1>📦 Batch Box Intake — <em>shoot now, review later</em></h1>
+    <p class="sub">Walk the shelves snapping labels with your normal camera (no waiting). Then upload everything at once — Google OCR pre-fills each pair, including the item code from your yellow sticker. You only review and tap ✓.</p>
+  </div>
+
+  <div>
+    <p class="step">Step 1 · Upload — Latest Inventory tab</p>
+    <div class="phone">
+      <div class="bar"><b>SOLEBLESSING · LATEST INVENTORY</b><span>SA02 ●</span></div>
+      <div class="inner">
+        <div class="big">📁 UPLOAD BOX PHOTOS (pick many)</div>
+        <div class="ghost">or 📷 Scan live — one box at a time, like now</div>
+        <div class="prog">
+          <div class="t">Reading labels… <span>31 / 50</span></div>
+          <div class="rail"><i></i></div>
+          <div class="hint">Google OCR · ~4 sec each · keep this tab open — review cards appear below as they finish</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <p class="step">Step 2 · Review queue — flagged ones float to the top</p>
+    <div class="phone">
+      <div class="bar"><b>REVIEW — 50 PAIRS</b><span>3 need a look</span></div>
+      <div class="inner">
+        <div class="card flag">
+          <div class="thumb">👟</div>
+          <div class="meta">
+            <div class="code">⚠ code not read — type it</div>
+            <div class="nm">Adidas · SAMBA OG · B75807</div>
+            <div class="sz">US 9M · EUR 42⅔ · 27 cm · ₱6,500</div>
+            <div class="why">sticker blurry on photo #14 — tap to zoom</div>
+          </div>
+          <div class="ok">✎</div>
+        </div>
+        <div class="card flag">
+          <div class="thumb">👟</div>
+          <div class="meta">
+            <div class="code">AB 2915 — already in scan log</div>
+            <div class="nm">Adidas · YEEZY BOOST 350 V2</div>
+            <div class="why">duplicate — skip, or edit code if sticker differs</div>
+          </div>
+          <div class="ok">✕</div>
+        </div>
+        <div class="card">
+          <div class="thumb">👟</div>
+          <div class="meta">
+            <div class="code">AB 1786 ✓ free</div>
+            <div class="nm">Adidas · BRYONY W · GX8175</div>
+            <div class="sz">US 6.5W · EUR 38 · 23.5 cm · ₱5,000</div>
+          </div>
+          <div class="ok y">✓</div>
+        </div>
+        <div class="card">
+          <div class="thumb">👟</div>
+          <div class="meta">
+            <div class="code">5108 ✓ free</div>
+            <div class="nm">Jordan · AJ1 RETRO HIGH · DZ5485-612</div>
+            <div class="sz">US 6.5M · EUR 39 · 24.5 cm</div>
+          </div>
+          <div class="ok y">✓</div>
+        </div>
+        <div class="saveall">💾 SAVE 47 APPROVED PAIRS</div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <p class="step">Step 3 · Done — stamped with your admin color</p>
+    <div class="phone">
+      <div class="bar"><b>BATCH SAVED</b><span>4:52 PM</span></div>
+      <div class="inner">
+        <div class="sum">
+          <div class="s"><div class="n g">47</div><div class="l">saved</div></div>
+          <div class="s"><div class="n w">2</div><div class="l">fixed by hand</div></div>
+          <div class="s"><div class="n">1</div><div class="l">skipped dup</div></div>
+          <div class="s"><div class="n gold">SA02</div><div class="l">stamped by</div></div>
+        </div>
+        <div class="math">
+          <b>Speed math, 100 boxes:</b><br>
+          Live scan (now): aim + wait + save ≈ 45 s each → <b>~75 min</b><br>
+          Batch: snap 5 s each (8 min) + review 8 s each (14 min) → <b>~22 min</b><br>
+          Photos OCR themselves while you review the first ones.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="foot">Mockup only — nothing built yet. Live single-box scan stays as it is; batch is an extra button beside it.</p>
+</div>
