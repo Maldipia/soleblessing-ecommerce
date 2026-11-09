@@ -615,36 +615,67 @@ function parseLabel(raw:string, fxRate:number){
   if (us) out.usSize = frac(us[1]) + (usIsMens?"M":usIsWmns?"W":isY?"Y":isW?"W":"M");
   if (eur) out.eurSize = frac(eur[1]);
   if (cm) out.cmSize = frac(cm[1]);
-  // Google-OCR table mode: adidas size grids flatten to header lines ("US","UK",
-  // then "F","D") with the values on following lines ("6½" reads as "62", "38 5").
-  // Reconstruct the columns when the inline patterns found nothing.
+  // Google-OCR table mode: adidas size grids flatten in SEVERAL shapes —
+  // stacked ("US","UK", junk, "62", "5"), interleaved ("US","6 1/2","UK","5"),
+  // or glued ("US UK", "6½ 5"). Reconstruct the columns from any of them.
   {
-    const L = U.split(/\n+/).map(s=>s.trim());
+    const L = U.split(/\n+/).map(s=>s.trim()).filter(Boolean);
     const num=(s:string)=>parseFloat(s.replace(",","."));
-    const grab=(h1:RegExp,h2:RegExp)=>{
-      const i=L.findIndex((s,k)=>h1.test(s)&&h2.test(L[k+1]||""));
-      if(i<0) return null;
-      const vals:string[]=[];
-      for(let k=i+2;k<Math.min(i+9,L.length)&&vals.length<2;k++){
-        const mm=L[k].match(/^(\d{1,3}(?:[.,]\d)?)(?:\s+(\d{1,3}(?:[.,]\d)?))?$/);
-        if(mm){vals.push(mm[1]); if(mm[2]&&vals.length<2)vals.push(mm[2]);}
+    // one numeric token: 38 · 6,5 · 6 1/2 · 6½ · 42 2/3
+    const numv=(s:string)=>{
+      const m=(s||"").trim().replace(/½/," 1/2").replace(/⅔/," 2/3").replace(/\s+/g," ")
+        .match(/^(\d{1,3})(?:[.,](\d))?(?:\s?([12])\/([23]))?$/);
+      if(!m) return null;
+      return m[1]+(m[2]?"."+m[2]:m[3]?(m[4]==="2"?".5":m[3]==="1"?".3":".7"):"");
+    };
+    // a line that is ONLY numbers → its tokens ("38 5" → [38,5])
+    const twoNum=(s:string)=>{
+      const parts=(s||"").trim().replace(/½/g," 1/2").replace(/⅔/g," 2/3").split(/\s+/);
+      const res:string[]=[]; let i=0;
+      while(i<parts.length){
+        const pair=i+1<parts.length?numv(parts[i]+" "+parts[i+1]):null; // "6 1/2"
+        if(pair&&/\//.test(parts[i+1])){res.push(pair);i+=2;continue;}
+        const one=numv(parts[i]); if(!one) return res.length?res:null;
+        res.push(one);i++;
       }
-      return vals.length?vals:null;
+      return res.length?res:null;
+    };
+    const colPair=(h1:RegExp,h2:RegExp)=>{
+      for(let i=0;i<L.length;i++){
+        if(!h1.test(L[i])) continue;
+        // interleaved: HDR value HDR value
+        const a=numv(L[i+1]||"");
+        if(a&&h2.test(L[i+2]||"")) return [a,numv(L[i+3]||"")||""].filter(Boolean);
+        // stacked: HDR then HDR within 2 lines, values further down (junk between allowed)
+        if(h2.test(L[i+1]||"")||h2.test(L[i+2]||"")){
+          const vals:string[]=[];
+          for(let k=i+2;k<Math.min(i+10,L.length)&&vals.length<2;k++){
+            const t=twoNum(L[k]); if(t) for(const x of t){if(vals.length<2)vals.push(x);}
+          }
+          if(vals.length) return vals;
+        }
+        return null;
+      }
+      return null;
     };
     if(!out.usSize){
-      const v=grab(/^US$/,/^UK$/);
+      const v=colPair(/^US$/,/^UK$/)||(()=>{ // glued headers "US UK" then "6½ 5"
+        const i=L.findIndex(s=>/^US\s+UK$/.test(s));
+        return i>=0?(twoNum(L[i+1]||"")||twoNum(L[i+2]||"")):null;})();
       if(v&&v[0]){
-        let s=v[0].replace(",",".");
+        let s=v[0];
         if(num(s)>16){const h=s.match(/^(1?\d)2$/); if(h) s=h[1]+".5";} // "6½" OCR-reads "62"
         if(num(s)>=1&&num(s)<=16) out.usSize=s+(isY?"Y":isW?"W":"M");
-        if(v[1]&&!out.ukSize&&num(v[1])>=1&&num(v[1])<=15) out.ukSize=v[1].replace(",",".");
+        if(v[1]&&!out.ukSize&&num(v[1])>=1&&num(v[1])<=15) out.ukSize=v[1];
       }
     }
     if(!out.eurSize){
-      const v=grab(/^F$/,/^D$/);
+      const v=colPair(/^F$/,/^D$/)||(()=>{
+        const i=L.findIndex(s=>/^F\s+D$/.test(s));
+        return i>=0?(twoNum(L[i+1]||"")||twoNum(L[i+2]||"")):null;})();
       if(v&&v[0]&&num(v[0])>=15&&num(v[0])<=50){
-        out.eurSize=v[0].replace(",",".");
-        if(v[1]&&!out.ukSize&&num(v[1])>=1&&num(v[1])<=15) out.ukSize=v[1].replace(",",".");
+        out.eurSize=v[0];
+        if(v[1]&&!out.ukSize&&num(v[1])>=1&&num(v[1])<=15) out.ukSize=v[1];
       }
     }
   }
@@ -717,6 +748,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
   const [busy,setBusy]=useState("");
   const [saving,setSaving]=useState(false);
   const [photo,setPhoto]=useState<string|null>(null); // dataURL for upload
+  const [lastOcr,setLastOcr]=useState(""); // raw engine output — debugging bad reads
   const [showPrice,setShowPrice]=useState(false);
   const videoRef=(window as any).__sbVid||={current:null as HTMLVideoElement|null};
   const streamRef=(window as any).__sbStream||={current:null as MediaStream|null};
@@ -784,6 +816,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
       }
       if(!gasText) toast.info(`Google OCR unavailable (${gasWhy||"no response"}) — using phone OCR`);
       if(gasText){
+        setLastOcr("— Google OCR —\n"+gasText.trim());
         const got=parseLabel(gasText,fx);
         setF(p=>({...p,
           code:p.code||got.code||"",
@@ -819,6 +852,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
       pg.imageSmoothingEnabled=true; pg.drawImage(c,0,0,p.width,p.height);
       const {data}=await worker.recognize(p);
       await worker.terminate();
+      setLastOcr("— phone OCR —\n"+String(data.text||"").trim());
       const got=parseLabel(data.text||"",fx);
       setF(p=>({...p,
         code:p.code||got.code||"",
@@ -912,7 +946,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
         <div className="bg-[#050f12] px-5 py-3.5 flex items-center justify-between">
           <div>
             <p className="text-[10px] font-bold tracking-[.15em] uppercase text-[#C9A84C]">📦 Scan Shoebox</p>
-            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v7</span></p>
+            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v8</span></p>
           </div>
           <button onClick={()=>{stopCam();onClose();}} className="text-white/40 hover:text-white"><X className="h-5 w-5"/></button>
         </div>
@@ -933,6 +967,10 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
         {phase==="form"&&(
           <div className="p-4 space-y-2.5">
             {busy&&<div className="text-xs font-bold text-amber-600 bg-amber-50 rounded-lg px-3 py-2 animate-pulse">{busy}</div>}
+            {lastOcr&&<details className="text-[10px] text-gray-400">
+              <summary className="cursor-pointer select-none">🔎 what the camera read</summary>
+              <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap bg-gray-50 rounded-lg p-2 font-mono text-[9px] leading-tight">{lastOcr}</pre>
+            </details>}
             <div>
               <label className="text-[9px] font-bold uppercase tracking-wider text-amber-600">🟠 Item code — you enter</label>
               <div className="flex gap-2">
