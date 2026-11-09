@@ -1044,6 +1044,9 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
         date_acquired:new Date().toISOString().slice(0,10),
         updated_at:new Date().toISOString(),
       };
+      // a claimed legacy row is NEW inventory — resurface it at the top of the
+      // scan log instead of leaving it buried at its old import date
+      if(claim) payload.created_at=new Date().toISOString();
       if(f.eurSize.trim())payload.size_eur=f.eurSize.trim();
       if(f.cmSize.trim())payload.size_cm=f.cmSize.trim();
       if(f.barcode.trim())payload.barcode=f.barcode.trim();
@@ -1089,7 +1092,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
         <div className="bg-[#050f12] px-5 py-3.5 flex items-center justify-between">
           <div>
             <p className="text-[10px] font-bold tracking-[.15em] uppercase text-[#C9A84C]">📦 Scan Shoebox</p>
-            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v16</span></p>
+            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v17</span></p>
           </div>
           <button onClick={()=>{stopCam();onClose();}} className="text-white/40 hover:text-white"><X className="h-5 w-5"/></button>
         </div>
