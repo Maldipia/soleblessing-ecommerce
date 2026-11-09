@@ -500,12 +500,16 @@ function parseLabel(raw:string, fxRate:number){
     const clean = bcd.map(s=>s.replace(/\s/g,"")).filter(s=>s.length===12||s.length===13);
     if (clean.length) out.barcode = clean[clean.length-1];
   }
-  // Brand + SKU patterns (pattern beats position — layouts differ per brand)
-  const nikeSkuOld = U.match(/\b(\d{6})[-\s]?(\d{3})\b/);                // 831217-011
-  const nikeSkuNew = UC.match(/\b([A-Z]{2}\d{4})[-\s](\d{3})\b/);        // DX4401 164, CJ0882 001
-  const adiSku  = UC.match(/\b([A-Z]{1,2}[0-9]{4,5})\b/);                // CQ2964, B37571, HQ4540
-  const asicsSku= U.match(/\b(\d{4}[A-Z]\d{3})(?:[-\s]?(\d{3}))?\b/);
-  const nbSku   = U.match(/\b([MUW][A-Z]?\d{3,4}[A-Z]{0,4})\b/);
+  // Brand + SKU patterns (pattern beats position — layouts differ per brand).
+  // EAN/PO#/UPC lines are factory order numbers, never SKUs — drop them first
+  // ("EAN PO# 129446096" otherwise reads as an old Nike style code).
+  const U2  = U.split(/\n/).filter(l=>!/EAN|PO\s?#|UPC|BARCODE/.test(l)).join("\n");
+  const UC2 = UC.split(/\n/).filter(l=>!/EAN|PO\s?#|UPC|BARCODE/.test(l)).join("\n");
+  const nikeSkuOld = U2.match(/\b(\d{6})[-\s]?(\d{3})\b/);                // 831217-011
+  const nikeSkuNew = UC2.match(/\b([A-Z]{2}\d{4})[-\s](\d{3})\b/);        // DX4401 164, CJ0882 001
+  const adiSku  = UC2.match(/\b([A-Z]{1,2}[0-9]{4,5})\b/);                // CQ2964, B37571, HQ4540
+  const asicsSku= U2.match(/\b(\d{4}[A-Z]\d{3})(?:[-\s]?(\d{3}))?\b/);
+  const nbSku   = U2.match(/\b([MUW][A-Z]?\d{3,4}[A-Z]{0,4})\b/);
   if (/JORDAN/.test(U)) out.brand="Jordan";
   else if (/YEEZY|YZY|MADE BY ADIDAS/.test(U)) out.brand="Adidas";
   else if (/NIKE|WMNS/.test(U) || nikeSkuOld) out.brand="Nike";
@@ -566,7 +570,9 @@ function parseLabel(raw:string, fxRate:number){
     const u=l.toUpperCase();
     if (u.length<4||u.length>40) return false;
     if (/MADE IN|MADE BY|FABRIQU|HECHO|INDONESIA|VIETNAM|CHINA|UPC|EAN|PRICE|PHP|SOLARSOFT|CUSHION|UNISEX|SOLE|BLESS|\.COM|WWW\.|\d{2}[- .\/]\d{2}[- .\/]\d{4}|\bPO\b|\bUS\b|\bUK\b|EUR|\bCM\b|\d{6,}/.test(u)) return false;
-    if (/^(ORIGINALS?|SPORTSWEAR|PERFORMANCE|EQUIPMENT|AUTHENTICS?|CLASSICS?|NIKE|ADIDAS|ASICS|PUMA|VANS|CONVERSE|NEW BALANCE|JORDAN)$/.test(u)) return false; // brand taglines aren't models
+    // brand taglines aren't models — also when OCR doubles them ("ORIGINALS ORIGINALS")
+    const tag=/^(ORIGINALS?|SPORTSWEAR|PERFORMANCE|EQUIPMENT|AUTHENTICS?|CLASSICS?|NIKE|ADIDAS|ASICS|PUMA|VANS|CONVERSE|NEW|BALANCE|JORDAN)$/;
+    if (u.split(/\s+/).every(w=>tag.test(w))) return false;
     // mostly-digits lines ("F460 11 101 tra602") are code soup, never a model
     const letters=(l.match(/[A-Za-z]/g)||[]).length, digits=(l.match(/\d/g)||[]).length;
     if (digits >= letters) return false;
@@ -608,6 +614,39 @@ function parseLabel(raw:string, fxRate:number){
   if (us) out.usSize = frac(us[1]) + (usIsMens?"M":usIsWmns?"W":isY?"Y":isW?"W":"M");
   if (eur) out.eurSize = frac(eur[1]);
   if (cm) out.cmSize = frac(cm[1]);
+  // Google-OCR table mode: adidas size grids flatten to header lines ("US","UK",
+  // then "F","D") with the values on following lines ("6½" reads as "62", "38 5").
+  // Reconstruct the columns when the inline patterns found nothing.
+  {
+    const L = U.split(/\n+/).map(s=>s.trim());
+    const num=(s:string)=>parseFloat(s.replace(",","."));
+    const grab=(h1:RegExp,h2:RegExp)=>{
+      const i=L.findIndex((s,k)=>h1.test(s)&&h2.test(L[k+1]||""));
+      if(i<0) return null;
+      const vals:string[]=[];
+      for(let k=i+2;k<Math.min(i+9,L.length)&&vals.length<2;k++){
+        const mm=L[k].match(/^(\d{1,3}(?:[.,]\d)?)(?:\s+(\d{1,3}(?:[.,]\d)?))?$/);
+        if(mm){vals.push(mm[1]); if(mm[2]&&vals.length<2)vals.push(mm[2]);}
+      }
+      return vals.length?vals:null;
+    };
+    if(!out.usSize){
+      const v=grab(/^US$/,/^UK$/);
+      if(v&&v[0]){
+        let s=v[0].replace(",",".");
+        if(num(s)>16){const h=s.match(/^(1?\d)2$/); if(h) s=h[1]+".5";} // "6½" OCR-reads "62"
+        if(num(s)>=1&&num(s)<=16) out.usSize=s+(isY?"Y":isW?"W":"M");
+        if(v[1]&&!out.ukSize&&num(v[1])>=1&&num(v[1])<=15) out.ukSize=v[1].replace(",",".");
+      }
+    }
+    if(!out.eurSize){
+      const v=grab(/^F$/,/^D$/);
+      if(v&&v[0]&&num(v[0])>=15&&num(v[0])<=50){
+        out.eurSize=v[0].replace(",",".");
+        if(v[1]&&!out.ukSize&&num(v[1])>=1&&num(v[1])<=15) out.ukSize=v[1].replace(",",".");
+      }
+    }
+  }
   // SRP from price sticker — any sign; ₱ as-is, $/€ converted, bare large number
   // near PRICE. OCR mangles separators ("5,000.00" → "5 000 00"), so: keep the
   // digit run, drop trailing cents when a cents pattern ended the amount.
@@ -618,9 +657,9 @@ function parseLabel(raw:string, fxRate:number){
     if (cents && d.length>2) d = d.slice(0,-2);
     return parseInt(d||"0",10);
   };
-  const php = text.match(/(?:₱|PHP)[\s:]*([\d][\d.,\s]{0,12}\d|\d)/i);
-  const usd = text.match(/(?:\$|USD)[\s:]*([\d][\d.,\s]{0,12}\d|\d)/i);
-  const near = text.match(/PRICE[^\d]{0,12}([\d][\d.,\s]{0,12}\d)/i);
+  const php = text.match(/(?:₱|PHP)[:\t ]*([\d][\d.,\t ]{0,12}\d|\d)/i);
+  const usd = text.match(/(?:\$|USD)[:\t ]*([\d][\d.,\t ]{0,12}\d|\d)/i);
+  const near = text.match(/PRICE[^\d\n]{0,12}([\d][\d.,\t ]{0,12}\d)/i);
   if (php && money(php[1])>0) out.srp = String(money(php[1]));
   else if (usd && money(usd[1])>0) out.srp = String(Math.round(money(usd[1])*fxRate));
   else if (near && money(near[1])>100) out.srp = String(money(near[1]));
