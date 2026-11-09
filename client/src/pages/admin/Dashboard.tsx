@@ -789,13 +789,16 @@ function parseLabel(raw:string, fxRate:number){
 // added_by server-side, so the last editor is always on record.
 function ScanEditModal({row,onClose,onSaved}:{row:any;onClose:()=>void;onSaved:()=>void}){
   const peso=(c:any)=>c?String(Math.round(c/100)):"";
-  const [f,setF]=useState<any>({name:row.name||"",brand:row.brand||"",sku:row.sku||"",size:row.size||"",
+  const [f,setF]=useState<any>({code:row.item_code||"",name:row.name||"",brand:row.brand||"",sku:row.sku||"",size:row.size||"",
     eur:row.size_eur||"",cm:row.size_cm||"",barcode:row.barcode||"",srp:peso(row.srp),selling:peso(row.selling_price),
     cond:(row.condition&&row.condition!=="New")?row.condition:"Good",status:row.status||"Available"});
   const [busy,setBusy]=useState(false);
   const I="w-full border border-gray-200 rounded-lg px-2.5 py-2 text-sm";
   const L="text-[9px] font-bold uppercase tracking-wider text-gray-400";
   const save=async()=>{
+    const newCode=String(f.code||"").replace(/\s+/g,"").toUpperCase();
+    if(!newCode){toast.error("Code is required");return;}
+    if(!/^[A-Z0-9_-]{1,32}$/.test(newCode)){toast.error(`Code "${newCode}" — letters and numbers only (e.g. AB3413)`);return;}
     if(!f.name.trim()){toast.error("Name is required");return;}
     const usN=parseFloat(f.size),eN=parseFloat(f.eur),cN=parseFloat(f.cm);
     if(f.size.trim()&&!(usN>=1&&usN<=16)){toast.error(`US ${f.size} can't be right — US sizes run 1–16`);return;}
@@ -803,13 +806,18 @@ function ScanEditModal({row,onClose,onSaved}:{row:any;onClose:()=>void;onSaved:(
     if(f.cm.trim()&&!(cN>=10&&cN<=34)){toast.error(`CM ${f.cm} can't be right — J/CHN prints millimeters, 235 means 23.5 cm`);return;}
     setBusy(true);
     try{
-      await sb.upsert("sb_inventory","on_conflict=item_code",{
-        item_code:row.item_code, name:f.name.trim(), brand:f.brand.trim()||null, sku:f.sku.trim()||null,
+      if(newCode!==row.item_code){
+        // renaming the box code — make sure the new one isn't already a different pair
+        const clash=await sb.select("sb_inventory",`select=item_code&item_code=eq.${encodeURIComponent(newCode)}`);
+        if(clash&&clash.length){toast.error(`${newCode} already exists — that's another pair`);setBusy(false);return;}
+      }
+      await sb.update("sb_inventory",`item_code=eq.${encodeURIComponent(row.item_code)}`,{
+        item_code:newCode, name:f.name.trim(), brand:f.brand.trim()||null, sku:f.sku.trim()||null,
         size:f.size.replace(/\s+/g,"").toUpperCase()||null, size_eur:f.eur.trim()||null, size_cm:f.cm.trim()||null, barcode:f.barcode.trim()||null,
         srp:f.srp?Math.round(Number(f.srp)||0)*100:null, selling_price:f.selling?Math.round(Number(f.selling)||0)*100:null,
         condition:f.cond, status:f.status, updated_at:new Date().toISOString(),
       });
-      toast.success(`${row.item_code} updated`); onSaved();
+      toast.success(newCode!==row.item_code?`${row.item_code} → ${newCode} saved`:`${newCode} updated`); onSaved();
     }catch(e:any){toast.error("Save failed: "+(e.message||e));}
     finally{setBusy(false);}
   };
@@ -821,6 +829,7 @@ function ScanEditModal({row,onClose,onSaved}:{row:any;onClose:()=>void;onSaved:(
           <button onClick={onClose} className="text-white/40 hover:text-white text-lg leading-none">✕</button>
         </div>
         <div className="p-4 space-y-2.5">
+          <div><label className={L}>Code (box sticker — fix a wrong code here)</label><input className={`${I} font-mono font-bold`} value={f.code} onChange={e=>setF({...f,code:e.target.value})}/></div>
           <div><label className={L}>Name (brand + model)</label><input className={I} value={f.name} onChange={e=>setF({...f,name:e.target.value})}/></div>
           <div className="grid grid-cols-2 gap-2">
             <div><label className={L}>Brand</label><input className={I} value={f.brand} onChange={e=>setF({...f,brand:e.target.value})}/></div>
@@ -1095,7 +1104,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
         <div className="bg-[#050f12] px-5 py-3.5 flex items-center justify-between">
           <div>
             <p className="text-[10px] font-bold tracking-[.15em] uppercase text-[#C9A84C]">📦 Scan Shoebox</p>
-            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v19</span></p>
+            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v20</span></p>
           </div>
           <button onClick={()=>{stopCam();onClose();}} className="text-white/40 hover:text-white"><X className="h-5 w-5"/></button>
         </div>
