@@ -578,9 +578,22 @@ function parseLabel(raw:string, fxRate:number){
     if (digits >= letters) return false;
     return /[A-Z]{3,}/i.test(u) && !/^\d/.test(l);
   });
-  // digits in a "model" line are usually a neighboring box's codes — penalize hard
-  const score=(l:string)=>((l.match(/\//g)||[]).length?0:100)+(l.match(/[A-Za-z]/g)||[]).length-3*(l.match(/\d/g)||[]).length;
-  const modelRaw = candidates.sort((a,b)=>score(b)-score(a))[0] || "";
+  // digits in a "model" line are usually a neighboring box's codes — penalize hard.
+  // The REAL model prints beside the SKU on the factory label, so lines containing
+  // or near the SKU outrank buyer stickers (customer names, towns) and stray text.
+  const skuFlatM=String(out.sku||"").replace(/[^A-Z0-9]/gi,"").toUpperCase();
+  const skuLineIdx = skuFlatM ? lines.findIndex(l=>l.toUpperCase().replace(/[^A-Z0-9]/g,"").includes(skuFlatM)) : -1;
+  const score=(l:string)=>{
+    let s=((l.match(/\//g)||[]).length?0:100)+(l.match(/[A-Za-z]/g)||[]).length-3*(l.match(/\d/g)||[]).length;
+    if(skuFlatM){
+      if(l.toUpperCase().replace(/[^A-Z0-9]/g,"").includes(skuFlatM)) s+=60;
+      else if(skuLineIdx>=0) s+=Math.max(0, 30-8*Math.abs(lines.indexOf(l)-skuLineIdx));
+    }
+    return s;
+  };
+  let modelRaw = candidates.sort((a,b)=>score(b)-score(a))[0] || "";
+  // the SKU printed on the same line is not part of the model name
+  if(skuFlatM) modelRaw=modelRaw.replace(new RegExp(skuFlatM.split("").join("[^A-Za-z0-9]?"),"i"),"").trim();
   // Strip OCR junk: [5k]-style brackets, stray symbols, duplicated trailing letters
   const modelLine = modelRaw.replace(/\[[^\]]*\]/g," ").replace(/[^A-Za-z0-9 .'\/_-]/g," ").replace(/\s{2,}/g," ").trim();
   out.model = modelLine;
@@ -664,7 +677,16 @@ function parseLabel(raw:string, fxRate:number){
         return i>=0?(twoNum(L[i+1]||"")||twoNum(L[i+2]||"")):null;})();
       if(v&&v[0]){
         let s=v[0];
-        if(num(s)>16){const h=s.match(/^(1?\d)2$/); if(h) s=h[1]+".5";} // "6½" OCR-reads "62"
+        // "½" OCR-reads as "2" glued on ("6½"→"62", kids "1½"→"12"). Repair when
+        // the raw value is impossible OR the UK column disagrees with it but
+        // agrees with the repaired value (US runs 0.5–1.5 above UK on every brand).
+        const rep=s.match(/^(1?\d)2$/), ukv=v[1]?num(v[1]):NaN;
+        if(rep){
+          const raw=num(s), fixed=num(rep[1])+0.5;
+          const rawFitsUk=!isNaN(ukv)&&(raw-ukv>=0.4&&raw-ukv<=1.6);
+          const fixFitsUk=!isNaN(ukv)&&(fixed-ukv>=0.4&&fixed-ukv<=1.6);
+          if((raw>16&&fixed<=16)||(!rawFitsUk&&fixFitsUk)) s=rep[1]+".5";
+        }
         if(num(s)>=1&&num(s)<=16) out.usSize=s+(isY?"Y":isW?"W":"M");
         if(v[1]&&!out.ukSize&&num(v[1])>=1&&num(v[1])<=15) out.ukSize=v[1];
       }
@@ -689,6 +711,12 @@ function parseLabel(raw:string, fxRate:number){
     if(out.eurSize&&!(parseFloat(out.eurSize)>=15&&parseFloat(out.eurSize)<=50)) delete out.eurSize;
     if(out.ukSize&&!(parseFloat(out.ukSize)>=1&&parseFloat(out.ukSize)<=15)) delete out.ukSize;
     const usN=n(out.usSize);
+    // kids pictograms can't be OCR'd, but the numbers can: a tiny US size with a
+    // small EUR/CM is a kids pair even without a C/K/Y marker on the model
+    if(out.usSize&&!/Y$/.test(String(out.usSize))&&usN<=3.5){
+      const eN=parseFloat(out.eurSize||""), cN=parseFloat(out.cmSize||"");
+      if((eN&&eN<=36)||(cN&&cN<=22.5)) out.usSize=String(usN)+"Y";
+    }
     if(!isNaN(usN)&&out.usSize&&!/Y$/.test(String(out.usSize))){
       if(out.eurSize&&Math.abs(parseFloat(out.eurSize)-(4/3*usN+30.5))>2.6) delete out.eurSize;
       if(out.cmSize&&Math.abs(parseFloat(out.cmSize)-(usN+17))>2.8) delete out.cmSize;
@@ -739,6 +767,84 @@ function parseLabel(raw:string, fxRate:number){
     if (est.length) out.estimated = est;
   }
   return out;
+}
+
+// Fix wrong input on a scanned pair WITHOUT leaving the scan log (Pia, Nov 9:
+// "do not incorporate or attached to any sheets this is new. Let me edit if
+// theres wrong input"). Upsert keeps the row in tab=SCAN; staff edits restamp
+// added_by server-side, so the last editor is always on record.
+function ScanEditModal({row,onClose,onSaved}:{row:any;onClose:()=>void;onSaved:()=>void}){
+  const peso=(c:any)=>c?String(Math.round(c/100)):"";
+  const [f,setF]=useState<any>({name:row.name||"",brand:row.brand||"",sku:row.sku||"",size:row.size||"",
+    eur:row.size_eur||"",cm:row.size_cm||"",barcode:row.barcode||"",srp:peso(row.srp),selling:peso(row.selling_price),
+    cond:(row.condition&&row.condition!=="New")?row.condition:"Good",status:row.status||"Available"});
+  const [busy,setBusy]=useState(false);
+  const I="w-full border border-gray-200 rounded-lg px-2.5 py-2 text-sm";
+  const L="text-[9px] font-bold uppercase tracking-wider text-gray-400";
+  const save=async()=>{
+    if(!f.name.trim()){toast.error("Name is required");return;}
+    const usN=parseFloat(f.size),eN=parseFloat(f.eur),cN=parseFloat(f.cm);
+    if(f.size.trim()&&!(usN>=1&&usN<=16)){toast.error(`US ${f.size} can't be right — US sizes run 1–16`);return;}
+    if(f.eur.trim()&&!(eN>=15&&eN<=50)){toast.error(`EUR ${f.eur} looks like the UK number — the EUR/F size on the box has 2 digits (e.g. 38)`);return;}
+    if(f.cm.trim()&&!(cN>=10&&cN<=34)){toast.error(`CM ${f.cm} can't be right — J/CHN prints millimeters, 235 means 23.5 cm`);return;}
+    setBusy(true);
+    try{
+      await sb.upsert("sb_inventory","on_conflict=item_code",{
+        item_code:row.item_code, name:f.name.trim(), brand:f.brand.trim()||null, sku:f.sku.trim()||null,
+        size:f.size.trim()||null, size_eur:f.eur.trim()||null, size_cm:f.cm.trim()||null, barcode:f.barcode.trim()||null,
+        srp:f.srp?Math.round(Number(f.srp)||0)*100:null, selling_price:f.selling?Math.round(Number(f.selling)||0)*100:null,
+        condition:f.cond, status:f.status, updated_at:new Date().toISOString(),
+      });
+      toast.success(`${row.item_code} updated`); onSaved();
+    }catch(e:any){toast.error("Save failed: "+(e.message||e));}
+    finally{setBusy(false);}
+  };
+  return(
+    <div className="fixed inset-0 z-[70] bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+      <div className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl max-h-[92vh] overflow-auto" onClick={e=>e.stopPropagation()}>
+        <div className="bg-[#050f12] px-4 py-3 flex items-center justify-between sticky top-0">
+          <p className="text-xs font-bold text-white">✏️ Edit <span className="text-[#C9A84C] font-mono">{row.item_code}</span> — stays in the scan file</p>
+          <button onClick={onClose} className="text-white/40 hover:text-white text-lg leading-none">✕</button>
+        </div>
+        <div className="p-4 space-y-2.5">
+          <div><label className={L}>Name (brand + model)</label><input className={I} value={f.name} onChange={e=>setF({...f,name:e.target.value})}/></div>
+          <div className="grid grid-cols-2 gap-2">
+            <div><label className={L}>Brand</label><input className={I} value={f.brand} onChange={e=>setF({...f,brand:e.target.value})}/></div>
+            <div><label className={L}>SKU</label><input className={I} value={f.sku} onChange={e=>setF({...f,sku:e.target.value})}/></div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div><label className={L}>Size US</label><input className={I} value={f.size} onChange={e=>setF({...f,size:e.target.value})}/></div>
+            <div><label className={L}>EUR</label><input className={I} inputMode="decimal" value={f.eur} onChange={e=>setF({...f,eur:e.target.value})}/></div>
+            <div><label className={L}>CM</label><input className={I} inputMode="decimal" value={f.cm} onChange={e=>setF({...f,cm:e.target.value})}/></div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div><label className={L}>Barcode</label><input className={I} inputMode="numeric" value={f.barcode} onChange={e=>setF({...f,barcode:e.target.value})}/></div>
+            <div><label className={L}>SRP ₱</label><input className={I} inputMode="numeric" value={f.srp} onChange={e=>setF({...f,srp:e.target.value})}/></div>
+          </div>
+          <div><label className={L}>Selling price ₱ (store shows the pair once priced)</label><input className={I} inputMode="numeric" value={f.selling} onChange={e=>setF({...f,selling:e.target.value})}/></div>
+          <div>
+            <label className={L}>Condition</label>
+            <div className="flex gap-1.5 flex-wrap mt-1">
+              {["Good","Stained","Missing pair","Unknown"].map(c=>(
+                <button key={c} onClick={()=>setF({...f,cond:c})}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${f.cond===c?(c==="Good"?"bg-green-500 border-green-500 text-white":"bg-[#0d2430] border-[#0d2430] text-white"):"border-gray-200 text-gray-500"}`}>{c}</button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className={L}>Status</label>
+            <select className={I} value={f.status} onChange={e=>setF({...f,status:e.target.value})}>
+              {["Available","Reserved","Sold","Returned","Damaged","Archived"].map(s=><option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button onClick={onClose} className="flex-1 border border-gray-200 py-3 rounded-xl text-xs font-semibold text-gray-500">Cancel</button>
+            <button onClick={save} disabled={busy} className="flex-[2] bg-[#0d2430] text-white py-3 rounded-xl font-black text-sm disabled:opacity-50">{busy?"Saving…":"💾 SAVE CHANGES"}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existingCodes:Set<string>;allRows:any[];nextCode:string;onClose:()=>void;onSaved:()=>void}){
@@ -953,7 +1059,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
         <div className="bg-[#050f12] px-5 py-3.5 flex items-center justify-between">
           <div>
             <p className="text-[10px] font-bold tracking-[.15em] uppercase text-[#C9A84C]">📦 Scan Shoebox</p>
-            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v9</span></p>
+            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v10</span></p>
           </div>
           <button onClick={()=>{stopCam();onClose();}} className="text-white/40 hover:text-white"><X className="h-5 w-5"/></button>
         </div>
@@ -1192,6 +1298,7 @@ export default function AdminDashboard() {
   const filteredInv = useMemo(()=>{
     const base = Array.isArray(inventory) ? inventory : inventoryGrouped;
     return base.filter((p:any)=>{
+      if((p as any).tab==='SCAN') return false; // scanned pairs are the NEW file — they live in Latest Inventory, never in the sheet views
       if(tabFilter!=='all' && (p as any).tab!==tabFilter) return false;
       if(brandFilter!=='All' && ((p as any).brand||'')!==brandFilter) return false;
       if(imageFilter==='has' && !p.imageUrl) return false;
@@ -1278,6 +1385,7 @@ export default function AdminDashboard() {
 
   // ── Shoebox intake / Latest Inventory ──
   const [scanBox,setScanBox]=useState(false);
+  const [editScan,setEditScan]=useState<any|null>(null);
   const [intakeRows,setIntakeRows]=useState<any[]>([]);
   const [intakeLoading,setIntakeLoading]=useState(false);
   const [intakeSearch,setIntakeSearch]=useState("");
@@ -1615,6 +1723,8 @@ export default function AdminDashboard() {
       {scanBox&&<ScanBoxModal existingCodes={existingCodes} allRows={intakeRows} nextCode={nextCode}
         onClose={()=>setScanBox(false)}
         onSaved={()=>{loadIntake();refetchInv();refreshInventory().catch(()=>{});}}/>}
+      {editScan&&<ScanEditModal row={editScan} onClose={()=>setEditScan(null)}
+        onSaved={()=>{setEditScan(null);loadIntake();}}/>}
 
       {/* Sidebar — staff admins get a top-bar-only phone layout (single screen, no nav needed) */}
       {!isStaff&&<aside className={`${sidebarOpen?"w-56":"w-14"} flex-shrink-0 bg-[#050f12] flex flex-col transition-all duration-300 sticky top-0 h-screen overflow-y-auto hidden sm:flex`}>
@@ -2484,7 +2594,7 @@ export default function AdminDashboard() {
                             :<span className="text-gray-300 text-[10px]">—</span>}</td>
                           <td className="px-2 text-[10px] text-gray-400 whitespace-nowrap">{r.created_at?fmtDate(r.created_at):"—"}</td>
                           <td className="px-2 whitespace-nowrap">
-                            <button title="Edit in Products" onClick={()=>{setSearch(r.item_code);setSection("products");}} className="text-gray-400 hover:text-[#0d2430] mr-1"><Edit2 className="h-3.5 w-3.5"/></button>
+                            <button title="Edit this pair" onClick={()=>setEditScan(r)} className="text-gray-400 hover:text-[#0d2430] mr-1"><Edit2 className="h-3.5 w-3.5"/></button>
                             <button title="QR sticker" onClick={()=>setQrModal({open:true,itemCode:r.item_code,name:r.name})} className="text-gray-400 hover:text-[#0d2430]"><QrCode className="h-3.5 w-3.5"/></button>
                           </td>
                         </tr>
@@ -2502,7 +2612,7 @@ export default function AdminDashboard() {
                   Show 50 more ({filteredIntake.length-intakeShown} left)
                 </button>
               )}
-              <p className="text-[10px] text-gray-400">Newest first. <b>Good/Stained</b> are sellable once priced · <b>Missing pair/Unknown</b> never reach the website · ✏️ opens the item in Products for full editing · QR reprints the box sticker.</p>
+              <p className="text-[10px] text-gray-400">Newest first. <b>Good/Stained</b> are sellable once priced · <b>Missing pair/Unknown</b> never reach the website · ✏️ edits the pair right here (scans never join the sheet inventory) · QR reprints the box sticker.</p>
             </div>
           )}
 
