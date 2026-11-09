@@ -579,7 +579,7 @@ function parseLabel(raw:string, fxRate:number){
   out.model = modelLine;
   // Gender / youth markers — the model line itself counts ("X_PLR J" = junior, "SPEZIAL C" = children)
   const MU = modelLine.toUpperCase();
-  const isW = /WMNS|WOMEN/.test(U);
+  const isW = /WMNS|WOMEN/.test(U) || /\sW$/.test(MU.trim()); // adidas women's models end " W" (BRYONY W, GAZELLE W)
   const isY = /\bGS\b|\bPS\b|\bTD\b|\(J\)|JUNIOR|YOUTH|INFANT/.test(U) || /\bJ$|\bJR$|\bC$|\bK$/.test(MU.trim());
   // Sizes — accept fractions and decimals. Dual-row Nike/Jordan labels print
   // "11 MENS … / 12.5 WMNS …" for the SAME shoe: the MENS row is the size.
@@ -608,14 +608,22 @@ function parseLabel(raw:string, fxRate:number){
   if (us) out.usSize = frac(us[1]) + (usIsMens?"M":usIsWmns?"W":isY?"Y":isW?"W":"M");
   if (eur) out.eurSize = frac(eur[1]);
   if (cm) out.cmSize = frac(cm[1]);
-  // SRP from price sticker — any sign; ₱ as-is, $/€ converted, bare large number near PRICE
-  const php = text.match(/(?:₱|PHP)\s*([\d,]+(?:\.\d{2})?)/i);
-  const usd = text.match(/(?:\$|USD)\s*([\d,]+(?:\.\d{2})?)/i);
-  const near = text.match(/PRICE[^\d]{0,12}([\d,]+(?:\.\d{2})?)/i);
-  const num = (s:string)=>parseFloat(s.replace(/,/g,""));
-  if (php) out.srp = String(Math.round(num(php[1])));
-  else if (usd) out.srp = String(Math.round(num(usd[1])*fxRate));
-  else if (near && num(near[1])>100) out.srp = String(Math.round(num(near[1])));
+  // SRP from price sticker — any sign; ₱ as-is, $/€ converted, bare large number
+  // near PRICE. OCR mangles separators ("5,000.00" → "5 000 00"), so: keep the
+  // digit run, drop trailing cents when a cents pattern ended the amount.
+  const money = (s:string)=>{
+    let d = s.trim();
+    const cents = /[.,]\s?\d{2}\s*$/.test(d);
+    d = d.replace(/[^\d]/g,"");
+    if (cents && d.length>2) d = d.slice(0,-2);
+    return parseInt(d||"0",10);
+  };
+  const php = text.match(/(?:₱|PHP)[\s:]*([\d][\d.,\s]{0,12}\d|\d)/i);
+  const usd = text.match(/(?:\$|USD)[\s:]*([\d][\d.,\s]{0,12}\d|\d)/i);
+  const near = text.match(/PRICE[^\d]{0,12}([\d][\d.,\s]{0,12}\d)/i);
+  if (php && money(php[1])>0) out.srp = String(money(php[1]));
+  else if (usd && money(usd[1])>0) out.srp = String(Math.round(money(usd[1])*fxRate));
+  else if (near && money(near[1])>100) out.srp = String(money(near[1]));
 
   // ── Size derivation from brand charts (researched + anchored on real boxes) ──
   // J/CHN = CM (mondopoint) · F = EUR · D(adidas) = UK. Within a brand the
@@ -689,7 +697,8 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
     const c=document.createElement("canvas");
     c.width=v.videoWidth;c.height=v.videoHeight;
     c.getContext("2d")!.drawImage(v,0,0);
-    setPhoto(c.toDataURL("image/jpeg",0.85));
+    const shotUrl=c.toDataURL("image/jpeg",0.85);
+    setPhoto(shotUrl);
     stopCam();setPhase("form");
     setBusy("Reading label…");
     try{
@@ -697,6 +706,29 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
       if(BD){try{const det=new BD({formats:["ean_13","upc_a","upc_e","ean_8","code_128"]});
         const codes=await det.detect(c);
         if(codes?.length)setF(p=>p.barcode?p:{...p,barcode:codes[0].rawValue});}catch{}}
+      // 1st choice: Google OCR through NSB SYSTEM (reads warehouse photos the
+      // browser engine can't). Falls back to on-device OCR if unavailable.
+      let gasText="";
+      try{
+        const pw=(()=>{try{return sessionStorage.getItem("sb_admin_pw")||""}catch{return ""}})();
+        const gr=await fetch("/api/ocr-label",{method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({password:pw,base64:shotUrl.split(",")[1],mimeType:"image/jpeg"})});
+        const go=await gr.json().catch(()=>({} as any));
+        if(gr.ok&&go.text&&String(go.text).trim().length>8) gasText=String(go.text);
+      }catch{}
+      if(gasText){
+        const got=parseLabel(gasText,fx);
+        setF(p=>({...p,
+          code:p.code||got.code||"",
+          brand:p.brand||got.brand||"", model:p.model||got.model||"", sku:p.sku||got.sku||"",
+          usSize:p.usSize||got.usSize||"", eurSize:p.eurSize||got.eurSize||"", cmSize:p.cmSize||got.cmSize||"",
+          barcode:p.barcode||got.barcode||"",
+          srp:p.srp||got.srp||"",
+        }));
+        if (got.estimated&&got.estimated.length) toast.success(`Label read (Google OCR) — ${got.estimated.join(", ")} estimated from the ${got.brand||"brand"} size chart`);
+        else toast.success("Label read (Google OCR) — check the green fields");
+        setBusy("");return;
+      }
       // OCR engine from CDN at runtime (audited live) — the bundled dynamic chunk
       // didn't expose createWorker in production, so the script-tag path is the
       // deterministic one. Cached by the browser after first load.
