@@ -815,10 +815,13 @@ function ScanEditModal({row,onClose,onSaved}:{row:any;onClose:()=>void;onSaved:(
         const clash=await sb.select("sb_inventory",`select=item_code&item_code=eq.${encodeURIComponent(newCode)}`);
         if(clash&&clash.length){toast.error(`${newCode} already exists — that's another pair`);setBusy(false);return;}
       }
+      let srpE=f.srp?Math.round(Number(f.srp)||0)*100:null;
+      let selE=f.selling?Math.round(Number(f.selling)||0)*100:null;
+      if(srpE&&Math.round(srpE/100)%100===99&&!selE){selE=srpE;srpE=null;toast(`₱${Math.round(selE/100)} ends in 99 — saved as selling price, not SRP`);}
       await sb.update("sb_inventory",`item_code=eq.${encodeURIComponent(row.item_code)}`,{
         item_code:newCode, name:f.name.trim(), brand:f.brand.trim()||null, sku:f.sku.trim()||null,
         size:f.size.replace(/\s+/g,"").toUpperCase()||null, size_eur:f.eur.trim()||null, size_cm:f.cm.trim()||null, barcode:f.barcode.trim()||null,
-        srp:f.srp?Math.round(Number(f.srp)||0)*100:null, selling_price:f.selling?Math.round(Number(f.selling)||0)*100:null,
+        srp:srpE, selling_price:selE,
         condition:f.cond, status:f.status, updated_at:new Date().toISOString(),
       });
       toast.success(newCode!==row.item_code?`${row.item_code} → ${newCode} saved`:`${newCode} updated`); onSaved();
@@ -1073,9 +1076,13 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
       if(f.brand.trim())payload.brand=f.brand.trim();
       // Pia's rule: the only real SRP is the one on the box. A claim must not
       // inherit the old sheet's SRP — no price read/typed = no SRP.
-      const srpC=Math.round(Number(f.srp)||0)*100;
+      let srpC=Math.round(Number(f.srp)||0)*100;
+      let selC=Math.round(Number(f.selling)||0)*100;
+      // Pia's rule: a price ending in 99 (1999, 4399, 6499…) is OUR tag price, never
+      // the box SRP — boxes print round numbers. Auto-route it to selling price.
+      if(srpC>0&&Math.round(srpC/100)%100===99&&!(selC>0)){selC=srpC;srpC=0;toast(`₱${Math.round(selC/100)} ends in 99 — saved as selling price, not SRP`);}
       if(srpC>0)payload.srp=srpC; else if(claim)payload.srp=null;
-      const selC=Math.round(Number(f.selling)||0)*100; if(selC>0)payload.selling_price=selC;
+      if(selC>0)payload.selling_price=selC;
       const ucC=Math.round(Number(f.unitCost)||0)*100; if(ucC>0)payload.unit_cost=ucC;
       await sb.upsert("sb_inventory","on_conflict=item_code",payload);
       // photo upload is best-effort
@@ -1117,7 +1124,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
         <div className="bg-[#050f12] px-5 py-3.5 flex items-center justify-between">
           <div>
             <p className="text-[10px] font-bold tracking-[.15em] uppercase text-[#C9A84C]">📦 Scan Shoebox</p>
-            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v22</span></p>
+            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v23</span></p>
           </div>
           <button onClick={()=>{stopCam();onClose();}} className="text-white/40 hover:text-white"><X className="h-5 w-5"/></button>
         </div>
