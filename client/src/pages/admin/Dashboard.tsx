@@ -1124,7 +1124,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
         <div className="bg-[#050f12] px-5 py-3.5 flex items-center justify-between">
           <div>
             <p className="text-[10px] font-bold tracking-[.15em] uppercase text-[#C9A84C]">📦 Scan Shoebox</p>
-            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v23</span></p>
+            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v24</span></p>
           </div>
           <button onClick={()=>{stopCam();onClose();}} className="text-white/40 hover:text-white"><X className="h-5 w-5"/></button>
         </div>
@@ -1460,7 +1460,7 @@ export default function AdminDashboard() {
   const [intakeShown,setIntakeShown]=useState(50);
   const loadIntake=async()=>{
     setIntakeLoading(true);
-    try{setIntakeRows(await sb.select("sb_inventory","select=item_code,name,brand,sku,size,size_eur,size_cm,barcode,srp,selling_price,status,condition,tab,added_by,created_at&order=created_at.desc&limit=1000"));}
+    try{setIntakeRows(await sb.select("sb_inventory","select=item_code,name,brand,sku,size,size_eur,size_cm,barcode,srp,selling_price,status,condition,tab,added_by,created_at,notes&order=created_at.desc&limit=1000"));}
     catch(e:any){toast.error("Inventory load failed: "+(e.message||e));}
     finally{setIntakeLoading(false);}
   };
@@ -2698,7 +2698,8 @@ export default function AdminDashboard() {
                           <td className="px-2 text-xs text-gray-500">{r.size_eur||"—"}</td>
                           <td className="px-2 text-xs text-gray-500">{r.size_cm||"—"}</td>
                           <td className="px-2 font-mono text-[10px] text-gray-400">{r.barcode?("…"+String(r.barcode).slice(-6)):"—"}</td>
-                          <td className="px-2 text-xs font-bold bg-[#C9A84C]/[.06]">{r.srp?((r.srp/100).toLocaleString("en-PH")):"—"}</td>
+                          {/* yellow = SRP didn't come from the box label (updated from adidas.com etc.) */}
+                          <td className={`px-2 text-xs font-bold ${/srp updated/i.test(r.notes||"")?"bg-yellow-200 text-yellow-900":"bg-[#C9A84C]/[.06]"}`}>{r.srp?((r.srp/100).toLocaleString("en-PH")):"—"}{/srp updated/i.test(r.notes||"")?" ✦":""}</td>
                           <td className="px-2"><span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${condCls}`}>{cond}</span>
                             {r.status==="Sold"&&<span className="ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-gray-800 text-white">Sold</span>}</td>
                           <td className="px-2">{r.added_by
