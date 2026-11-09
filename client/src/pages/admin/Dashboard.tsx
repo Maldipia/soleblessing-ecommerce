@@ -799,7 +799,7 @@ function ScanEditModal({row,onClose,onSaved}:{row:any;onClose:()=>void;onSaved:(
     try{
       await sb.upsert("sb_inventory","on_conflict=item_code",{
         item_code:row.item_code, name:f.name.trim(), brand:f.brand.trim()||null, sku:f.sku.trim()||null,
-        size:f.size.trim()||null, size_eur:f.eur.trim()||null, size_cm:f.cm.trim()||null, barcode:f.barcode.trim()||null,
+        size:f.size.replace(/\s+/g,"").toUpperCase()||null, size_eur:f.eur.trim()||null, size_cm:f.cm.trim()||null, barcode:f.barcode.trim()||null,
         srp:f.srp?Math.round(Number(f.srp)||0)*100:null, selling_price:f.selling?Math.round(Number(f.selling)||0)*100:null,
         condition:f.cond, status:f.status, updated_at:new Date().toISOString(),
       });
@@ -1032,7 +1032,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
       // is updated in place and joins the scan log. Empty/zero fields are OMITTED
       // so a claim never wipes an existing cost or price with a blank.
       const payload:any={
-        item_code:codeNorm, name, sku:f.sku.trim(), size:f.usSize.trim(),
+        item_code:codeNorm, name, sku:f.sku.trim(), size:f.usSize.replace(/\s+/g,"").toUpperCase(),
         condition:f.cond, category:"Sneakers",
         status:"Available", stock:1, tab:"SCAN", added_by:getRole(),
         date_acquired:new Date().toISOString().slice(0,10),
@@ -1083,7 +1083,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
         <div className="bg-[#050f12] px-5 py-3.5 flex items-center justify-between">
           <div>
             <p className="text-[10px] font-bold tracking-[.15em] uppercase text-[#C9A84C]">📦 Scan Shoebox</p>
-            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v14</span></p>
+            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v15</span></p>
           </div>
           <button onClick={()=>{stopCam();onClose();}} className="text-white/40 hover:text-white"><X className="h-5 w-5"/></button>
         </div>
