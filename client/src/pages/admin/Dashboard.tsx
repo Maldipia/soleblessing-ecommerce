@@ -1104,7 +1104,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
         <div className="bg-[#050f12] px-5 py-3.5 flex items-center justify-between">
           <div>
             <p className="text-[10px] font-bold tracking-[.15em] uppercase text-[#C9A84C]">📦 Scan Shoebox</p>
-            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v20</span></p>
+            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v21</span></p>
           </div>
           <button onClick={()=>{stopCam();onClose();}} className="text-white/40 hover:text-white"><X className="h-5 w-5"/></button>
         </div>
@@ -1469,6 +1469,13 @@ export default function AdminDashboard() {
     mine:s.filter((r:any)=>r.added_by===getRole()).length,
     unpriced:s.filter((r:any)=>!r.srp&&!r.selling_price).length,
   };},[intakeRows]);
+  // Totals over the SCAN file only — what's been scanned so far, never the old sheets
+  const scanTotals=useMemo(()=>{
+    const s=intakeRows.filter((r:any)=>r.tab==="SCAN");
+    const priced=s.filter((r:any)=>r.srp>0);
+    return {pairs:s.length, priced:priced.length,
+      srp:priced.reduce((t:number,r:any)=>t+(Number(r.srp)||0),0)/100};
+  },[intakeRows]);
   useEffect(()=>{setIntakeShown(50);},[intakeSearch,intakeCond,intakeAll,intakeTab]);
   const intakeCSV=()=>{
     const cols=["item_code","brand","name","sku","size","size_eur","size_cm","barcode","srp","status","condition","created_at"];
@@ -2588,6 +2595,19 @@ export default function AdminDashboard() {
                     {lbl} <span className={intakeTab===k?"text-[#C9A84C]":"text-gray-400"}>{intakeTabCounts[k]}</span>
                   </button>
                 ))}
+              </div>
+              {/* running total of the scan file (Pia: "put total above the SRP — only what you scanned") */}
+              <div className="bg-[#050f12] rounded-xl px-4 py-3 flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">Scanned so far</span>
+                  <span className="text-lg font-black text-white">{scanTotals.pairs}</span>
+                  <span className="text-[10px] text-white/40">pairs</span>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">Total SRP</span>
+                  <span className="text-lg font-black text-[#C9A84C]">₱{scanTotals.srp.toLocaleString()}</span>
+                  <span className="text-[10px] text-white/40">{scanTotals.priced} of {scanTotals.pairs} priced</span>
+                </div>
               </div>
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div className="flex gap-2 flex-wrap">
