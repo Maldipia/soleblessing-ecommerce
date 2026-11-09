@@ -1051,7 +1051,10 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
       if(f.cmSize.trim())payload.size_cm=f.cmSize.trim();
       if(f.barcode.trim())payload.barcode=f.barcode.trim();
       if(f.brand.trim())payload.brand=f.brand.trim();
-      const srpC=Math.round(Number(f.srp)||0)*100; if(srpC>0)payload.srp=srpC;
+      // Pia's rule: the only real SRP is the one on the box. A claim must not
+      // inherit the old sheet's SRP — no price read/typed = no SRP.
+      const srpC=Math.round(Number(f.srp)||0)*100;
+      if(srpC>0)payload.srp=srpC; else if(claim)payload.srp=null;
       const selC=Math.round(Number(f.selling)||0)*100; if(selC>0)payload.selling_price=selC;
       const ucC=Math.round(Number(f.unitCost)||0)*100; if(ucC>0)payload.unit_cost=ucC;
       await sb.upsert("sb_inventory","on_conflict=item_code",payload);
@@ -1092,7 +1095,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
         <div className="bg-[#050f12] px-5 py-3.5 flex items-center justify-between">
           <div>
             <p className="text-[10px] font-bold tracking-[.15em] uppercase text-[#C9A84C]">📦 Scan Shoebox</p>
-            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v18</span></p>
+            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v19</span></p>
           </div>
           <button onClick={()=>{stopCam();onClose();}} className="text-white/40 hover:text-white"><X className="h-5 w-5"/></button>
         </div>
