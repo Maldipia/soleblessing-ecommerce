@@ -1124,7 +1124,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
         <div className="bg-[#050f12] px-5 py-3.5 flex items-center justify-between">
           <div>
             <p className="text-[10px] font-bold tracking-[.15em] uppercase text-[#C9A84C]">📦 Scan Shoebox</p>
-            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v24</span></p>
+            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v25</span></p>
           </div>
           <button onClick={()=>{stopCam();onClose();}} className="text-white/40 hover:text-white"><X className="h-5 w-5"/></button>
         </div>
@@ -1460,7 +1460,16 @@ export default function AdminDashboard() {
   const [intakeShown,setIntakeShown]=useState(50);
   const loadIntake=async()=>{
     setIntakeLoading(true);
-    try{setIntakeRows(await sb.select("sb_inventory","select=item_code,name,brand,sku,size,size_eur,size_cm,barcode,srp,selling_price,status,condition,tab,added_by,created_at,notes&order=created_at.desc&limit=1000"));}
+    try{
+      // Supabase caps each request at 1000 rows — page until done (scan file is past 1,000 pairs)
+      const all:any[]=[];
+      for(let off=0;off<20000;off+=1000){
+        const page=await sb.select("sb_inventory",`select=item_code,name,brand,sku,size,size_eur,size_cm,barcode,srp,selling_price,status,condition,tab,added_by,created_at,notes&order=created_at.desc&limit=1000&offset=${off}`);
+        all.push(...page);
+        if(!Array.isArray(page)||page.length<1000)break;
+      }
+      setIntakeRows(all);
+    }
     catch(e:any){toast.error("Inventory load failed: "+(e.message||e));}
     finally{setIntakeLoading(false);}
   };
