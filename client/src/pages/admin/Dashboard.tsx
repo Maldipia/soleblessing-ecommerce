@@ -522,6 +522,13 @@ function parseLabel(raw:string, fxRate:number){
   else if (nbSku && out.brand==="New Balance") out.sku = nbSku[1];
   else if (nikeSkuNew) out.sku = `${nikeSkuNew[1]}-${nikeSkuNew[2]}`;
   else if (adiSku) out.sku = adiSku[1];
+  // No brand word readable? The SKU shape still tells us the brand.
+  if (!out.brand && out.sku){
+    if (nikeSkuOld||nikeSkuNew) out.brand = "Nike";
+    else if (asicsSku) out.brand = "ASICS";
+    else if (nbSku) out.brand = "New Balance";
+    else if (adiSku) out.brand = "Adidas";
+  }
   // SoleBlessing's own yellow intake sticker carries the item code — formats
   // seen on real boxes: "8732", "AB 2915", "NC 45", "0036", "5108".
   // A code is a WHOLE line of optional 1-3 letter prefix + 2-5 digits. Lines that
@@ -560,6 +567,9 @@ function parseLabel(raw:string, fxRate:number){
     if (u.length<4||u.length>40) return false;
     if (/MADE IN|MADE BY|FABRIQU|HECHO|INDONESIA|VIETNAM|CHINA|UPC|EAN|PRICE|PHP|SOLARSOFT|CUSHION|UNISEX|SOLE|BLESS|\.COM|WWW\.|\d{2}[- .\/]\d{2}[- .\/]\d{4}|\bPO\b|\bUS\b|\bUK\b|EUR|\bCM\b|\d{6,}/.test(u)) return false;
     if (/^(ORIGINALS?|SPORTSWEAR|PERFORMANCE|EQUIPMENT|AUTHENTICS?|CLASSICS?|NIKE|ADIDAS|ASICS|PUMA|VANS|CONVERSE|NEW BALANCE|JORDAN)$/.test(u)) return false; // brand taglines aren't models
+    // mostly-digits lines ("F460 11 101 tra602") are code soup, never a model
+    const letters=(l.match(/[A-Za-z]/g)||[]).length, digits=(l.match(/\d/g)||[]).length;
+    if (digits >= letters) return false;
     return /[A-Z]{3,}/i.test(u) && !/^\d/.test(l);
   });
   const score=(l:string)=>((l.match(/\//g)||[]).length?0:100)+l.length;
@@ -803,9 +813,18 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
                  :claim?`↻ ${codeNorm} exists in OLD inventory (${String((legacyRow as any)?.name||"").slice(0,28)}) — saving claims it as new inventory`
                  :codeNorm?`✓ ${codeNorm} is free`:"type the code on the box / your series"}</p>
             </div>
+            <div>
+              <label className="text-[9px] font-bold uppercase text-gray-400">Brand — tap or type</label>
+              <div className="flex gap-1 overflow-x-auto pb-1 mb-1">
+                {["Nike","Jordan","Adidas","New Balance","ASICS","Converse","Vans","Puma"].map(b=>(
+                  <button key={b} onClick={()=>setF({...f,brand:f.brand===b?"":b})}
+                    className={`px-2.5 py-1.5 rounded-full text-[10px] font-bold whitespace-nowrap flex-shrink-0 border ${f.brand===b?"bg-[#0d2430] text-white border-[#0d2430]":"border-gray-200 text-gray-500"}`}>{b}</button>
+                ))}
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-2">
               <div><label className="text-[9px] font-bold uppercase text-gray-400">Brand</label>
-                <input className={`${inp} ${f.brand?auto:""}`} value={f.brand} onChange={e=>setF({...f,brand:e.target.value})}/></div>
+                <input className={`${inp} ${f.brand?auto:""}`} value={f.brand} onChange={e=>setF({...f,brand:e.target.value})} placeholder="or type other"/></div>
               <div><label className="text-[9px] font-bold uppercase text-gray-400">SKU</label>
                 <input className={`${inp} ${f.sku?auto:""}`} value={f.sku} onChange={e=>setF({...f,sku:e.target.value})}/></div>
             </div>
@@ -813,7 +832,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
               <input className={`${inp} ${f.model?auto:""}`} value={f.model} onChange={e=>setF({...f,model:e.target.value})}/></div>
             <div className="grid grid-cols-3 gap-2">
               <div><label className="text-[9px] font-bold uppercase text-gray-400">Size US</label>
-                <input className={`${inp} ${f.usSize?auto:""}`} value={f.usSize} onChange={e=>setF({...f,usSize:e.target.value})} placeholder="6.5W"/></div>
+                <input className={`${inp} ${f.usSize?auto:""}`} value={f.usSize} onChange={e=>setF({...f,usSize:e.target.value})} placeholder="—"/></div>
               <div><label className="text-[9px] font-bold uppercase text-gray-400">EUR</label>
                 <input className={`${inp} ${f.eurSize?auto:""}`} value={f.eurSize} onChange={e=>setF({...f,eurSize:e.target.value})}/></div>
               <div><label className="text-[9px] font-bold uppercase text-gray-400">CM</label>
