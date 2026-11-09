@@ -893,6 +893,13 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
     if(!codeNorm){toast.error("Item code is required");return;}
     if(dup){toast.error(`Code ${codeNorm} is already in the scan file — pick another`);return;}
     if(!f.model.trim()&&!f.sku.trim()){toast.error("Give it at least a model or SKU");return;}
+    // Typed-size guard: the box's small UK/D number keeps landing in the wrong field
+    {
+      const usN=parseFloat(f.usSize); const eurN=parseFloat(f.eurSize); const cmN=parseFloat(f.cmSize);
+      if(f.usSize.trim()&&!(usN>=1&&usN<=16)){toast.error(`US ${f.usSize} can't be right — US sizes run 1–16`);return;}
+      if(f.eurSize.trim()&&!(eurN>=15&&eurN<=50)){toast.error(`EUR ${f.eurSize} looks like the UK number — the EUR/F size on the box has 2 digits (e.g. 38)`);return;}
+      if(f.cmSize.trim()&&!(cmN>=10&&cmN<=34)){toast.error(`CM ${f.cmSize} can't be right — J/CHN prints millimeters, 235 means 23.5 cm`);return;}
+    }
     setSaving(true);
     try{
       const name=[f.brand&&!f.model.toUpperCase().includes(f.brand.toUpperCase())?f.brand:"",f.model].filter(Boolean).join(" ").trim()||f.sku;
@@ -946,7 +953,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
         <div className="bg-[#050f12] px-5 py-3.5 flex items-center justify-between">
           <div>
             <p className="text-[10px] font-bold tracking-[.15em] uppercase text-[#C9A84C]">📦 Scan Shoebox</p>
-            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v8</span></p>
+            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v9</span></p>
           </div>
           <button onClick={()=>{stopCam();onClose();}} className="text-white/40 hover:text-white"><X className="h-5 w-5"/></button>
         </div>
