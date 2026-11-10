@@ -2,7 +2,11 @@
 // password-gated /api/admin endpoint (service role server-side). The password is
 // captured at login (verified server-side) and held in sessionStorage.
 const PW_KEY = 'sb_admin_pw';
-const getPw = () => { try { return sessionStorage.getItem(PW_KEY) || ''; } catch { return ''; } };
+// Phones kill browser tabs constantly (camera app, backgrounding), wiping
+// sessionStorage and forcing a re-login loop. The credential therefore lives in
+// localStorage (cleared only by explicit Logout); sessionStorage is a fallback
+// for sessions created before this change.
+const getPw = () => { try { return localStorage.getItem(PW_KEY) || sessionStorage.getItem(PW_KEY) || ''; } catch { return ''; } };
 
 async function call(op: string, table: string, query = '', data?: object) {
   const res = await fetch('/api/admin', {
@@ -26,6 +30,9 @@ export const sbAdmin = {
       if (!res.ok) return false;
       const out = await res.json().catch(() => ({} as any));
       try {
+        localStorage.setItem(PW_KEY, password);
+        localStorage.setItem('sb_admin_role', out.role || 'OWNER');
+        localStorage.setItem('sb_admin_color', out.color || '#C9A84C');
         sessionStorage.setItem(PW_KEY, password);
         sessionStorage.setItem('sb_admin_role', out.role || 'OWNER');
         sessionStorage.setItem('sb_admin_color', out.color || '#C9A84C');

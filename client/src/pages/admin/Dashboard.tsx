@@ -107,13 +107,13 @@ function useAdminAuth() {
       // credential lives in sessionStorage (does NOT). When they drift apart the panel
       // looks logged in while every privileged write returns {"error":"unauthorized"}.
       // Force a clean re-login instead of letting saves fail silently.
-      const hasPw = !!sessionStorage.getItem(PW_KEY);
+      const hasPw = !!(localStorage.getItem(PW_KEY) || sessionStorage.getItem(PW_KEY));
       if (flagged && !hasPw) { localStorage.removeItem(ADMIN_KEY); return false; }
       return flagged;
     } catch { return false; }
   });
   const logout = () => {
-    try { localStorage.removeItem(ADMIN_KEY); sessionStorage.removeItem(PW_KEY); sessionStorage.removeItem("sb_admin_role"); sessionStorage.removeItem("sb_admin_color"); } catch {}
+    try { localStorage.removeItem(ADMIN_KEY); for (const st of [localStorage, sessionStorage]) { st.removeItem(PW_KEY); st.removeItem("sb_admin_role"); st.removeItem("sb_admin_color"); } } catch {}
     window.location.reload();
   };
   return { isAdmin, logout };
@@ -484,8 +484,8 @@ const CONDS = ["Good","Stained","Missing pair","Unknown"];
 const normSBCode = (v:string)=>v.replace(/\s+/g,"").toUpperCase();
 // Accountability colors — who added each record (SA pins are server-verified)
 const BY_COLORS:Record<string,string>={SA01:"#e11d48",SA02:"#2563eb",SA03:"#059669",SA04:"#7c3aed",OWNER:"#C9A84C"};
-const getRole=()=>{try{return sessionStorage.getItem("sb_admin_role")||"OWNER"}catch{return "OWNER"}};
-const getRoleColor=()=>{try{return sessionStorage.getItem("sb_admin_color")||"#C9A84C"}catch{return "#C9A84C"}};
+const getRole=()=>{try{return localStorage.getItem("sb_admin_role")||sessionStorage.getItem("sb_admin_role")||"OWNER"}catch{return "OWNER"}};
+const getRoleColor=()=>{try{return localStorage.getItem("sb_admin_color")||sessionStorage.getItem("sb_admin_color")||"#C9A84C"}catch{return "#C9A84C"}};
 
 function parseLabel(raw:string, fxRate:number){
   const text = raw.replace(/[|]/g," ");
@@ -940,7 +940,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
       // 1st choice: Google OCR through NSB SYSTEM (reads warehouse photos the
       // browser engine can't). Falls back to on-device OCR if unavailable.
       let gasText="",gasWhy="";
-      const pw=(()=>{try{return sessionStorage.getItem("sb_admin_pw")||""}catch{return ""}})();
+      const pw=(()=>{try{return localStorage.getItem("sb_admin_pw")||sessionStorage.getItem("sb_admin_pw")||""}catch{return ""}})();
       for(let att=0;att<2&&!gasText;att++){ // GAS cold starts throw one-off errors — retry once
         try{
           const gr=await fetch("/api/ocr-label",{method:"POST",headers:{"Content-Type":"application/json"},
@@ -1088,7 +1088,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
       // photo upload is best-effort
       if(photo){
         try{
-          const pw=(()=>{try{return sessionStorage.getItem("sb_admin_pw")||""}catch{return ""}})();
+          const pw=(()=>{try{return localStorage.getItem("sb_admin_pw")||sessionStorage.getItem("sb_admin_pw")||""}catch{return ""}})();
           await fetch("/api/upload-image",{method:"POST",headers:{"Content-Type":"application/json"},
             body:JSON.stringify({password:pw,item_code:codeNorm,sku:f.sku.trim(),content_type:"image/jpeg",base64:photo.split(",")[1]})});
         }catch{}
@@ -1124,7 +1124,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
         <div className="bg-[#050f12] px-5 py-3.5 flex items-center justify-between">
           <div>
             <p className="text-[10px] font-bold tracking-[.15em] uppercase text-[#C9A84C]">📦 Scan Shoebox</p>
-            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v25</span></p>
+            <p className="text-xs font-bold text-white">{phase==="cam"?"Point at the box label":"Check & save — green = read from box"} <span className="opacity-50 font-normal">· v26</span></p>
           </div>
           <button onClick={()=>{stopCam();onClose();}} className="text-white/40 hover:text-white"><X className="h-5 w-5"/></button>
         </div>
@@ -1628,7 +1628,7 @@ export default function AdminDashboard() {
     setUploadingRow(p.itemCode);
     try{
       const base64:string = await new Promise((ok,err)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(",")[1]);r.onerror=()=>err(new Error("read failed"));r.readAsDataURL(file);});
-      const pw = (()=>{try{return sessionStorage.getItem(PW_KEY)||""}catch{return ""}})();
+      const pw = (()=>{try{return localStorage.getItem(PW_KEY)||sessionStorage.getItem(PW_KEY)||""}catch{return ""}})();
       const res = await fetch("/api/upload-image",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({password:pw,item_code:p.itemCode,sku:p.sku||"",content_type:file.type,base64})});
       const out = await res.json().catch(()=>({}));
@@ -1694,7 +1694,7 @@ export default function AdminDashboard() {
     if(regenerate && !confirm("Create a new invoice for "+o.order_number+"? The link on the order (and column O in the sheet) will point to the new one.")) return;
     setInvBusy(o.id);
     try{
-      const pw=(()=>{try{return sessionStorage.getItem("sb_admin_pw")||""}catch{return ""}})();
+      const pw=(()=>{try{return localStorage.getItem("sb_admin_pw")||sessionStorage.getItem("sb_admin_pw")||""}catch{return ""}})();
       const r=await fetch("/api/generate-invoice",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({password:pw,order_number:o.order_number})});
       const out=await r.json().catch(()=>({} as any));
@@ -1710,7 +1710,7 @@ export default function AdminDashboard() {
     if(resend && !confirm("Email the invoice to "+o.customer_email+" again?")) return;
     setSendBusy(o.id);
     try{
-      const pw=(()=>{try{return sessionStorage.getItem("sb_admin_pw")||""}catch{return ""}})();
+      const pw=(()=>{try{return localStorage.getItem("sb_admin_pw")||sessionStorage.getItem("sb_admin_pw")||""}catch{return ""}})();
       const r=await fetch("/api/send-invoice",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({password:pw,order_number:o.order_number})});
       const out=await r.json().catch(()=>({} as any));
@@ -1728,7 +1728,7 @@ export default function AdminDashboard() {
     setReceiptBusy(true); setReceiptScan(null);
     try{
       const base64:string = await new Promise((ok,err)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(",")[1]);r.onerror=()=>err(new Error("read failed"));r.readAsDataURL(file);});
-      const pw=(()=>{try{return sessionStorage.getItem("sb_admin_pw")||""}catch{return ""}})();
+      const pw=(()=>{try{return localStorage.getItem("sb_admin_pw")||sessionStorage.getItem("sb_admin_pw")||""}catch{return ""}})();
       const res=await fetch("/api/parse-shipping-receipt",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({password:pw,fileBase64:base64,mimeType:file.type})});
       const out=await res.json().catch(()=>({} as any));
