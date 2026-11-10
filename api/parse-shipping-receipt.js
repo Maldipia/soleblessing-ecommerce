@@ -19,7 +19,20 @@ export default async function handler(req, res) {
   let body = req.body;
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }
   const { password, fileBase64, mimeType = 'image/jpeg' } = body || {};
-  if (password !== ADMIN_PASSWORD) return res.status(401).json({ error: 'unauthorized' });
+  let authed = password === ADMIN_PASSWORD;
+  // Manager PIN (sb_settings.staff_admins entry with role:'manager') may also
+  // process orders: generate/send invoices and parse shipping receipts.
+  if (!authed && password) {
+    try {
+      const sres = await fetch(`${SUPABASE_URL}/rest/v1/sb_settings?key=eq.staff_admins&select=value`, {
+        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+      });
+      const [row] = sres.ok ? await sres.json() : [];
+      const list = row ? JSON.parse(row.value || '[]') : [];
+      authed = !!list.find(s => s && s.active !== false && s.role === 'manager' && String(s.pin) === String(password));
+    } catch {}
+  }
+  if (!authed) return res.status(401).json({ error: 'unauthorized' });
   if (!fileBase64) return res.status(400).json({ error: 'missing file' });
   if (!/^image\/(jpeg|png|webp)$/.test(mimeType)) return res.status(400).json({ error: 'jpeg/png/webp only' });
 

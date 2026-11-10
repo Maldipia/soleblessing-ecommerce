@@ -43,11 +43,24 @@ export default async function handler(req, res) {
   if (op === 'auth') return res.status(200).json({ ok: true, role: staff ? staff.id : 'OWNER', color: staff ? staff.color : '#C9A84C' });
 
   if (staff) {
-    // Least privilege: scanner needs exactly these and nothing else.
-    const allowedForStaff =
-      (table === 'sb_inventory' && (op === 'select' || op === 'insert' || op === 'upsert'));
-    if (!allowedForStaff) return res.status(403).json({ error: 'staff accounts can only view and add inventory' });
-    if ((op === 'insert' || op === 'upsert') && data) {
+    // Least privilege per role. Scanner = view + add inventory only.
+    // Manager = run the floor: scan/edit inventory, view + process orders,
+    // view products. NEVER sb_settings (holds the PINs), never deletes.
+    const PERMS = staff.role === 'manager' ? {
+      sb_inventory: ['select', 'insert', 'upsert', 'update'],
+      sb_orders:    ['select', 'update'],
+      sb_products:  ['select'],
+      sync_log:     ['select'],
+      sb_reviews:   ['select'],
+      sb_promos:    ['select'],
+      sb_loyalty:   ['select'],
+      sb_wishlist_log: ['select'],
+    } : {
+      sb_inventory: ['select', 'insert', 'upsert'],
+    };
+    const allowedForStaff = (PERMS[table] || []).includes(op);
+    if (!allowedForStaff) return res.status(403).json({ error: staff.role === 'manager' ? 'managers cannot do that' : 'staff accounts can only view and add inventory' });
+    if (table === 'sb_inventory' && (op === 'insert' || op === 'upsert') && data) {
       const stamp = (r) => ({ ...r, added_by: staff.id, tab: 'SCAN' });
       body.data = Array.isArray(data) ? data.map(stamp) : stamp(data);
     }

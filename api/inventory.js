@@ -3,7 +3,8 @@ const SPREADSHEET_ID = '1WZttK5ZsPhnBz91JmBb-V4GCs-42uXjTUXz67V5sSDI';
 const GID_2025 = '631652219';
 const GID_2024 = '0';
 const SUPABASE_URL = 'https://akualfrqzaierqsfcnkp.supabase.co';
-const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || '';
+// Service role (server-side only): sb_inventory is no longer anon-readable.
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
 
 function parseCSVLine(line) {
   const result = []; let current = ''; let inQuotes = false;
