@@ -14,8 +14,9 @@ import { toast } from "sonner";
 import AdminSettings from "./Settings";
 import { useInventory, refreshInventory } from "@/hooks/useInventory";
 import AdminPromos from "./Promos";
+import ShoeCleanerCampaign from "./ShoeCleanerCampaign";
 
-type Section = "overview"|"products"|"orders"|"intake"|"reports"|"promos"|"settings"|"analytics"|"system";
+type Section = "overview"|"products"|"orders"|"intake"|"reports"|"promos"|"campaign"|"settings"|"analytics"|"system";
 
 const ADMIN_KEY = "sb_admin_v1";
 const fmt = (c: number) => `₱${(c/100).toLocaleString("en-PH")}`;
@@ -1765,6 +1766,7 @@ export default function AdminDashboard() {
     {id:"intake"    as Section, icon:QrCode,         label:"Latest Inventory"},
     {id:"reports"   as Section, icon:TrendingUp,     label:"Sales & Reports"},
     {id:"promos"    as Section, icon:Tag,            label:"Vouchers & Promos"},
+    {id:"campaign"  as Section, icon:Tag,            label:"Shoe Cleaner Campaign"},
     {id:"analytics" as Section, icon:BarChart3,      label:"Analytics"},
     {id:"system"    as Section, icon:Database,       label:"System"},
     {id:"settings"  as Section, icon:Settings,       label:"Settings"},
@@ -1865,7 +1867,7 @@ export default function AdminDashboard() {
             </div>
           ):(
           <h1 className="text-lg font-black text-[#0d2430] tracking-tight capitalize">
-            {section==="promos"?"Vouchers & Promos":section==="reports"?"Sales & Reports":section==="intake"?"Latest Inventory":section==="analytics"?"Analytics":section==="system"?"System":section.charAt(0).toUpperCase()+section.slice(1)}
+            {section==="campaign"?"Shoe Cleaner Campaign":section==="promos"?"Vouchers & Promos":section==="reports"?"Sales & Reports":section==="intake"?"Latest Inventory":section==="analytics"?"Analytics":section==="system"?"System":section.charAt(0).toUpperCase()+section.slice(1)}
           </h1>
           )}
           <div className="flex items-center gap-3">
@@ -2565,6 +2567,7 @@ export default function AdminDashboard() {
 
           {/* ── PROMO CODES ── */}
           {section==="promos"&&<AdminPromos/>}
+          {section==="campaign"&&<ShoeCleanerCampaign/>}
 
           {/* ── SETTINGS ── */}
           {section==="settings"&&<AdminSettings/>}

@@ -26,6 +26,7 @@ import Wishlist from "./pages/Wishlist";
 import LoyaltyProgram from "./pages/LoyaltyProgram";
 import ClearanceSale from "./pages/ClearanceSale";
 import ShoeCleaner from "./pages/ShoeCleaner";
+import PlayAndWin from "./pages/PlayAndWin";
 import UploadPayment from "./pages/UploadPayment";
 import InventoryDetail from "./pages/InventoryDetail";
 import ShippingPolicy from "./pages/ShippingPolicy";
@@ -47,6 +48,7 @@ function Router() {
         <Route path={"/"} component={Home} />
         <Route path={"/products"} component={Products} />
         <Route path={"/clearance"} component={ClearanceSale} />
+        <Route path={"/shoe-cleaner/play-and-win"} component={PlayAndWin} />
         <Route path={"/shoe-cleaner"} component={ShoeCleaner} />
         <Route path={"/upload-payment"} component={UploadPayment} />
         <Route path={"/product/:id"} component={ProductDetail} />
