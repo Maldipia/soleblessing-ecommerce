@@ -13,10 +13,29 @@ import {
   SprayCan,
   Shirt
 } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { APP_LOGO } from "@/const";
+import { useCart } from "@/contexts/CartContext";
+import { toast } from "sonner";
+import { ShoppingCart } from "lucide-react";
+
+const CLEANER_PRODUCTS = {
+  solo: { id: "SBCLEAN100", sku: "SB-CLEAN-100", name: "SoleBlessing Shoe Cleaner — Solo 100ml", brand: "SoleBlessing", size: "100ml", price: 19900, imageUrl: "/shoe-cleaner/cleaner-brush.jpg" },
+  kit:  { id: "SBCLEANKIT", sku: "SB-CLEAN-KIT", name: "SoleBlessing Shoe Essential Kit — Complete 5-pc", brand: "SoleBlessing", size: "Kit", price: 59900, imageUrl: "/shoe-cleaner/kit-hero.jpg" },
+};
 
 export default function ShoeCleaner() {
+  const { addItem } = useCart();
+  const [, setLocation] = useLocation();
+
+  const addToCart = (which: keyof typeof CLEANER_PRODUCTS) => {
+    addItem(CLEANER_PRODUCTS[which]);
+    toast.success(`${which === "kit" ? "Complete Kit" : "Solo Cleaner"} added to cart!`);
+  };
+  const buyNow = (which: keyof typeof CLEANER_PRODUCTS) => {
+    addItem(CLEANER_PRODUCTS[which]);
+    setLocation("/checkout");
+  };
   const features = [
     { icon: Shield, title: "Safe for All Materials", desc: "Works on white shoes, mesh, suede, leather & rubber soles" },
     { icon: Droplets, title: "No Water Soak", desc: "Dry foam cleaning - no damage, no color fade" },
@@ -86,21 +105,22 @@ export default function ShoeCleaner() {
                 SOLEBLESSING Shoe Cleaner by your side. Made with non-toxic eco-friendly organic formula that can be used on all types of materials.
               </p>
               <div className="flex flex-wrap gap-4">
-                <Button 
-                  size="lg" 
+                <Button
+                  size="lg"
                   className="bg-orange-500 hover:bg-orange-600 text-white text-lg px-8"
+                  onClick={() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' })}
+                >
+                  <ShoppingCart className="w-5 h-5 mr-2" />
+                  Shop Now — from ₱199
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="border-zinc-700 text-white hover:bg-zinc-800"
                   onClick={() => window.open("https://m.me/soleblessingofficial", "_blank")}
                 >
                   <MessageCircle className="w-5 h-5 mr-2" />
-                  Comment "CLEAN" to Order
-                </Button>
-                <Button 
-                  size="lg" 
-                  variant="outline" 
-                  className="border-zinc-700 text-white hover:bg-zinc-800"
-                  onClick={() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' })}
-                >
-                  View Products
+                  Message Us
                 </Button>
               </div>
               <div className="flex items-center gap-4 pt-4">
@@ -119,10 +139,10 @@ export default function ShoeCleaner() {
             </div>
             <div className="relative">
               <div className="absolute -inset-4 bg-gradient-to-r from-orange-500/20 to-yellow-500/20 rounded-3xl blur-3xl" />
-              <img 
-                src="/soleblessing-logo.png" 
-                alt="Clean White Sneakers"
-                className="relative rounded-2xl shadow-2xl w-full max-w-md mx-auto"
+              <img
+                src="/shoe-cleaner/kit-hero.jpg"
+                alt="SoleBlessing Shoe Cleaner Kit"
+                className="relative rounded-2xl shadow-2xl w-full max-w-md mx-auto object-cover"
               />
               <div className="absolute -bottom-6 -right-6 bg-zinc-900 border border-zinc-800 rounded-xl p-4 shadow-xl">
                 <p className="text-orange-500 font-bold text-2xl">₱199</p>
@@ -176,10 +196,10 @@ export default function ShoeCleaner() {
             {/* Solo Cleaner */}
             <Card className="bg-gradient-to-br from-zinc-800 to-zinc-900 border-zinc-700 overflow-hidden group hover:border-orange-500/50 transition-all">
               <div className="relative h-64 bg-gradient-to-br from-orange-500/10 to-transparent flex items-center justify-center">
-                <img 
-                  src="/soleblessing-logo.png" 
+                <img
+                  src="/shoe-cleaner/cleaner-brush.jpg"
                   alt="Solo Cleaner"
-                  className="h-48 object-contain group-hover:scale-105 transition-transform"
+                  className="h-full w-full object-cover group-hover:scale-105 transition-transform"
                 />
                 <Badge className="absolute top-4 right-4 bg-green-500 text-white">
                   Best Seller
@@ -210,13 +230,22 @@ export default function ShoeCleaner() {
                     Ideal for students & daily users
                   </li>
                 </ul>
-                <Button 
-                  className="w-full bg-orange-500 hover:bg-orange-600 text-white"
-                  onClick={() => window.open("https://m.me/soleblessingofficial?text=CLEAN", "_blank")}
-                >
-                  <MessageCircle className="w-4 h-4 mr-2" />
-                  Order Solo Cleaner
-                </Button>
+                <div className="grid grid-cols-2 gap-3">
+                  <Button
+                    className="bg-orange-500 hover:bg-orange-600 text-white"
+                    onClick={() => addToCart("solo")}
+                  >
+                    <ShoppingCart className="w-4 h-4 mr-2" />
+                    Add to Cart
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="border-orange-500/60 text-orange-400 hover:bg-orange-500/10"
+                    onClick={() => buyNow("solo")}
+                  >
+                    Buy Now — ₱199
+                  </Button>
+                </div>
               </CardContent>
             </Card>
 
@@ -226,10 +255,10 @@ export default function ShoeCleaner() {
                 🏆 BEST VALUE - Save ₱400+
               </div>
               <div className="relative h-64 bg-gradient-to-br from-orange-500/20 to-transparent flex items-center justify-center mt-8">
-                <img 
-                  src="/soleblessing-logo.png" 
+                <img
+                  src="/shoe-cleaner/kit-contents.jpg"
                   alt="Complete Kit"
-                  className="h-48 object-contain group-hover:scale-105 transition-transform"
+                  className="h-full w-full object-cover group-hover:scale-105 transition-transform"
                 />
               </div>
               <CardContent className="p-6">
@@ -251,13 +280,25 @@ export default function ShoeCleaner() {
                     </div>
                   ))}
                 </div>
-                <Button 
-                  className="w-full bg-gradient-to-r from-orange-500 to-yellow-500 hover:from-orange-600 hover:to-yellow-600 text-white"
-                  onClick={() => window.open("https://m.me/soleblessingofficial?text=KIT", "_blank")}
-                >
-                  <MessageCircle className="w-4 h-4 mr-2" />
-                  Order Complete Kit
-                </Button>
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button
+                      className="bg-gradient-to-r from-orange-500 to-yellow-500 hover:from-orange-600 hover:to-yellow-600 text-white"
+                      onClick={() => addToCart("kit")}
+                    >
+                      <ShoppingCart className="w-4 h-4 mr-2" />
+                      Add to Cart
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="border-orange-500/60 text-orange-400 hover:bg-orange-500/10"
+                      onClick={() => buyNow("kit")}
+                    >
+                      Buy Now — ₱599
+                    </Button>
+                  </div>
+                  <p className="text-center text-xs text-orange-300/80">🎟️ Every kit comes with a Play & Win raffle voucher!</p>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -275,28 +316,12 @@ export default function ShoeCleaner() {
               See the transformation for yourself
             </p>
           </div>
-          <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-            {[
-              { before: "Dirty white sneakers", after: "Brand new look" },
-              { before: "Yellowed rubber soles", after: "Restored white" },
-              { before: "Stained mesh fabric", after: "Clean & fresh" },
-            ].map((item, index) => (
-              <Card key={index} className="bg-zinc-800/50 border-zinc-700 overflow-hidden">
-                <div className="relative h-48 bg-gradient-to-r from-zinc-700 to-zinc-600 flex items-center justify-center">
-                  <div className="absolute inset-0 flex">
-                    <div className="w-1/2 bg-zinc-800 flex items-center justify-center border-r border-zinc-600">
-                      <span className="text-zinc-500 text-sm">BEFORE</span>
-                    </div>
-                    <div className="w-1/2 bg-gradient-to-br from-orange-500/20 to-transparent flex items-center justify-center">
-                      <span className="text-orange-400 text-sm">AFTER</span>
-                    </div>
-                  </div>
-                </div>
-                <CardContent className="p-4 text-center">
-                  <p className="text-zinc-300">{item.before} → {item.after}</p>
-                </CardContent>
-              </Card>
-            ))}
+          <div className="max-w-3xl mx-auto">
+            <img
+              src="/shoe-cleaner/before-after.jpg"
+              alt="Before and after cleaning with SoleBlessing Shoe Cleaner"
+              className="rounded-2xl shadow-2xl w-full border border-zinc-700"
+            />
           </div>
         </div>
       </section>
@@ -336,13 +361,22 @@ export default function ShoeCleaner() {
             Ready to Revive Your Shoes?
           </h2>
           <p className="text-zinc-300 mb-8 max-w-2xl mx-auto">
-            Comment "CLEAN" for Solo Cleaner (₱199) or "KIT" for Complete Kit (₱599). 
-            We'll message you right away!
+            Solo Cleaner ₱199 · Complete Kit ₱599 — check out right here with COD or GCash,
+            nationwide delivery. Every Complete Kit comes with a Play & Win raffle voucher!
           </p>
           <div className="flex flex-wrap justify-center gap-4">
-            <Button 
-              size="lg" 
+            <Button
+              size="lg"
               className="bg-orange-500 hover:bg-orange-600 text-white text-lg px-8"
+              onClick={() => buyNow("kit")}
+            >
+              <ShoppingCart className="w-5 h-5 mr-2" />
+              Buy Complete Kit — ₱599
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="border-white text-white hover:bg-white/10"
               onClick={() => window.open("https://m.me/soleblessingofficial", "_blank")}
             >
               <MessageCircle className="w-5 h-5 mr-2" />

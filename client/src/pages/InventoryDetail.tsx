@@ -1,7 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { useInventory } from "@/hooks/useInventory";
 import { useParams, useLocation } from "wouter";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { ChevronLeft, ShoppingCart, Heart, AlertCircle, Ruler, QrCode, Shirt, Check } from "lucide-react";
 import { SizeGuideModal } from "@/components/SizeGuideModal";
 import { toast } from "sonner";
@@ -32,6 +32,13 @@ export default function InventoryDetail() {
     const selected = selectedSize ? sameSkuProducts.find(p => p.size === selectedSize) : mainProduct;
     return { product: mainProduct, allSizes: sizes, selectedProduct: selected || mainProduct };
   }, [inventoryProducts, itemCode, selectedSize]);
+
+  // Single-size items (e.g. shoe care products) need no size choice — preselect it.
+  useEffect(() => {
+    if (!selectedSize && allSizes.length === 1 && allSizes[0].status?.toUpperCase().includes("AVAILABLE")) {
+      setSelectedSize(allSizes[0].size);
+    }
+  }, [allSizes, selectedSize]);
 
   const handleAddToCart = () => {
     if (!selectedSize) { toast.error("Please select a size first"); return; }
