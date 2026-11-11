@@ -119,39 +119,37 @@ function Vouchers({ onChanged }: { onChanged: () => void }) {
     try {
       const out = await api("voucher_codes", { batch_id: batch.id });
       if (!out.ok || !out.codes?.length) throw new Error("No codes in batch");
-      // verify count matches DB before printing
       const { jsPDF } = await import("jspdf");
       const QR = (await import("qrcode")).default;
-      const url = `${location.origin}/shoe-cleaner/play-and-win`;
-      const qrData = await QR.toDataURL(url, { margin: 1, width: 240 });
-      const heroImg = await fetch("/shoe-cleaner/kit-hero.jpg").then(r => r.blob()).then(b => new Promise<string>(res => { const f = new FileReader(); f.onload = () => res(f.result as string); f.readAsDataURL(b); }));
-      const doc = new jsPDF({ unit: "mm", format: "a4" });
-      const W = 210, H = 297, M = 10, GW = (W - M * 2) / 2, GH = (H - M * 2) / 2;
+      const url = "https://soleblessingofficial.com/shoe-cleaner/play-and-win";
+      const qrData = await QR.toDataURL(url, { margin: 0, width: 480, errorCorrectionLevel: "M" });
+      const tpl = await fetch("/shoe-cleaner/voucher-template.jpg").then(r => r.blob())
+        .then(b => new Promise<string>(res => { const f = new FileReader(); f.onload = () => res(f.result as string); f.readAsDataURL(b); }));
+      // A4 landscape, 4 vouchers per sheet (2x2), each 140 x 93.3 mm, crop marks
+      const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "landscape" });
+      const PW = 297, PH = 210, M = 4.5, CW = (PW - M * 2) / 2, CH = (PH - M * 2) / 2;
+      const VW = 140, VH = VW * (1024 / 1536);
       out.codes.forEach((code: string, i: number) => {
         const slot = i % 4;
         if (i > 0 && slot === 0) doc.addPage();
-        const x = M + (slot % 2) * GW, y = M + Math.floor(slot / 2) * GH;
-        // card
-        doc.setFillColor(10, 10, 10); doc.rect(x + 2, y + 2, GW - 4, GH - 4, "F");
-        doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold");
-        doc.setFontSize(13); doc.text("SOLEBLESSING", x + 7, y + 12);
-        doc.setTextColor(242, 118, 46); doc.setFontSize(9); doc.text("SHOE CLEANER · PLAY & WIN", x + 7, y + 17.5);
-        doc.setTextColor(255, 255, 255); doc.setFontSize(17); doc.text("15% OFF", x + 7, y + 27);
-        doc.setFontSize(8); doc.setFont("helvetica", "normal");
-        doc.text("+ monthly raffle: FREE Shoe Essential Kit", x + 7, y + 32.5);
-        doc.addImage(heroImg, "JPEG", x + 7, y + 36, 30, 30);
-        doc.addImage(qrData, "PNG", x + GW - 37, y + 22, 28, 28);
-        doc.setFontSize(6.5); doc.setTextColor(180, 180, 180);
-        doc.text("Scan, then enter your voucher number:", x + GW - 39, y + 54, { maxWidth: 32 });
-        doc.setFillColor(242, 118, 46); doc.rect(x + 7, y + GH - 24, GW - 18, 9, "F");
-        doc.setTextColor(0, 0, 0); doc.setFont("courier", "bold"); doc.setFontSize(12);
-        doc.text(code, x + 9, y + GH - 17.5);
-        doc.setFont("helvetica", "normal"); doc.setFontSize(6); doc.setTextColor(150, 150, 150);
-        doc.text("One registration per voucher · Valid until Dec 31, 2027 · soleblessingofficial.com", x + 7, y + GH - 10);
+        const x = M + (slot % 2) * CW + (CW - VW) / 2;
+        const y = M + Math.floor(slot / 2) * CH + (CH - VH) / 2;
+        doc.addImage(tpl, "JPEG", x, y, VW, VH, "sc_tpl");
+        // real QR over the placeholder box (box: 12.24%..24.1% x, 71.1%..90.0% y)
+        doc.setFillColor(255, 255, 255);
+        doc.rect(x + 0.1200 * VW, y + 0.7050 * VH, 0.1240 * VW, 0.1960 * VH, "F");
+        const qs = 0.1070 * VW;
+        doc.addImage(qrData, "PNG", x + 0.1285 * VW, y + 0.7215 * VH, qs, qs, "sc_qr");
+        // voucher number over the pill, right of the divider
+        doc.setFillColor(255, 255, 255);
+        doc.rect(x + 0.2730 * VW, y + 0.9030 * VH, 0.2060 * VW, 0.0470 * VH, "F");
+        doc.setFont("courier", "bold"); doc.setFontSize(11); doc.setTextColor(10, 10, 10);
+        doc.text(code, x + 0.3760 * VW, y + 0.9400 * VH, { align: "center" });
         // crop marks
-        doc.setDrawColor(120, 120, 120); doc.setLineWidth(0.2);
-        [[x, y], [x + GW, y], [x, y + GH], [x + GW, y + GH]].forEach(([cx, cy]) => {
-          doc.line(cx - 3, cy, cx + 3, cy); doc.line(cx, cy - 3, cx, cy + 3);
+        doc.setDrawColor(130, 130, 130); doc.setLineWidth(0.2);
+        [[x, y], [x + VW, y], [x, y + VH], [x + VW, y + VH]].forEach(([cx, cy]) => {
+          doc.line(cx - 3.2, cy, cx - 1.2, cy); doc.line(cx + 1.2, cy, cx + 3.2, cy);
+          doc.line(cx, cy - 3.2, cx, cy - 1.2); doc.line(cx, cy + 1.2, cx, cy + 3.2);
         });
       });
       doc.save(`${(batch.label || "vouchers").replace(/\W+/g, "-")}.pdf`);
