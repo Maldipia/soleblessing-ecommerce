@@ -55,21 +55,39 @@ export default async function handler(req, res) {
 
   try {
     // Single source of truth: sb_inventory (DB). Images from product_image_cache CDN.
-    const sbAuth = { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } };
+    // PostgREST caps each response at the project's max-rows (1000), so page
+    // through with Range headers until a short page — a single capped request
+    // silently drops everything past the first 1000 item codes.
+    const sbAuth = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
+    const PAGE = 1000;
+    async function fetchAll(path) {
+      const out = [];
+      for (let from = 0; from < 20000; from += PAGE) {
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+          headers: { ...sbAuth, Range: `${from}-${from + PAGE - 1}` },
+        });
+        if (!r.ok) { if (from === 0) throw new Error(`fetch ${path}: ${r.status}`); break; }
+        const page = await r.json();
+        if (!Array.isArray(page)) break;
+        out.push(...page);
+        if (page.length < PAGE) break;
+      }
+      return out;
+    }
+
     const [invRes, imgRes] = await Promise.allSettled([
-      fetch(`${SUPABASE_URL}/rest/v1/sb_inventory?select=*&order=item_code.asc&limit=5000`, sbAuth),
-      fetch(`${SUPABASE_URL}/rest/v1/product_image_cache?select=item_code,supabase_url&sync_status=eq.OK`, sbAuth),
+      fetchAll('sb_inventory?select=*&order=item_code.asc'),
+      fetchAll('product_image_cache?select=item_code,supabase_url&sync_status=eq.OK&order=item_code.asc'),
     ]);
 
-    if (invRes.status !== 'fulfilled' || !invRes.value.ok) {
+    if (invRes.status !== 'fulfilled') {
       return res.status(502).json({ error: 'Inventory fetch failed' });
     }
-    const rows = await invRes.value.json();
+    const rows = invRes.value;
 
     const cdnImages = new Map();
-    if (imgRes.status === 'fulfilled' && imgRes.value && imgRes.value.ok) {
-      const imgs = await imgRes.value.json();
-      if (Array.isArray(imgs)) imgs.forEach(r => { if (r.supabase_url) cdnImages.set(r.item_code, r.supabase_url); });
+    if (imgRes.status === 'fulfilled' && Array.isArray(imgRes.value)) {
+      imgRes.value.forEach(r => { if (r.supabase_url) cdnImages.set(r.item_code, r.supabase_url); });
     }
 
     const products = [];

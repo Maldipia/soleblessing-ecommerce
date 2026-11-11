@@ -1274,8 +1274,19 @@ export default function AdminDashboard() {
   const loadSystem = async () => {
     setSysLoading(true);
     try{
+      // sb_inventory is >1000 rows; PostgREST caps each response at 1000, so page.
+      const fetchAllInv = async () => {
+        const all:any[]=[];
+        for(let off=0;off<20000;off+=1000){
+          const page=await sb.select("sb_inventory",`select=item_code,name,sku,size,srp,selling_price,unit_cost,status,stock,tab,updated_at&order=item_code.asc&limit=1000&offset=${off}`);
+          if(!Array.isArray(page)||!page.length) break;
+          all.push(...page);
+          if(page.length<1000) break;
+        }
+        return all;
+      };
       const [raw,log,loy,promos,reviews,wl,settings] = await Promise.all([
-        sb.select("sb_inventory","select=item_code,name,sku,size,srp,selling_price,unit_cost,status,stock,tab,updated_at"),
+        fetchAllInv(),
         sb.select("sync_log","select=created_at,synced,total,notes&order=created_at.desc&limit=5"),
         sb.select("sb_loyalty","select=id"), sb.select("sb_promos","select=id"),
         sb.select("sb_reviews","select=id"), sb.select("sb_wishlist_log","select=id"),
