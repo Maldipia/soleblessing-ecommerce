@@ -1427,11 +1427,21 @@ export default function AdminDashboard() {
     [sbProducts, productCategory, search]);
 
   const [channelFilter,setChannelFilter]=useState<"all"|"website"|"sheet_import">("all");
+  const [orderSearch,setOrderSearch]=useState("");
   const [ordersShown,setOrdersShown]=useState(25);
-  useEffect(()=>{setOrdersShown(25);},[orderFilter,channelFilter]);
-  const filteredOrders = useMemo(()=>
-    sbOrders.filter(o=>(orderFilter==="all"||o.status===orderFilter)&&(channelFilter==="all"||(o.source||"website")===channelFilter)),
-    [sbOrders,orderFilter,channelFilter]);
+  useEffect(()=>{setOrdersShown(25);},[orderFilter,channelFilter,orderSearch]);
+  const filteredOrders = useMemo(()=>{
+    const q=orderSearch.trim().toLowerCase();
+    return sbOrders.filter(o=>{
+      if(orderFilter!=="all"&&o.status!==orderFilter) return false;
+      if(channelFilter!=="all"&&(o.source||"website")!==channelFilter) return false;
+      if(!q) return true;
+      const hay=[o.order_number,o.customer_name,o.facebook_name,o.contact_number,o.customer_email,
+        o.tracking_reference,o.shipping_address,...(o.items||[]).map((i:any)=>`${i.name} ${i.id} ${i.sku}`)]
+        .filter(Boolean).join(" ").toLowerCase();
+      return q.split(/\s+/).every(w=>hay.includes(w));
+    });
+  },[sbOrders,orderFilter,channelFilter,orderSearch]);
 
   const stats = useMemo(()=>{
     // Raw inventory items (each row = 1 unit in stock)
@@ -2412,7 +2422,14 @@ export default function AdminDashboard() {
           {/* ── ORDERS ── */}
           {section==="orders"&&(
             <div>
-              <div className="flex items-center gap-3 mb-6">
+              <div className="flex items-center gap-3 mb-6 flex-wrap">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400"/>
+                  <input value={orderSearch} onChange={e=>setOrderSearch(e.target.value)}
+                    placeholder="Search order #, name, FB, contact, item…"
+                    className="h-10 w-72 max-w-full pl-9 pr-8 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-[#C9A84C]"/>
+                  {orderSearch&&<button onClick={()=>setOrderSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm font-bold">✕</button>}
+                </div>
                 <Select value={orderFilter} onValueChange={setOrderFilter}>
                   <SelectTrigger className="w-44 bg-white border-gray-200 text-sm h-10"><SelectValue/></SelectTrigger>
                   <SelectContent>
