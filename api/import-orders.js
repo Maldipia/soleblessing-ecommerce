@@ -121,9 +121,10 @@ export default async function handler(req, res) {
       let created = null;
       const m = o.ts.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
       if (m) created = `${m[3]}-${m[1]}-${m[2]}T${String(m[4]).padStart(2, '0')}:${m[5]}:00+08:00`;
-      const notes = [o.req && ('Request: ' + o.req), o.notes, o.fb && o.fb !== o.name && ('FB: ' + o.fb)].filter(Boolean).join(' | ');
+      const notes = [o.req && ('Request: ' + o.req), o.notes].filter(Boolean).join(' | ');
       const rec = {
         order_number: oid, customer_name: o.name, customer_email: o.email || null,
+        facebook_name: o.fb || null,
         contact_number: o.contact, shipping_address: o.addr, items: o.items,
         subtotal: total, shipping_fee: 0, discount_amount: 0, total,
         payment_method: o.pm || 'unknown', notes: notes || null,
