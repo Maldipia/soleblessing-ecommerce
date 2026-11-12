@@ -355,7 +355,7 @@ type OrderLine = {code:string;name:string;sku:string;size:string;price:string;co
 const BLANK_LINE: OrderLine = {code:"",name:"",sku:"",size:"",price:"",cost:null,found:false};
 
 function CreateOrderModal({inventory,onClose,onPlaced}:{inventory:any[];onClose:()=>void;onPlaced:()=>void}){
-  const [cust,setCust]=useState({name:"",contact:"",email:"",address:"",region:"",city:"",notes:""});
+  const [cust,setCust]=useState({name:"",fbName:"",contact:"",email:"",address:"",region:"",city:"",notes:""});
   const [pm,setPm]=useState("cod");
   const [shipFee,setShipFee]=useState("");
   const [lines,setLines]=useState<OrderLine[]>([{...BLANK_LINE}]);
@@ -385,7 +385,7 @@ function CreateOrderModal({inventory,onClose,onPlaced}:{inventory:any[];onClose:
     try{
       const orderData:any={
         order_number:`SB-${String(Math.floor(1e9+Math.random()*9e9))}`,
-        customer_name:cust.name.trim(),customer_email:cust.email.trim(),
+        customer_name:cust.name.trim(),facebook_name:cust.fbName.trim()||null,customer_email:cust.email.trim(),
         contact_number:cust.contact.trim(),shipping_address:cust.address.trim(),
         region:cust.region.trim(),city:cust.city.trim(),notes:cust.notes.trim(),
         items,subtotal,shipping_fee:fee,discount_amount:0,total:subtotal+fee,
@@ -416,6 +416,7 @@ function CreateOrderModal({inventory,onClose,onPlaced}:{inventory:any[];onClose:
         <div className="p-6 space-y-5 overflow-y-auto">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <input className={inp} placeholder="Customer name *" value={cust.name} onChange={e=>setCust({...cust,name:e.target.value})}/>
+            <input className={inp} placeholder="Facebook name" value={cust.fbName} onChange={e=>setCust({...cust,fbName:e.target.value})}/>
             <input className={inp} placeholder="Contact number" value={cust.contact} onChange={e=>setCust({...cust,contact:e.target.value})}/>
             <input className={inp} placeholder="Email (optional)" value={cust.email} onChange={e=>setCust({...cust,email:e.target.value})}/>
             <input className={`${inp} col-span-2`} placeholder="Delivery address" value={cust.address} onChange={e=>setCust({...cust,address:e.target.value})}/>
@@ -2485,7 +2486,7 @@ export default function AdminDashboard() {
                             {(o.source||"website")==="website"?"🌐 Website":"📋 FB Form"}
                           </span>
                         </div>
-                        <div className="text-xs text-gray-400 mt-0.5">{o.customer_name} · {o.contact_number} · {fmtDate(o.created_at)}</div>
+                        <div className="text-xs text-gray-400 mt-0.5">{o.customer_name}{o.facebook_name?<span className="text-blue-500"> · FB: {o.facebook_name}</span>:null} · {o.contact_number} · {fmtDate(o.created_at)}</div>
                       </div>
                       <div className="text-right">
                         <div className="text-lg font-black text-[#0d2430]">{fmt(o.total)}</div>

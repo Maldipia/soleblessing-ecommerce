@@ -33,7 +33,7 @@ export default function Checkout() {
   const [promoError, setPromoError] = useState("");
 
   const [form, setForm] = useState({
-    customerName: "", customerEmail: "", contactNumber: "",
+    customerName: "", facebookName: "", customerEmail: "", contactNumber: "",
     shippingAddress: "", notes: "", paymentMethod: "",
   });
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
@@ -112,6 +112,7 @@ export default function Checkout() {
       const orderData: any = {
         order_number: orderNumber,
         customer_name: form.customerName,
+        facebook_name: form.facebookName || null,
         customer_email: form.customerEmail || null,
         contact_number: form.contactNumber,
         shipping_address: form.shippingAddress,
@@ -200,6 +201,7 @@ export default function Checkout() {
                 <h2 className="text-sm font-bold uppercase tracking-wider text-[#0d2430]">Delivery Information</h2>
                 {[
                   { label: "Full Name *", key: "customerName", placeholder: "Juan dela Cruz", type: "text" },
+                  { label: "Facebook Name", key: "facebookName", placeholder: "Your FB name (for order updates)", type: "text" },
                   { label: "Contact Number *", key: "contactNumber", placeholder: "09XX-XXX-XXXX", type: "tel" },
                   { label: "Email (optional)", key: "customerEmail", placeholder: "email@example.com", type: "email" },
                 ].map(f => (
@@ -320,6 +322,7 @@ export default function Checkout() {
                 <div className="bg-[#F7F4EF] rounded-xl p-4 space-y-2 text-sm">
                   {[
                     ["Name", form.customerName],
+                    ...(form.facebookName ? [["FB Name", form.facebookName]] : []),
                     ["Contact", form.contactNumber],
                     ["Payment", selectedPayment?.label || form.paymentMethod],
                     ["Address", form.shippingAddress],

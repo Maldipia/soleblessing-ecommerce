@@ -50,7 +50,7 @@ export default async function handler(req, res) {
             body: JSON.stringify({
               orderId: order.order_number,
               email: order.customer_email || '',
-              fbName: order.source === 'manual' ? 'DASHBOARD' : 'WEBSITE',
+              fbName: order.facebook_name || (order.source === 'manual' ? 'DASHBOARD' : 'WEBSITE'),
               receiverName: order.customer_name || '',
               address: order.shipping_address || '',
               contact: order.contact_number || '',
