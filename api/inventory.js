@@ -77,7 +77,8 @@ export default async function handler(req, res) {
 
     const [invRes, imgRes] = await Promise.allSettled([
       fetchAll('sb_inventory?select=*&order=item_code.asc'),
-      fetchAll('product_image_cache?select=item_code,supabase_url&sync_status=eq.OK&order=item_code.asc'),
+      // is_box=true are warehouse box/label scans — never storefront material
+      fetchAll('product_image_cache?select=item_code,supabase_url&sync_status=eq.OK&is_box=not.is.true&order=item_code.asc'),
     ]);
 
     if (invRes.status !== 'fulfilled') {
