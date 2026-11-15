@@ -1,315 +1,173 @@
-import { trpc } from "@/lib/trpc";
+// Clearance Sale — live /api/inventory data (rebuilt off the dead legacy tRPC backend)
 import { useState, useMemo } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useInventory } from "@/hooks/useInventory";
 import { useLocation } from "wouter";
-import { Search, Flame, Clock, TrendingDown } from "lucide-react";
-import { useAuth } from "@/_core/hooks/useAuth";
-import { toast } from "sonner";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Search, Heart, Flame } from "lucide-react";
+import { useWishlist } from "@/pages/Wishlist";
+import LazyImage from "@/components/LazyImage";
+
+const fmt = (c: number) => `₱${(c / 100).toLocaleString("en-PH")}`;
+
+function normalizeSize(s: string): string {
+  if (!s) return "";
+  let n = s.toString().trim().replace(/\s*CM\s*/gi, "").trim();
+  const num = parseFloat(n);
+  return isNaN(num) ? n.toUpperCase() : String(num);
+}
 
 export default function ClearanceSale() {
   const [, setLocation] = useLocation();
-  const { user } = useAuth();
-  const utils = trpc.useUtils();
-  
-  // Fetch inventory from Google Sheets
-  const { data: inventoryProducts, isLoading, error } = trpc.inventory.list.useQuery(undefined, {
-    retry: 3,
-    retryDelay: 1000,
-  });
-  
-  const [searchQuery, setSearchQuery] = useState("");
-  const [sortBy, setSortBy] = useState<"discount-high" | "price-low" | "price-high" | "newest">("discount-high");
-  
-  // Filter clearance products (discount >= 50%) and group by SKU
-  const clearanceProducts = useMemo(() => {
-    if (!inventoryProducts) return [];
-    
-    // Filter clearance items (50%+ discount)
-    const clearanceItems = inventoryProducts.filter(item => item.discount >= 50);
-    
-    // Group by SKU
-    const groupedBySku = clearanceItems.reduce((acc, item) => {
-      const sku = item.sku;
-      if (!acc[sku]) {
-        acc[sku] = [];
+  const { data: raw, isLoading, error, refetch } = useInventory();
+  const { toggle, isWishlisted } = useWishlist();
+
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState("discount-high");
+
+  // Discounted items only, grouped by SKU → one card per model
+  const products = useMemo(() => {
+    if (!raw) return [];
+    const grouped = new Map<string, any>();
+    raw.filter(item => item.discount > 0).forEach(item => {
+      const key = item.sku || item.itemCode;
+      const sz = normalizeSize(item.size);
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          itemCode: item.itemCode, sku: item.sku, name: item.name,
+          brand: item.brand || "Other",
+          price: item.srp || item.sellingPrice,
+          salePrice: item.sellingPrice < item.srp ? item.sellingPrice : null,
+          imageUrl: item.imageUrl,
+          sizes: sz ? [sz] : [],
+          discount: item.discount,
+        });
+      } else {
+        const p = grouped.get(key);
+        if (sz && !p.sizes.includes(sz)) p.sizes.push(sz);
+        if (!p.imageUrl && item.imageUrl) p.imageUrl = item.imageUrl;
+        if (item.discount > p.discount) p.discount = item.discount;
       }
-      acc[sku].push(item);
-      return acc;
-    }, {} as Record<string, typeof clearanceItems>);
-    
-    // Transform grouped data into product cards
-    return Object.entries(groupedBySku).map(([sku, items]) => {
-      const firstItem = items[0];
-      const allSizes = items.map(item => item.size).filter(Boolean).sort((a, b) => parseFloat(a) - parseFloat(b));
-      
-      return {
-        id: parseInt(firstItem.itemCode) || 0,
-        name: firstItem.name,
-        description: `${firstItem.name}`,
-        brand: sku.split(/[^a-zA-Z]/)[0] || 'Unknown',
-        category: 'Sneakers',
-        basePrice: Math.round(firstItem.srp),
-        salePrice: Math.round(firstItem.sellingPrice),
-        discount: firstItem.discount,
-        images: JSON.stringify(firstItem.imageUrl ? [firstItem.imageUrl] : []),
-        sizes: JSON.stringify(allSizes),
-        stock: items.filter(item => item.status === 'AVAILABLE').length,
-        itemCode: firstItem.itemCode,
-        size: allSizes.join(', '),
-        imageUrl: firstItem.imageUrl,
-        createdAt: new Date(),
-        sku: sku,
-        allSizes: allSizes,
-      };
     });
-  }, [inventoryProducts]);
-  
-  // Apply search and sort
-  const filteredProducts = useMemo(() => {
-    let filtered = [...clearanceProducts];
-    
-    // Search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(p =>
-        p.name.toLowerCase().includes(query) ||
-        p.brand.toLowerCase().includes(query)
-      );
-    }
-    
-    // Sort
-    switch (sortBy) {
-      case "discount-high":
-        filtered.sort((a, b) => b.discount - a.discount);
-        break;
-      case "price-low":
-        filtered.sort((a, b) => a.salePrice - b.salePrice);
-        break;
-      case "price-high":
-        filtered.sort((a, b) => b.salePrice - a.salePrice);
-        break;
-      case "newest":
-        filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        break;
-    }
-    
-    return filtered;
-  }, [clearanceProducts, searchQuery, sortBy]);
-  
-  const { data: wishlistItems } = trpc.wishlist.get.useQuery(undefined, {
-    enabled: !!user,
-  });
-  
-  const addToWishlistMutation = trpc.wishlist.add.useMutation({
-    onSuccess: () => {
-      toast.success("Added to wishlist");
-      utils.wishlist.get.invalidate();
-    },
-    onError: () => {
-      toast.error("Failed to add to wishlist");
-    },
-  });
-  
-  const handleAddToWishlist = (productId: number) => {
-    if (!user) {
-      toast.error("Please sign in to add to wishlist");
-      return;
-    }
-    addToWishlistMutation.mutate({ productId });
-  };
-  
-  if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen gap-4">
-        <Flame className="h-12 w-12 text-orange-500 animate-pulse" />
-        <div className="text-lg">Loading clearance deals...</div>
-      </div>
+    return Array.from(grouped.values());
+  }, [raw]);
+
+  const maxDiscount = useMemo(() => products.reduce((m, p) => Math.max(m, p.discount), 0), [products]);
+
+  const filtered = useMemo(() => {
+    let f = products.filter(p =>
+      !search ||
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      p.sku.toLowerCase().includes(search.toLowerCase())
     );
-  }
-  
+    if (sort === "discount-high") f.sort((a, b) => b.discount - a.discount);
+    else if (sort === "price-low") f.sort((a, b) => (a.salePrice || a.price) - (b.salePrice || b.price));
+    else if (sort === "price-high") f.sort((a, b) => (b.salePrice || b.price) - (a.salePrice || a.price));
+    return f;
+  }, [products, search, sort]);
+
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen gap-4">
-        <div className="text-lg text-red-500">Error loading clearance items</div>
-        <div className="text-sm text-muted-foreground">{error.message}</div>
-        <Button onClick={() => window.location.reload()}>Retry</Button>
+      <div className="min-h-screen bg-[#F7F4EF] flex flex-col items-center justify-center gap-4">
+        <div className="text-lg text-red-500 font-bold">Error loading clearance items</div>
+        <div className="text-sm text-gray-500">{error}</div>
+        <button onClick={() => refetch()} className="bg-[#C9A84C] text-[#050f12] font-bold px-6 py-2.5 rounded-xl">Retry</button>
       </div>
     );
   }
-  
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-red-50 to-pink-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-      {/* Hero Section */}
-      <div className="bg-gradient-to-r from-red-600 via-orange-600 to-red-600 text-white py-12">
-        <div className="container">
-          <div className="flex items-center gap-3 mb-4">
-            <Flame className="h-10 w-10 animate-pulse" />
-            <h1 className="text-4xl md:text-5xl font-bold">CLEARANCE SALE</h1>
-            <Flame className="h-10 w-10 animate-pulse" />
-          </div>
-          <p className="text-xl md:text-2xl mb-2">Up to 76% OFF Premium Sneakers!</p>
-          <div className="flex items-center gap-2 text-lg">
-            <Clock className="h-5 w-5" />
-            <span>Limited Stock - While Supplies Last</span>
-          </div>
+    <div className="min-h-screen bg-[#F7F4EF]">
+      {/* Header */}
+      <div className="bg-[#2a0a0a] px-6 py-12">
+        <div className="max-w-7xl mx-auto">
+          <p className="text-[10px] font-bold tracking-[.2em] uppercase text-red-400 mb-2 flex items-center gap-1.5">
+            <Flame className="h-3.5 w-3.5"/>{maxDiscount > 0 ? `Up to ${maxDiscount}% off` : "Deals"}
+          </p>
+          <h1 className="text-4xl font-black text-white tracking-tight">Clearance Sale</h1>
+          <p className="text-white/40 text-sm mt-1">{isLoading ? "Loading…" : `${filtered.length} deals`}</p>
         </div>
       </div>
-      
-      <div className="container py-8">
-        {/* Stats Bar */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <Card className="bg-white/80 backdrop-blur border-orange-200">
-            <CardContent className="p-6 text-center">
-              <TrendingDown className="h-8 w-8 text-orange-600 mx-auto mb-2" />
-              <div className="text-3xl font-bold text-orange-600">{clearanceProducts.length}</div>
-              <div className="text-sm text-muted-foreground">Items on Clearance</div>
-            </CardContent>
-          </Card>
-          <Card className="bg-white/80 backdrop-blur border-red-200">
-            <CardContent className="p-6 text-center">
-              <Flame className="h-8 w-8 text-red-600 mx-auto mb-2" />
-              <div className="text-3xl font-bold text-red-600">50-76%</div>
-              <div className="text-sm text-muted-foreground">Discount Range</div>
-            </CardContent>
-          </Card>
-          <Card className="bg-white/80 backdrop-blur border-pink-200">
-            <CardContent className="p-6 text-center">
-              <Clock className="h-8 w-8 text-pink-600 mx-auto mb-2" />
-              <div className="text-3xl font-bold text-pink-600">LIMITED</div>
-              <div className="text-sm text-muted-foreground">Stock Available</div>
-            </CardContent>
-          </Card>
-        </div>
-        
-        {/* Search and Sort Bar */}
-        <div className="flex flex-col md:flex-row gap-4 mb-6">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search clearance items..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-white/80 backdrop-blur"
-            />
+
+      {/* Search + sort */}
+      <div className="sticky top-0 z-20 bg-white border-b border-gray-100 shadow-sm">
+        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center gap-3">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400"/>
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Search name or SKU…"
+              className="w-full pl-10 pr-4 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-[#0d2430]"/>
           </div>
-          <Select value={sortBy} onValueChange={(value: any) => setSortBy(value)}>
-            <SelectTrigger className="w-full md:w-[200px] bg-white/80 backdrop-blur">
-              <SelectValue placeholder="Sort by" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="discount-high">Highest Discount</SelectItem>
-              <SelectItem value="price-low">Price: Low to High</SelectItem>
-              <SelectItem value="price-high">Price: High to Low</SelectItem>
-              <SelectItem value="newest">Newest</SelectItem>
-            </SelectContent>
-          </Select>
+          <select value={sort} onChange={e => setSort(e.target.value)}
+            className="text-sm border border-gray-200 rounded-xl px-3 py-2.5 bg-white outline-none text-gray-600">
+            <option value="discount-high">Biggest discount</option>
+            <option value="price-low">Price: Low → High</option>
+            <option value="price-high">Price: High → Low</option>
+          </select>
         </div>
-        
-        {/* Results Count */}
-        <div className="mb-6">
-          <p className="text-lg font-semibold">
-            Showing {filteredProducts.length} clearance {filteredProducts.length === 1 ? 'item' : 'items'}
-          </p>
-        </div>
-        
-        {/* Product Grid */}
-        {filteredProducts.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredProducts.map(product => {
-              const images = product.images ? JSON.parse(product.images) : [];
-              const imageUrl = images[0] || '/placeholder-product.png';
-              const isInWishlist = wishlistItems?.some(item => item.productId === product.id);
-              const savings = product.basePrice - product.salePrice;
-              
+      </div>
+
+      {/* Grid */}
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        {isLoading ? (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="bg-white rounded-2xl overflow-hidden animate-pulse">
+                <div className="aspect-square bg-[#EDE9E3]"/>
+                <div className="p-4 space-y-2"><div className="h-3 bg-gray-100 rounded w-2/3"/><div className="h-4 bg-gray-100 rounded w-1/2"/></div>
+              </div>
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-20 text-gray-400">No clearance deals right now — check back soon!</div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+            {filtered.map(p => {
+              const wishlisted = isWishlisted(p.itemCode);
+              const displaySizes = p.sizes.slice(0, 5);
               return (
-                <Card 
-                  key={`${product.itemCode}-${product.size}`}
-                  className="group cursor-pointer hover:shadow-xl transition-all duration-300 overflow-hidden border-2 border-orange-200 bg-white/90 backdrop-blur"
-                  onClick={() => setLocation(`/inventory/${product.itemCode}`)}
-                >
-                  {/* Clearance Badge */}
-                  <div className="absolute top-2 left-2 z-10 bg-gradient-to-r from-red-600 to-orange-600 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg">
-                    <Flame className="h-3 w-3" />
-                    {product.discount}% OFF
+                <div key={p.itemCode}
+                  className="bg-white rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-300 cursor-pointer group"
+                  onClick={() => setLocation(`/inventory/${p.itemCode}`)}>
+                  <div className="relative aspect-square bg-[#EDE9E3] overflow-hidden">
+                    {p.imageUrl ? (
+                      <LazyImage src={p.imageUrl} alt={p.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"/>
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-5xl opacity-20">👟</div>
+                    )}
+                    {p.discount > 0 && (
+                      <span className="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-black px-2 py-1 rounded-full">
+                        -{p.discount}%
+                      </span>
+                    )}
+                    <button
+                      onClick={e => { e.stopPropagation(); toggle({ id: p.itemCode, sku: p.sku, name: p.name, brand: p.brand, price: p.salePrice || p.price, imageUrl: p.imageUrl, itemCode: p.itemCode }); }}
+                      className={`absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-all shadow ${wishlisted ? "bg-red-500 text-white" : "bg-white/90 text-gray-400 hover:text-red-400"}`}>
+                      <Heart className={`h-4 w-4 ${wishlisted ? "fill-current" : ""}`}/>
+                    </button>
                   </div>
-                  
-                  {/* Limited Stock Badge */}
-                  {product.stock > 0 && (
-                    <div className="absolute top-2 right-2 z-10 bg-yellow-500 text-black px-2 py-1 rounded text-xs font-bold shadow-lg">
-                      LIMITED
+                  <div className="p-4">
+                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full mb-1 inline-block bg-[#C9A84C] text-[#050f12]">{p.brand}</span>
+                    <h3 className="text-sm font-bold text-[#0d2430] leading-tight line-clamp-2 mb-2">{p.name}</h3>
+                    <div className="flex flex-wrap gap-1 mb-3">
+                      {displaySizes.map((sz: string) => (
+                        <span key={sz} className="text-[10px] bg-[#EDE9E3] text-[#0d2430] px-2 py-0.5 rounded font-semibold">{sz}</span>
+                      ))}
+                      {p.sizes.length > 5 && <span className="text-[10px] text-gray-400 px-1 py-0.5">+{p.sizes.length - 5}</span>}
                     </div>
-                  )}
-                  
-                  <CardContent className="p-0">
-                    {/* Product Image */}
-                    <div className="relative aspect-square overflow-hidden bg-gray-100">
-                      <img
-                        src={imageUrl}
-                        alt={product.name}
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                        loading="lazy"
-                      />
-                    </div>
-                    
-                    {/* Product Info */}
-                    <div className="p-4">
-                      <div className="text-xs text-orange-600 font-semibold mb-1">{product.brand}</div>
-                      <h3 className="font-semibold text-sm mb-2 line-clamp-2 min-h-[2.5rem] force-black-text">
-                        {product.name}
-                      </h3>
-                      <div className="text-xs text-muted-foreground mb-3">Size: {product.size}</div>
-                      
-                      {/* Pricing */}
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xl font-bold text-red-600">
-                            ₱{(product.salePrice / 100).toFixed(2)}
-                          </span>
-                          <span className="text-sm text-muted-foreground line-through">
-                            ₱{(product.basePrice / 100).toFixed(2)}
-                          </span>
-                        </div>
-                        <div className="text-xs text-green-600 font-semibold">
-                          You save ₱{(savings / 100).toFixed(2)}!
-                        </div>
-                      </div>
-                      
-                      {/* Stock Status */}
-                      {product.stock > 0 ? (
-                        <div className="mt-3 text-xs text-green-600 font-semibold flex items-center gap-1">
-                          <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
-                          In Stock - Order Now!
-                        </div>
+                    <div className="flex items-baseline gap-2">
+                      {p.salePrice ? (
+                        <>
+                          <span className="text-base font-black text-[#0d2430]">{fmt(p.salePrice)}</span>
+                          <span className="text-xs text-gray-400 line-through">{fmt(p.price)}</span>
+                        </>
                       ) : (
-                        <div className="mt-3 text-xs text-red-600 font-semibold">
-                          Out of Stock
-                        </div>
+                        <span className="text-base font-black text-[#0d2430]">{fmt(p.price)}</span>
                       )}
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               );
             })}
-          </div>
-        ) : (
-          <div className="text-center py-12">
-            <Flame className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold mb-2">No clearance items found</h3>
-            <p className="text-muted-foreground mb-4">
-              {searchQuery ? "Try adjusting your search" : "Check back soon for new deals!"}
-            </p>
-            <Button onClick={() => setLocation("/products")}>
-              Browse All Products
-            </Button>
           </div>
         )}
       </div>
