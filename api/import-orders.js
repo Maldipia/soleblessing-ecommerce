@@ -59,8 +59,12 @@ export default async function handler(req, res) {
       tabCounts[TABS[i].name] = rs.length;
       return rs.map(r => ({ r, tab: TABS[i].name }));
     });
-    const orders = new Map(); let last = null;
+    const orders = new Map(); let last = null; let curTab = null;
     for (const { r, tab } of rows) {
+      // Item rows belong to the order above them IN THE SAME TAB only — without
+      // this reset, a tab that opens with no-oid item rows (WALK-IN) dumps them
+      // all onto whatever order closed the previous tab.
+      if (tab !== curTab) { curTab = tab; last = null; }
       const oid = (r[2] || '').trim();
       const item = normCode(r[26]);
       if (oid) {
