@@ -1525,7 +1525,8 @@ export default function AdminDashboard() {
     if(intakeCond!=="All"&&(r.condition||"Good")!==intakeCond&&!(intakeCond==="Good"&&(r.condition||"")==="New"))return false;
     if(!intakeSearch)return true;
     const q=intakeSearch.toLowerCase();
-    return [r.item_code,r.name,r.brand,r.sku,r.size,r.size_eur,r.size_cm,r.barcode].some(v=>String(v||"").toLowerCase().includes(q));
+    // notes included so corrected/merged identifiers (old SKUs, duplicate links) stay findable
+    return [r.item_code,r.name,r.brand,r.sku,r.size,r.size_eur,r.size_cm,r.barcode,r.notes].some(v=>String(v||"").toLowerCase().includes(q));
   }),[intakeRows,intakeSearch,intakeCond,intakeAll,intakeTab]);
   const intakeTabCounts=useMemo(()=>{const s=intakeRows.filter((r:any)=>r.tab==="SCAN");return {
     all:s.length,
