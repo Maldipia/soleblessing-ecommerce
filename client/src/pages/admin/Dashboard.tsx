@@ -1,7 +1,19 @@
 import { trpc } from "@/lib/trpc";
 import { sbAdmin as sb } from "@/lib/supabaseAdmin";
 import { useLocation } from "wouter";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
+
+/** Infinite scroll sentinel — loads the next chunk when scrolled near, no button clicks. */
+function AutoLoader({ onMore, remaining }: { onMore: () => void; remaining: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current; if (!el) return;
+    const io = new IntersectionObserver(es => { if (es[0].isIntersecting) onMore(); }, { rootMargin: "700px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [onMore]);
+  return <div ref={ref} className="py-3 text-center text-[11px] text-gray-400">Loading more… ({remaining} left)</div>;
+}
 import {
   LayoutDashboard, Package, ShoppingCart, BarChart3,
   Shield, ChevronRight, Lock, LogOut, Zap, ExternalLink,
@@ -2585,10 +2597,7 @@ export default function AdminDashboard() {
                 ))}
                 {filteredOrders.length===0&&<div className="bg-white border border-gray-100 rounded-xl py-16 text-center text-sm text-gray-400">No orders found</div>}
                 {filteredOrders.length>ordersShown&&(
-                  <button onClick={()=>setOrdersShown(n=>n+50)}
-                    className="w-full border border-gray-200 bg-white text-[#0d2430] py-2.5 text-xs font-bold rounded-xl hover:bg-gray-50">
-                    Show more ({filteredOrders.length-ordersShown} remaining)
-                  </button>
+                  <AutoLoader onMore={()=>setOrdersShown(n=>n+50)} remaining={filteredOrders.length-ordersShown}/>
                 )}
               </div>
             </div>
@@ -2762,9 +2771,7 @@ export default function AdminDashboard() {
                 </table>
               </div>
               {filteredIntake.length>intakeShown&&(
-                <button onClick={()=>setIntakeShown(n=>n+50)} className="w-full border border-gray-200 rounded-lg py-2 text-xs font-bold text-gray-500 hover:bg-gray-50">
-                  Show 50 more ({filteredIntake.length-intakeShown} left)
-                </button>
+                <AutoLoader onMore={()=>setIntakeShown(n=>n+50)} remaining={filteredIntake.length-intakeShown}/>
               )}
               <p className="text-[10px] text-gray-400">Newest first. <b>Good/Stained</b> are sellable once priced · <b>Missing pair/Unknown</b> never reach the website · ✏️ edits the pair right here (scans never join the sheet inventory) · QR reprints the box sticker.</p>
             </div>
