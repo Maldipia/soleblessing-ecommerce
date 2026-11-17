@@ -25,9 +25,16 @@ export default function InventoryDetail() {
     const mainProduct = inventoryProducts.find(p => p.itemCode === itemCode);
     if (!mainProduct) return { product: null, allSizes: [], selectedProduct: null };
     const sameSkuProducts = inventoryProducts.filter(p => p.sku === mainProduct.sku);
-    const sizes = sameSkuProducts
-      .map(p => ({ size: p.size, itemCode: p.itemCode, status: p.status }))
-      .filter(s => s.size)
+    // One button per size (several pairs can share a size); prefer an available pair.
+    const bySize = new Map<string, { size: string; sizeCm?: string; itemCode: string; status: string }>();
+    sameSkuProducts.forEach(p => {
+      if (!p.size) return;
+      const cur = bySize.get(p.size);
+      const avail = p.status === "AVAILABLE";
+      if (!cur || (avail && cur.status !== "AVAILABLE"))
+        bySize.set(p.size, { size: p.size, sizeCm: p.sizeCm, itemCode: p.itemCode, status: p.status });
+    });
+    const sizes = Array.from(bySize.values())
       .sort((a, b) => parseFloat(a.size) - parseFloat(b.size));
     const selected = selectedSize ? sameSkuProducts.find(p => p.size === selectedSize) : mainProduct;
     return { product: mainProduct, allSizes: sizes, selectedProduct: selected || mainProduct };
@@ -154,17 +161,20 @@ export default function InventoryDetail() {
                 }/>
               </div>
               <div className="grid grid-cols-5 gap-1.5">
-                {allSizes.map(({size, itemCode: sic, status}) => {
+                {allSizes.map(({size, sizeCm, itemCode: sic, status}) => {
                   const avail = status === "AVAILABLE";
                   const sel = selectedSize === size;
                   return (
                     <button key={sic} disabled={!avail} onClick={()=>setSelectedSize(size)}
-                      className={`py-2.5 text-xs font-semibold border transition-all relative ${
+                      className={`py-1.5 text-xs font-semibold border transition-all relative ${
                         sel?"bg-[#0d2430] text-white border-[#0d2430]":
                         avail?"bg-white text-[#0d2430] border-gray-200 hover:border-[#0d2430]":
                         "bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed line-through"
                       }`}>
-                      {size}
+                      <span className="block leading-tight">{size}</span>
+                      <span className={`block text-[9px] font-normal leading-tight ${sel?"text-white/60":avail?"text-gray-400":"text-gray-300"}`}>
+                        {sizeCm ? `${sizeCm} cm` : " "}
+                      </span>
                     </button>
                   );
                 })}

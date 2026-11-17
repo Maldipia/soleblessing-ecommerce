@@ -7,6 +7,7 @@ export interface InventoryProduct {
   brand?: string;
   sku: string;
   size: string;
+  sizeCm?: string;
   sellingPrice: number;
   srp: number;
   status: string;
