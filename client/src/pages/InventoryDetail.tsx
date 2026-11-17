@@ -37,7 +37,9 @@ export default function InventoryDetail() {
     const sizes = Array.from(bySize.values())
       .sort((a, b) => parseFloat(a.size) - parseFloat(b.size));
     const selected = selectedSize ? sameSkuProducts.find(p => p.size === selectedSize) : mainProduct;
-    return { product: mainProduct, allSizes: sizes, selectedProduct: selected || mainProduct };
+    // A pair without its own photo borrows the SKU's photo from a sibling pair.
+    const hero = mainProduct.imageUrl || sameSkuProducts.find(p => p.imageUrl)?.imageUrl || "";
+    return { product: { ...mainProduct, imageUrl: hero }, allSizes: sizes, selectedProduct: selected || mainProduct };
   }, [inventoryProducts, itemCode, selectedSize]);
 
   // Single-size items (e.g. shoe care products) need no size choice — preselect it.
@@ -57,7 +59,7 @@ export default function InventoryDetail() {
       brand: product.sku.split(/[^a-zA-Z]/)[0] || "Brand",
       size: selectedSize,
       price: selectedProduct.sellingPrice > 0 ? selectedProduct.sellingPrice : selectedProduct.srp,
-      imageUrl: selectedProduct.imageUrl || undefined,
+      imageUrl: selectedProduct.imageUrl || product.imageUrl || undefined,
     });
     setAddedToCart(true);
     toast.success(`Added to cart — Size ${selectedSize}`);
