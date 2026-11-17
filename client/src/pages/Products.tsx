@@ -20,7 +20,10 @@ export default function Products() {
   const { data: raw, isLoading } = useInventory();
   const { toggle, isWishlisted } = useWishlist();
 
-  const [search, setSearch] = useState("");
+  // Honor ?search= / ?q= in the URL so shared/typed search links land filtered
+  const [search, setSearch] = useState(() => {
+    try { const sp = new URLSearchParams(window.location.search); return sp.get("search") || sp.get("q") || ""; } catch { return ""; }
+  });
   const [brandFilter, setBrandFilter] = useState("All");
   const [sizeFilter, setSizeFilter] = useState("");
   const [sort, setSort] = useState("newest");
