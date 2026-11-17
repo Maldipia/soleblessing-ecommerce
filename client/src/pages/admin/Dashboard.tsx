@@ -2897,10 +2897,7 @@ export default function AdminDashboard() {
                   {missingCost.length===0&&<div className="py-6 text-center text-sm text-gray-400">Every line has a cost — report is 100% accurate 🎉</div>}
                 </div>
                 {missingCost.length>missingShown&&(
-                  <button onClick={()=>setMissingShown(n=>n+30)}
-                    className="mt-3 w-full border border-gray-200 rounded-lg py-2 text-xs font-bold text-gray-500 hover:bg-gray-50">
-                    Show {Math.min(30,missingCost.length-missingShown)} more ({missingCost.length-missingShown} left)
-                  </button>
+                  <AutoLoader onMore={()=>setMissingShown(n=>n+30)} remaining={missingCost.length-missingShown}/>
                 )}
               </div>
             </div>
