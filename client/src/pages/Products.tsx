@@ -42,8 +42,10 @@ export default function Products() {
           sku: item.sku,
           name: item.name,
           brand: item.brand || "Other",
-          price: item.srp || item.sellingPrice,
-          salePrice: item.sellingPrice < item.srp ? item.sellingPrice : null,
+          // What the customer pays is always sellingPrice (srp only as fallback);
+          // hype pairs sell ABOVE srp, so never show srp as the big price.
+          price: item.sellingPrice > 0 && item.sellingPrice >= item.srp ? item.sellingPrice : (item.srp || item.sellingPrice),
+          salePrice: item.sellingPrice > 0 && item.sellingPrice < item.srp ? item.sellingPrice : null,
           imageUrl: item.imageUrl,
           sizes: sz ? [sz] : [],
           rawSizes: [item.size],

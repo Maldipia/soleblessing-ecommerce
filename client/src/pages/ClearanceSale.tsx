@@ -34,8 +34,8 @@ export default function ClearanceSale() {
         grouped.set(key, {
           itemCode: item.itemCode, sku: item.sku, name: item.name,
           brand: item.brand || "Other",
-          price: item.srp || item.sellingPrice,
-          salePrice: item.sellingPrice < item.srp ? item.sellingPrice : null,
+          price: item.sellingPrice > 0 && item.sellingPrice >= item.srp ? item.sellingPrice : (item.srp || item.sellingPrice),
+          salePrice: item.sellingPrice > 0 && item.sellingPrice < item.srp ? item.sellingPrice : null,
           imageUrl: item.imageUrl,
           sizes: sz ? [sz] : [],
           discount: item.discount,
