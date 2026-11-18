@@ -85,6 +85,19 @@ export default async function handler(req, res) {
           order.invoice_url = out.invoiceUrl;
         }
       } catch (e) { /* non-fatal — admin button covers it */ }
+
+      // Nike/Adidas-style "order received" email with photos, right away.
+      // Non-fatal; sb_email_log keeps the record either way.
+      if (order.customer_email) {
+        try {
+          const host = req.headers['x-forwarded-host'] || req.headers.host;
+          await fetch(`https://${host}/api/send-order-email`, {
+            method: 'POST', signal: AbortSignal.timeout(30000),
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: process.env.ADMIN_PASSWORD, order_number: order.order_number, type: 'order_received' }),
+          });
+        } catch (e) { /* non-fatal */ }
+      }
     }
     return res.status(200).json({ order });
   } catch (e) {

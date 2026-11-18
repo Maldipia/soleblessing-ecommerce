@@ -1854,8 +1854,13 @@ export default function AdminDashboard() {
         try{
           if(!o.invoice_url) await generateInvoice(o);
           const pw=(()=>{try{return localStorage.getItem("sb_admin_pw")||sessionStorage.getItem("sb_admin_pw")||""}catch{return ""}})();
-          const r=await fetch("/api/send-invoice",{method:"POST",headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({password:pw,order_number:o.order_number})});
+          // branded "payment confirmed" email (photos + totals), logged in sb_email_log
+          let r=await fetch("/api/send-order-email",{method:"POST",headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({password:pw,order_number:o.order_number,type:"payment_verified"})});
+          if(!r.ok){ // fall back to the legacy invoice email until the GAS patch lands
+            r=await fetch("/api/send-invoice",{method:"POST",headers:{"Content-Type":"application/json"},
+              body:JSON.stringify({password:pw,order_number:o.order_number})});
+          }
           if(r.ok){toast.success("Confirmation emailed to "+o.customer_email);loadOrders();}
           else{const out=await r.json().catch(()=>({} as any));toast.error("Auto-email failed: "+(out.error||"—")+" — use 📧 Send invoice");}
         }catch{toast.error("Auto-email failed — use 📧 Send invoice");}
