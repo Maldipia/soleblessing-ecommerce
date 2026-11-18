@@ -2550,7 +2550,7 @@ export default function AdminDashboard() {
                           <ExternalLink className="h-3 w-3"/> View Proof
                         </a>
                       )}
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${o.payment_status==="verified"?"bg-emerald-100 text-emerald-700":o.payment_status==="submitted"?"bg-blue-100 text-blue-700":"bg-gray-100 text-gray-500"}`}>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${o.payment_status==="verified"?"bg-emerald-600 text-white":o.payment_status==="submitted"?"bg-blue-100 text-blue-700":"bg-gray-100 text-gray-500"}`}>
                         pay: {o.payment_status||"pending"}
                       </span>
                       {o.payment_status==="submitted"&&(
