@@ -1232,7 +1232,7 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
             <button onClick={()=>setShowPrice(s=>!s)} className="text-[11px] font-bold text-gray-400">{showPrice?"▾":"▸"} Pricing (optional — no price = hidden from store)</button>
             {showPrice&&(
               <div className="grid grid-cols-3 gap-2">
-                <div><label className="text-[9px] font-bold uppercase text-gray-400">Unit cost ₱</label>
+                <div><label className="text-[9px] font-bold uppercase text-gray-400">Cost ₱ — what we paid, NOT the box price</label>
                   <input className={inp} inputMode="numeric" value={f.unitCost} onChange={e=>setF({...f,unitCost:e.target.value})}/></div>
                 <div><label className="text-[9px] font-bold uppercase text-gray-400">Selling ₱</label>
                   <input className={inp} inputMode="numeric" value={f.selling} onChange={e=>setF({...f,selling:e.target.value})}/></div>
