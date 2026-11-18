@@ -45,6 +45,17 @@ export default function UploadPayment() {
     });
   }
 
+  // Prefill from the email link: /upload-payment?order=SB-xxx&name=...&amount=...
+  useEffect(() => {
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      const o = sp.get("order") || sp.get("orderId") || "";
+      if (o) setOrderId(o.toUpperCase());
+      if (sp.get("name")) setCustomerName(sp.get("name") as string);
+      if (sp.get("amount")) setAmount(sp.get("amount") as string);
+    } catch {}
+  }, []);
+
   // Default the selected method + visible tab to whatever the Dashboard actually has enabled.
   useEffect(() => {
     if (!payLoading && !method && payMethods.length > 0) setMethod(payMethods[0].label);
@@ -72,6 +83,12 @@ export default function UploadPayment() {
 
   async function handleSubmit() {
     if (!orderId || !customerName || !amount || !refNo || !file) {
+      // Name what's missing — a silent shake reads as "the upload is broken" on phones.
+      const missing = [
+        !orderId && "Order ID", !customerName && "Customer Name", !amount && "Amount",
+        !refNo && "Reference No.", !file && "payment screenshot",
+      ].filter(Boolean).join(", ");
+      setUploadError(`Please fill in: ${missing}`);
       const panel = document.getElementById("sb-upload-panel");
       if (panel) { panel.style.animation = "none"; void panel.offsetHeight; panel.style.animation = "sbShake 0.4s ease"; }
       return;
@@ -341,7 +358,8 @@ export default function UploadPayment() {
 
                 <div className="sb-field">
                   <label>Order ID</label>
-                  <input type="text" placeholder="e.g. AB 0277" value={orderId} onChange={e=>setOrderId(e.target.value)}/>
+                  <input type="text" placeholder="e.g. SB-4913582688" value={orderId} onChange={e=>setOrderId(e.target.value)}/>
+                  <span style={{fontSize:"11px",color:"#8fa89b",marginTop:"4px",display:"block"}}>Starts with SB- — it's in your order confirmation</span>
                 </div>
 
                 <div className="sb-field-row">
