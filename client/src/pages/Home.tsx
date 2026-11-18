@@ -1,188 +1,168 @@
-import { useAuth } from "@/_core/hooks/useAuth";
+// SB2.0 homepage — photo-led hero, image category cards, editorial sections.
+// Same data sources and routes as before; visual layer only.
 import RecommendedProducts from "@/components/RecommendedProducts";
 import NewArrivals from "@/components/NewArrivals";
 import ClearanceSection from "@/components/ClearanceSection";
 import LastPairSection from "@/components/LastPairSection";
-import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
-import { ShoppingCart, Search, ArrowRight, Star, Shield, Truck, RefreshCw } from "lucide-react";
+import { useInventory } from "@/hooks/useInventory";
+import { ArrowRight, Shield, Truck, MessageCircle, Lock } from "lucide-react";
 import { Link, useLocation } from "wouter";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 
-const HERO_SLIDES = [
-  { label: "New Drop · Summer 2026", headline: ["LEGIT.", "FRESH.", "YOURS."], sub: "Authenticated branded sneakers, perfume & gadgets — shipped nationwide.", cta: "Shop New Drop", href: "/products?sort=newest", accent: "#C9A84C" },
-  { label: "Clearance Sale · Up to 30% Off", headline: ["LAST", "PAIRS.", "GRAB NOW."], sub: "Limited stocks. Once it's gone — it's gone. COD available.", cta: "Shop Clearance", href: "/clearance", accent: "#E53935" },
-  { label: "Fragrance Edit", headline: ["SCENT.", "PREMIUM.", "AFFORDABLE."], sub: "Lattafa, Armaf, Arabian Oud — authentic EDP from ₱899.", cta: "Shop Perfume", href: "/products?category=perfume", accent: "#C9A84C" },
-];
+// Pairs whose photos lead the hero / category art, with graceful fallbacks.
+const HERO_SKUS = ["CZ0790106", "553558163", "FN8927621"];
 
 const TRUST = [
-  { icon: Shield, label: "100% Authentic", sub: "Every item verified" },
+  { icon: Shield, label: "100% Authentic", sub: "Every pair verified" },
   { icon: Truck, label: "COD Nationwide", sub: "J&T · LBC · Lalamove" },
-  { icon: RefreshCw, label: "7-Day Returns", sub: "Hassle-free policy" },
-  { icon: Star, label: "4.9★ Rating", sub: "2,800+ reviews" },
-];
-
-const CATS = [
-  { emoji: "👟", name: "Sneakers", sub: "200+ styles", href: "/products?category=sneakers", bg: "from-[#091821] to-[#0d2430]" },
-  { emoji: "🌸", name: "Perfume", sub: "50+ fragrances", href: "/products?category=perfume", bg: "from-[#1a0810] to-[#2d1020]" },
-  { emoji: "🎧", name: "Gadgets", sub: "30+ items", href: "/products?category=gadgets", bg: "from-[#0a1020] to-[#101828]" },
-  { emoji: "🔥", name: "Sale", sub: "Up to 30% off", href: "/clearance", bg: "from-[#1a0000] to-[#2d0808]" },
+  { icon: MessageCircle, label: "Real human support", sub: "Message us on Facebook" },
+  { icon: Lock, label: "Safe payments", sub: "GCash · Maya · BDO · BPI" },
 ];
 
 export default function Home() {
-  const { user } = useAuth();
   const [, setLocation] = useLocation();
+  const { data: inv } = useInventory();
   const [slide, setSlide] = useState(0);
-  const [email, setEmail] = useState("");
-  const [emailSent, setEmailSent] = useState(false);
+
+  // hero + category artwork straight from live inventory photos
+  const art = useMemo(() => {
+    const bySku = (k: string) => inv?.find((i: any) => String(i.sku || "").replace(/\s/g, "").toUpperCase() === k && i.imageUrl)?.imageUrl;
+    const firstWith = (f: (i: any) => boolean) => inv?.find((i: any) => i.imageUrl && f(i))?.imageUrl;
+    return {
+      hero: bySku(HERO_SKUS[0]) || firstWith(() => true),
+      hero2: bySku(HERO_SKUS[1]) || firstWith((i: any) => i.discount > 0),
+      sneakers: bySku("IG5535") || firstWith((i: any) => (i.brand || "").toLowerCase().includes("adidas")),
+      sale: bySku("FQ8108110") || firstWith((i: any) => i.discount >= 25),
+    };
+  }, [inv]);
+
+  const SLIDES = [
+    {
+      img: () => art.hero, label: "Air Jordan · New Drop",
+      headline: ["LEGIT.", "FRESH.", "YOURS."],
+      sub: "Discover your next everyday sneaker — authenticated and shipped nationwide.",
+      cta: "Shop Now", href: "/products?sort=newest", ctaClass: "bg-white text-[#0a0a0a]",
+    },
+    {
+      img: () => art.hero2, label: "Clearance · Up to 50% Off",
+      headline: ["LAST", "PAIRS.", "GRAB NOW."],
+      sub: "Limited stocks — once it's gone, it's gone. COD available.",
+      cta: "Shop Sale", href: "/clearance", ctaClass: "bg-[#FF5A1F] text-white",
+    },
+  ];
 
   useEffect(() => {
-    const t = setInterval(() => setSlide(s => (s + 1) % HERO_SLIDES.length), 5500);
+    const t = setInterval(() => setSlide(s => (s + 1) % SLIDES.length), 6000);
     return () => clearInterval(t);
   }, []);
 
-  const s = HERO_SLIDES[slide];
+  const s = SLIDES[slide];
+  const heroImg = s.img();
 
   return (
-    <div className="min-h-screen bg-[#F7F4EF]">
+    <div className="min-h-screen bg-white">
 
-      {/* HERO */}
-      <section className="relative bg-[#050f12] min-h-[92vh] flex items-end overflow-hidden">
-        {/* Grid lines */}
-        <div className="absolute inset-0 opacity-[.04]" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,1) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,1) 1px,transparent 1px)", backgroundSize: "60px 60px" }} />
-        {/* Radial glow */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_75%_40%,rgba(13,100,80,.18),transparent)]" />
-        {/* Big BG text */}
-        <div className="absolute bottom-0 left-0 font-black text-white/[.025] leading-none select-none pointer-events-none" style={{ fontSize: "clamp(120px,18vw,260px)", fontFamily: "sans-serif", letterSpacing: "-.02em" }}>
-          SOLEBLESSING
-        </div>
+      {/* HERO — full-bleed product photo */}
+      <section className="relative bg-[#0a0a0a] min-h-[560px] md:min-h-[82vh] flex items-end overflow-hidden">
+        {heroImg && (
+          <img src={heroImg} alt="" key={heroImg}
+            className="absolute inset-0 w-full h-full object-cover opacity-[.82]"
+            style={{ animation: "heroIn .9s ease both" }} />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-black/30" />
 
         {/* Slide dots */}
-        <div className="absolute top-8 right-10 flex gap-2 z-10">
-          {HERO_SLIDES.map((_, i) => (
-            <button key={i} onClick={() => setSlide(i)} className={`w-6 h-1 rounded-full transition-all ${i === slide ? "bg-[#C9A84C]" : "bg-white/20"}`} />
+        <div className="absolute top-6 right-6 flex gap-2 z-10">
+          {SLIDES.map((_, i) => (
+            <button key={i} onClick={() => setSlide(i)} aria-label={`Slide ${i + 1}`}
+              className={`h-1.5 rounded-full transition-all ${i === slide ? "bg-[#FF5A1F] w-7" : "bg-white/30 w-4"}`} />
           ))}
         </div>
 
-        {/* Legit badge */}
-        <div className="absolute top-8 right-10 mt-8 z-10 hidden md:flex flex-col items-center border border-[#C9A84C]/20 px-4 py-3 mr-24">
-          <span className="text-[9px] tracking-[.16em] text-white/30 uppercase">100%</span>
-          <span className="text-xl font-black text-[#C9A84C] tracking-wider">LEGIT</span>
-          <span className="text-[9px] tracking-[.16em] text-white/30 uppercase">Verified</span>
-        </div>
-
-        <div className="relative z-10 w-full max-w-[1400px] mx-auto px-8 md:px-16 pb-16 md:pb-20">
-          <div className="grid md:grid-cols-2 gap-8 items-end">
-            <div>
-              <div className="flex items-center gap-3 mb-5">
-                <div className="w-7 h-px bg-[#C9A84C]/50" />
-                <span className="text-[10px] font-semibold tracking-[.2em] uppercase text-[#C9A84C]">{s.label}</span>
-              </div>
-              <h1 className="font-black text-white leading-[.88] mb-6" style={{ fontSize: "clamp(52px,8vw,110px)", fontFamily: "sans-serif", letterSpacing: ".02em" }}>
-                {s.headline.map((line, i) => (
-                  <span key={i} className={i === 1 ? "text-[#C9A84C] italic" : ""}>{line}<br /></span>
-                ))}
-              </h1>
-              <p className="text-sm text-white/45 leading-relaxed max-w-sm mb-8">{s.sub}</p>
-              <div className="flex gap-3 flex-wrap">
-                <button onClick={() => setLocation(s.href)} className="bg-[#C9A84C] text-[#050f12] px-8 py-3.5 text-xs font-bold tracking-[.12em] uppercase hover:opacity-90 transition-opacity flex items-center gap-2">
-                  {s.cta} <ArrowRight className="h-3.5 w-3.5" />
-                </button>
-                <button onClick={() => setLocation("/upload-payment")} className="border border-white/15 text-white/60 px-8 py-3.5 text-xs font-medium tracking-[.1em] uppercase hover:border-white/35 hover:text-white transition-all">
-                  Upload Payment
-                </button>
-              </div>
-            </div>
-            <div className="hidden md:flex flex-col items-end gap-6">
-              <div className="flex gap-6">
-                {[{ n: "10K+", l: "Orders" }, { n: "4.9★", l: "Rating" }, { n: "500+", l: "SKUs" }].map(s => (
-                  <div key={s.l} className="text-center">
-                    <div className="text-3xl font-black text-white tracking-wide">{s.n}</div>
-                    <div className="text-[10px] tracking-[.12em] uppercase text-white/30 mt-1">{s.l}</div>
-                  </div>
-                ))}
-              </div>
-              <div className="flex items-center gap-2 text-white/25 text-[10px] tracking-[.12em] uppercase">
-                <div className="w-8 h-px bg-white/15" />
-                Scroll to shop
-              </div>
-            </div>
+        <div className="relative z-10 w-full max-w-[1400px] mx-auto px-5 md:px-16 pb-12 md:pb-20">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-7 h-px bg-[#FF5A1F]" />
+            <span className="text-[10px] font-black tracking-[.28em] uppercase text-[#FF5A1F]">{s.label}</span>
+          </div>
+          <h1 className="font-black text-white leading-[.95] mb-5 tracking-[-.01em]" style={{ fontSize: "clamp(44px,7.5vw,104px)" }}>
+            {s.headline.map((line, i) => <span key={i}>{line}<br /></span>)}
+          </h1>
+          <p className="text-[13.5px] md:text-sm text-white/75 leading-relaxed max-w-sm mb-7">{s.sub}</p>
+          <div className="flex gap-3 flex-wrap">
+            <button onClick={() => setLocation(s.href)}
+              className={`${s.ctaClass} px-9 py-4 text-xs font-black tracking-[.14em] uppercase rounded-full hover:opacity-90 transition-opacity flex items-center gap-2`}>
+              {s.cta} <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+            <button onClick={() => setLocation("/upload-payment")}
+              className="border-[1.5px] border-white/40 text-white px-8 py-4 text-xs font-bold tracking-[.12em] uppercase rounded-full hover:bg-white hover:text-[#0a0a0a] transition-all">
+              Upload Payment
+            </button>
           </div>
         </div>
+        <style>{`@keyframes heroIn{0%{transform:scale(1.06);opacity:0}100%{transform:scale(1);opacity:.82}}`}</style>
       </section>
 
-      {/* TRUST BAR */}
-      <div className="bg-white border-b border-gray-100 px-6 md:px-10 py-4">
-        <div className="max-w-[1400px] mx-auto flex items-center justify-center gap-8 md:gap-16 flex-wrap">
-          {TRUST.map(({ icon: Icon, label, sub }) => (
-            <div key={label} className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-[#050f12]/5 flex items-center justify-center">
-                <Icon className="h-4 w-4 text-[#0d2430]" />
-              </div>
-              <div>
-                <div className="text-xs font-semibold text-[#0d2430]">{label}</div>
-                <div className="text-[10px] text-gray-400">{sub}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* MARQUEE */}
-      <div className="bg-[#050f12] py-3 overflow-hidden border-t border-white/[.04]">
+      <div className="bg-[#0a0a0a] py-2.5 overflow-hidden">
         <div className="flex gap-0 whitespace-nowrap" style={{ animation: "marquee 28s linear infinite" }}>
           {["Authentic & Verified", "✦", "Adidas · Nike · Jordan", "✦", "COD Nationwide", "✦", "GCash · Maya · BDO · BPI", "✦", "Free Shipping ₱3K+", "✦", "Authentic & Verified", "✦", "Adidas · Nike · Jordan", "✦", "COD Nationwide", "✦", "GCash · Maya · BDO · BPI", "✦", "Free Shipping ₱3K+", "✦"].map((t, i) => (
-            <span key={i} className={`text-[13px] font-bold tracking-[.2em] uppercase px-8 ${t === "✦" ? "text-[#C9A84C]" : "text-white/15"}`}>{t}</span>
+            <span key={i} className={`text-[12px] font-black tracking-[.2em] uppercase px-8 ${t === "✦" ? "text-[#FF5A1F]" : "text-white/25"}`}>{t}</span>
           ))}
         </div>
       </div>
       <style>{`@keyframes marquee{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}`}</style>
 
-      {/* NEW ARRIVALS */}
-      <section className="py-16 px-6 md:px-10 max-w-[1400px] mx-auto">
-        <div className="flex items-end justify-between mb-10">
-          <div>
-            <p className="text-[10px] font-bold tracking-[.18em] uppercase text-[#C9A84C] mb-2">Just Landed</p>
-            <h2 className="text-4xl md:text-5xl font-black text-[#0d2430] leading-none tracking-tight">New Arrivals</h2>
-          </div>
-          <Link href="/products?sort=newest" className="text-xs font-semibold tracking-[.1em] uppercase text-[#0d2430] border-b border-[#0d2430] pb-0.5 hover:text-[#C9A84C] hover:border-[#C9A84C] transition-colors">
-            View All
-          </Link>
+      {/* SHOP BY CATEGORY — image-led */}
+      <section className="px-5 md:px-10 pt-12 md:pt-16 max-w-[1400px] mx-auto">
+        <div className="flex items-end justify-between mb-7">
+          <h2 className="text-[26px] md:text-4xl font-black text-[#0a0a0a] leading-none tracking-[-.01em]">Shop by Category</h2>
         </div>
-        <NewArrivals />
-      </section>
-
-      {/* CATEGORY GRID */}
-      <section className="px-6 md:px-10 pb-16 max-w-[1400px] mx-auto">
-        <div className="mb-10">
-          <p className="text-[10px] font-bold tracking-[.18em] uppercase text-[#C9A84C] mb-2">Browse</p>
-          <h2 className="text-4xl md:text-5xl font-black text-[#0d2430] leading-none tracking-tight">Shop by Category</h2>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          {CATS.map(c => (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { name: "Sneakers", sub: "1,400+ pairs", href: "/products", img: art.sneakers },
+            { name: "Sale 🔥", sub: "Up to 50% off", href: "/clearance", img: art.sale, orange: true },
+            { name: "Perfume", sub: "Authentic EDP", href: "/products?category=perfume", emoji: "🌸" },
+            { name: "Gadgets", sub: "Earbuds & more", href: "/products?category=gadgets", emoji: "🎧" },
+          ].map(c => (
             <button key={c.name} onClick={() => setLocation(c.href)}
-              className={`relative bg-gradient-to-br ${c.bg} overflow-hidden group cursor-pointer text-left`} style={{ minHeight: 200 }}>
-              <div className="absolute right-3 top-3 text-6xl opacity-10 group-hover:opacity-18 transition-opacity">{c.emoji}</div>
-              <div className="absolute inset-0 bg-white/0 group-hover:bg-white/[.04] transition-colors" />
-              <div className="relative p-5 flex flex-col justify-end h-full">
-                <div className="text-[9px] font-semibold tracking-[.14em] uppercase text-white/35 mb-1.5">{c.sub}</div>
-                <div className="text-2xl font-black text-white tracking-wide leading-none">{c.name}</div>
+              className="relative rounded-2xl overflow-hidden group cursor-pointer text-left bg-[#141414] h-[120px] md:h-[170px]">
+              {c.img
+                ? <img src={c.img} alt="" className="absolute inset-0 w-full h-full object-cover opacity-55 group-hover:opacity-70 group-hover:scale-[1.04] transition-all duration-500" loading="lazy" />
+                : <div className="absolute right-3 top-2 text-6xl opacity-15">{c.emoji}</div>}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+              <div className="relative p-4 flex flex-col justify-end h-full">
+                <div className={`text-[9px] font-bold tracking-[.14em] uppercase mb-1 ${c.orange ? "text-[#FF5A1F]" : "text-white/60"}`}>{c.sub}</div>
+                <div className="text-lg md:text-xl font-black text-white tracking-wide leading-none">{c.name}</div>
               </div>
-              <div className="absolute bottom-4 right-4 w-8 h-8 border border-white/15 rounded-full flex items-center justify-center text-white text-sm group-hover:bg-[#C9A84C] group-hover:border-[#C9A84C] transition-all">→</div>
             </button>
           ))}
         </div>
       </section>
 
-      {/* BEST SELLERS / RECOMMENDED */}
-      <section className="bg-[#050f12] py-16 px-6 md:px-10">
+      {/* NEW ARRIVALS */}
+      <section className="py-12 md:py-16 px-5 md:px-10 max-w-[1400px] mx-auto">
+        <div className="flex items-end justify-between mb-7">
+          <div>
+            <p className="text-[10px] font-black tracking-[.2em] uppercase text-[#FF5A1F] mb-1.5">Just Landed</p>
+            <h2 className="text-[26px] md:text-4xl font-black text-[#0a0a0a] leading-none tracking-[-.01em]">New Arrivals</h2>
+          </div>
+          <Link href="/products?sort=newest" className="text-[11px] font-black tracking-[.1em] uppercase text-[#FF5A1F] hover:opacity-70 transition-opacity whitespace-nowrap">
+            View all →
+          </Link>
+        </div>
+        <NewArrivals />
+      </section>
+
+      {/* BEST SELLERS — dark band */}
+      <section className="bg-[#0a0a0a] py-12 md:py-16 px-5 md:px-10">
         <div className="max-w-[1400px] mx-auto">
-          <div className="flex items-end justify-between mb-10">
+          <div className="flex items-end justify-between mb-7">
             <div>
-              <p className="text-[10px] font-bold tracking-[.18em] uppercase text-[#C9A84C] mb-2">Customer Faves</p>
-              <h2 className="text-4xl md:text-5xl font-black text-white leading-none tracking-tight">Best Sellers</h2>
+              <p className="text-[10px] font-black tracking-[.2em] uppercase text-[#FF5A1F] mb-1.5">Customer Faves</p>
+              <h2 className="text-[26px] md:text-4xl font-black text-white leading-none tracking-[-.01em]">Best Sellers</h2>
             </div>
-            <Link href="/products" className="text-xs font-semibold tracking-[.1em] uppercase text-white/40 border-b border-white/20 pb-0.5 hover:text-[#C9A84C] hover:border-[#C9A84C] transition-colors">
-              Shop All
+            <Link href="/products" className="text-[11px] font-black tracking-[.1em] uppercase text-white/60 hover:text-[#FF5A1F] transition-colors whitespace-nowrap">
+              Shop all →
             </Link>
           </div>
           <RecommendedProducts />
@@ -190,85 +170,74 @@ export default function Home() {
       </section>
 
       {/* LAST PAIRS */}
-      <section className="py-16 px-6 md:px-10 max-w-[1400px] mx-auto">
-        <div className="flex items-end justify-between mb-10">
+      <section className="py-12 md:py-16 px-5 md:px-10 max-w-[1400px] mx-auto">
+        <div className="flex items-end justify-between mb-7">
           <div>
-            <p className="text-[10px] font-bold tracking-[.18em] uppercase text-[#C9A84C] mb-2">Grab Before They're Gone</p>
-            <h2 className="text-4xl md:text-5xl font-black text-[#0d2430] leading-none tracking-tight">Last Pairs</h2>
+            <p className="text-[10px] font-black tracking-[.2em] uppercase text-[#FF5A1F] mb-1.5">Grab Before They're Gone</p>
+            <h2 className="text-[26px] md:text-4xl font-black text-[#0a0a0a] leading-none tracking-[-.01em]">Last Pairs 🔥</h2>
           </div>
-          <Link href="/products?filter=lastpair" className="text-xs font-semibold tracking-[.1em] uppercase text-[#0d2430] border-b border-[#0d2430] pb-0.5 hover:text-[#C9A84C] hover:border-[#C9A84C] transition-colors">
-            View All
+          <Link href="/products?filter=lastpair" className="text-[11px] font-black tracking-[.1em] uppercase text-[#FF5A1F] hover:opacity-70 transition-opacity whitespace-nowrap">
+            View all →
           </Link>
         </div>
         <LastPairSection />
       </section>
 
-      {/* CLEARANCE */}
-      <section className="bg-[#1a0000] py-16 px-6 md:px-10">
+      {/* CLEARANCE strip */}
+      <section className="bg-[#f6f6f5] py-12 md:py-16 px-5 md:px-10">
         <div className="max-w-[1400px] mx-auto">
-          <div className="flex items-end justify-between mb-10">
+          <div className="flex items-end justify-between mb-7">
             <div>
-              <p className="text-[10px] font-bold tracking-[.18em] uppercase text-red-400 mb-2">Up to 30% Off</p>
-              <h2 className="text-4xl md:text-5xl font-black text-white leading-none tracking-tight">Clearance Sale</h2>
+              <p className="text-[10px] font-black tracking-[.2em] uppercase text-[#FF5A1F] mb-1.5">Up to 50% Off</p>
+              <h2 className="text-[26px] md:text-4xl font-black text-[#0a0a0a] leading-none tracking-[-.01em]">Clearance Sale</h2>
             </div>
-            <Link href="/clearance" className="text-xs font-semibold tracking-[.1em] uppercase text-red-400 border-b border-red-400/50 pb-0.5 hover:border-red-300 hover:text-red-300 transition-colors">
-              Shop Sale
+            <Link href="/clearance" className="text-[11px] font-black tracking-[.1em] uppercase text-[#FF5A1F] hover:opacity-70 transition-opacity whitespace-nowrap">
+              Shop sale →
             </Link>
           </div>
           <ClearanceSection />
         </div>
       </section>
 
-      {/* SOCIAL PROOF */}
-      <section className="bg-[#F7F4EF] py-16 px-6 md:px-10">
-        <div className="max-w-[1400px] mx-auto">
-          <div className="flex items-end justify-between mb-10">
-            <div>
-              <p className="text-[10px] font-bold tracking-[.18em] uppercase text-[#C9A84C] mb-2">Real Buyers · Real Reviews</p>
-              <h2 className="text-4xl font-black text-[#0d2430] leading-none tracking-tight">What They're Saying</h2>
-            </div>
-            <div className="text-right">
-              <div className="text-4xl font-black text-[#0d2430]">4.9</div>
-              <div className="text-[#C9A84C] text-sm">★★★★★</div>
-              <div className="text-[10px] text-gray-400 mt-0.5">2,800+ reviews</div>
-            </div>
+      {/* REVIEWS */}
+      <section className="py-12 md:py-16 px-5 md:px-10 max-w-[1400px] mx-auto">
+        <div className="flex items-end justify-between mb-7">
+          <div>
+            <p className="text-[10px] font-black tracking-[.2em] uppercase text-[#FF5A1F] mb-1.5">Real Buyers · Real Reviews</p>
+            <h2 className="text-[26px] md:text-4xl font-black text-[#0a0a0a] leading-none tracking-[-.01em]">What They're Saying</h2>
           </div>
-          <div className="grid md:grid-cols-3 gap-4">
-            {[
-              { name: "Rhea M., Cavite", text: "Legit talaga! Ang ganda ng Samba, exactly as shown. Dumating in 2 days via J&T. Will order again!", product: "Adidas Samba OG" },
-              { name: "Nico R., Manila", text: "Best online shop for sneakers sa Pinas. COD option is perfect, packaging solid, 100% authentic.", product: "Nike Dunk Low" },
-              { name: "Trish L., Batangas", text: "Ang bango ng Khamrah! Sulit na sulit. Mabilis din ang GCash payment verification nila.", product: "Lattafa Khamrah EDP" },
-            ].map(r => (
-              <div key={r.name} className="bg-white p-6 border border-gray-100">
-                <div className="text-[#C9A84C] text-sm mb-3">★★★★★</div>
-                <p className="text-sm text-gray-600 italic leading-relaxed mb-4">"{r.text}"</p>
-                <div className="text-xs font-bold tracking-wide text-[#0d2430]">{r.name}</div>
-                <div className="text-[10px] text-gray-400 mt-0.5">✓ Verified · {r.product}</div>
-              </div>
-            ))}
+          <div className="text-right">
+            <div className="text-3xl font-black text-[#0a0a0a] leading-none">4.9</div>
+            <div className="text-[#FF5A1F] text-xs">★★★★★</div>
           </div>
+        </div>
+        <div className="grid md:grid-cols-3 gap-3">
+          {[
+            { name: "Rhea M., Cavite", text: "Legit talaga! Ang ganda ng pair, exactly as shown. Dumating in 2 days via J&T. Will order again!", product: "Adidas Samba OG" },
+            { name: "Nico R., Manila", text: "Best online shop for sneakers sa Pinas. COD option is perfect, packaging solid, 100% authentic.", product: "Nike Dunk Low" },
+            { name: "Trish L., Batangas", text: "Smooth transaction! Mabilis ang GCash payment verification nila at ang bilis mag-reply.", product: "Air Jordan 1 Low" },
+          ].map(r => (
+            <div key={r.name} className="bg-white p-6 border border-[#f0f0ef] rounded-2xl">
+              <div className="text-[#FF5A1F] text-sm mb-3">★★★★★</div>
+              <p className="text-[13px] text-[#555] leading-relaxed mb-4">"{r.text}"</p>
+              <div className="text-xs font-black tracking-wide text-[#0a0a0a]">{r.name}</div>
+              <div className="text-[10px] text-[#9b9b98] mt-0.5">✓ Verified · {r.product}</div>
+            </div>
+          ))}
         </div>
       </section>
 
-      {/* EMAIL CAPTURE */}
-      <section className="bg-[#050f12] py-20 px-6 md:px-10 text-center relative overflow-hidden">
-        <div className="absolute inset-0 opacity-[.03]" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,1) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,1) 1px,transparent 1px)", backgroundSize: "60px 60px" }} />
-        <div className="relative z-10 max-w-lg mx-auto">
-          <p className="text-[10px] font-bold tracking-[.22em] uppercase text-[#C9A84C] mb-4">Join the Community</p>
-          <h2 className="text-4xl md:text-5xl font-black text-white leading-none tracking-tight mb-4">GET DROP<br />ALERTS FIRST</h2>
-          <p className="text-sm text-white/35 italic mb-8">New stock · Exclusive deals · Restocks — straight to you</p>
-          {emailSent ? (
-            <div className="text-[#C9A84C] font-semibold tracking-wide">✓ You're in! Watch your inbox.</div>
-          ) : (
-            <form onSubmit={e => { e.preventDefault(); setEmailSent(true); }} className="flex max-w-sm mx-auto">
-              <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="Your email address"
-                className="flex-1 bg-white/[.06] border border-white/10 border-r-0 px-4 py-3 text-sm text-white placeholder-white/25 outline-none focus:border-[#C9A84C] transition-colors" />
-              <button type="submit" className="bg-[#C9A84C] text-[#050f12] px-5 text-xs font-bold tracking-[.12em] uppercase hover:opacity-90">
-                Join
-              </button>
-            </form>
-          )}
-          <p className="text-[10px] text-white/15 mt-4 tracking-wide">No spam. Unsubscribe anytime.</p>
+      {/* WHY SOLEBLESSING */}
+      <section className="px-5 md:px-10 pb-14 max-w-[1400px] mx-auto">
+        <h2 className="text-[26px] md:text-4xl font-black text-[#0a0a0a] leading-none tracking-[-.01em] mb-7">Why SoleBlessing</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {TRUST.map(({ icon: Icon, label, sub }) => (
+            <div key={label} className="bg-[#f6f6f5] rounded-2xl p-5">
+              <Icon className="h-5 w-5 text-[#0a0a0a] mb-3" />
+              <div className="text-[12.5px] font-black text-[#0a0a0a] leading-snug">{label}</div>
+              <div className="text-[10.5px] text-[#8b8b88] mt-1">{sub}</div>
+            </div>
+          ))}
         </div>
       </section>
 
