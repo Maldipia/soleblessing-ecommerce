@@ -367,6 +367,81 @@ function Donut({segs}:{segs:{label:string;value:number;color:string}[]}){
 type OrderLine = {code:string;name:string;sku:string;size:string;price:string;cost:number|null;found:boolean};
 const BLANK_LINE: OrderLine = {code:"",name:"",sku:"",size:"",price:"",cost:null,found:false};
 
+// ── Orders 2.0: edit the whole order (customer, items, amounts) ──
+function OrderEditModal({order,onClose,onSave}:{order:any;onClose:()=>void;onSave:(id:string,payload:any)=>void}){
+  const [f,setF]=useState({
+    customer_name:order.customer_name||"", facebook_name:order.facebook_name||"",
+    customer_email:order.customer_email||"", contact_number:order.contact_number||"",
+    shipping_address:order.shipping_address||"", notes:order.notes||"",
+    payment_method:order.payment_method||"",
+  });
+  const [items,setItems]=useState<any[]>((order.items||[]).map((i:any)=>({...i})));
+  const [shipP,setShipP]=useState(String((order.shipping_fee||0)/100));
+  const [discP,setDiscP]=useState(String((order.discount_amount||0)/100));
+  const peso=(s:string)=>Math.max(0,Math.round((parseFloat(s)||0)*100));
+  const subtotal=items.reduce((s,i)=>s+(Math.round((parseFloat(String(i._priceP??i.price/100))||0)*100))*(parseInt(String(i.qty))||1),0);
+  const total=Math.max(0,subtotal+peso(shipP)-peso(discP));
+  const setItem=(idx:number,k:string,v:string)=>setItems(prev=>prev.map((it,i)=>i===idx?{...it,[k]:v}:it));
+  const removeItem=(idx:number)=>setItems(prev=>prev.filter((_,i)=>i!==idx));
+  const save=()=>{
+    const cleanItems=items.map(({_priceP,...it})=>({...it,
+      qty:parseInt(String(it.qty))||1,
+      price:Math.round((parseFloat(String(_priceP??it.price/100))||0)*100)}));
+    onSave(order.id,{...f,
+      facebook_name:f.facebook_name||null, customer_email:f.customer_email||null, notes:f.notes||null,
+      items:cleanItems, subtotal, shipping_fee:peso(shipP), discount_amount:peso(discP), total});
+  };
+  const inp="w-full border border-gray-200 rounded-lg px-2.5 py-2 text-xs outline-none focus:border-[#C9A84C]";
+  const lbl="text-[9.5px] font-bold uppercase tracking-wider text-gray-400 mb-1 block";
+  return (
+    <div className="fixed inset-0 z-[80] bg-black/50 flex items-start md:items-center justify-center p-3 overflow-y-auto" onClick={onClose}>
+      <div className="bg-white rounded-2xl p-5 w-full max-w-lg my-6" onClick={e=>e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-black text-[#0d2430]">Edit Order <span className="text-[#8a6d25]">{order.order_number}</span></h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="h-4 w-4"/></button>
+        </div>
+        <div className="grid grid-cols-2 gap-2.5 mb-2.5">
+          <div><span className={lbl}>Customer name</span><input className={inp} value={f.customer_name} onChange={e=>setF({...f,customer_name:e.target.value})}/></div>
+          <div><span className={lbl}>FB name</span><input className={inp} value={f.facebook_name} onChange={e=>setF({...f,facebook_name:e.target.value})}/></div>
+          <div><span className={lbl}>Email</span><input className={inp} value={f.customer_email} onChange={e=>setF({...f,customer_email:e.target.value})}/></div>
+          <div><span className={lbl}>Contact</span><input className={inp} value={f.contact_number} onChange={e=>setF({...f,contact_number:e.target.value})}/></div>
+        </div>
+        <div className="mb-2.5"><span className={lbl}>Shipping address</span>
+          <textarea className={inp} rows={2} value={f.shipping_address} onChange={e=>setF({...f,shipping_address:e.target.value})}/></div>
+        <div className="grid grid-cols-2 gap-2.5 mb-3">
+          <div><span className={lbl}>Payment method</span><input className={inp} value={f.payment_method} onChange={e=>setF({...f,payment_method:e.target.value})}/></div>
+          <div><span className={lbl}>Notes</span><input className={inp} value={f.notes} onChange={e=>setF({...f,notes:e.target.value})}/></div>
+        </div>
+        <span className={lbl}>Items — name · size · qty · price ₱</span>
+        <div className="space-y-1.5 mb-3">
+          {items.map((it,i)=>(
+            <div key={i} className="flex items-center gap-1.5">
+              <input className={inp} style={{flex:3}} value={it.name||""} onChange={e=>setItem(i,"name",e.target.value)}/>
+              <input className={inp} style={{flex:1}} value={it.size||""} onChange={e=>setItem(i,"size",e.target.value)} placeholder="Size"/>
+              <input className={inp} style={{flex:1}} type="number" min="1" value={it.qty??1} onChange={e=>setItem(i,"qty",e.target.value)}/>
+              <input className={inp} style={{flex:1.5}} type="number" step="0.01" value={it._priceP??String((it.price||0)/100)} onChange={e=>setItem(i,"_priceP",e.target.value)}/>
+              <button onClick={()=>removeItem(i)} className="text-gray-300 hover:text-red-500 flex-shrink-0"><Trash2 className="h-3.5 w-3.5"/></button>
+            </div>
+          ))}
+          {items.length===0&&<p className="text-[11px] text-gray-400">No items on this order.</p>}
+        </div>
+        <div className="grid grid-cols-2 gap-2.5 mb-3">
+          <div><span className={lbl}>Shipping fee ₱</span><input className={inp} type="number" step="0.01" value={shipP} onChange={e=>setShipP(e.target.value)}/></div>
+          <div><span className={lbl}>Discount ₱</span><input className={inp} type="number" step="0.01" value={discP} onChange={e=>setDiscP(e.target.value)}/></div>
+        </div>
+        <div className="flex justify-between items-baseline border-t-2 border-[#0d2430] pt-2.5 mb-4">
+          <span className="text-xs font-bold text-gray-500">Subtotal {fmt(subtotal)} · New total</span>
+          <span className="text-lg font-black text-[#0d2430]">{fmt(total)}</span>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 border border-gray-200 text-gray-600 py-2.5 text-xs font-bold rounded-lg hover:bg-gray-50">Cancel</button>
+          <button onClick={save} className="flex-1 bg-[#C9A84C] text-[#0d2430] py-2.5 text-xs font-black rounded-lg hover:opacity-90 flex items-center justify-center gap-1.5"><Save className="h-3.5 w-3.5"/> Save Changes</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CreateOrderModal({inventory,costMap,onClose,onPlaced}:{inventory:any[];costMap:Record<string,number>;onClose:()=>void;onPlaced:()=>void}){
   const [cust,setCust]=useState({name:"",fbName:"",contact:"",email:"",address:"",region:"",city:"",notes:""});
   const [pm,setPm]=useState("cod");
@@ -1465,7 +1540,10 @@ export default function AdminDashboard() {
   const [selOrderId,setSelOrderId]=useState<string|null>(null);
   const [ordPage,setOrdPage]=useState(0);
   const [ordPer,setOrdPer]=useState(10);
+  const [editOrder,setEditOrder]=useState<any>(null);
+  const [delArm,setDelArm]=useState(false);
   useEffect(()=>{setOrdPage(0);},[orderFilter,channelFilter,orderSearch]);
+  useEffect(()=>{setDelArm(false);},[selOrderId]);
   useEffect(()=>{setOrdersShown(25);},[orderFilter,channelFilter,orderSearch]);
   const filteredOrders = useMemo(()=>{
     const q=orderSearch.trim().toLowerCase();
@@ -1850,6 +1928,25 @@ export default function AdminDashboard() {
       setReceiptScan(null); loadOrders();
     }catch(e:any){toast.error("Save failed: "+(e.message||e));}
   };
+  // Orders 2.0: full-order edit + delete (delete cancels first so stock restocks,
+  // then tombstones the order number so the hourly sheet import can't resurrect it)
+  const saveOrderEdit = async (id:string, payload:any) => {
+    try{
+      await sb.update("sb_orders",`id=eq.${id}`,{...payload,updated_at:new Date().toISOString()});
+      toast.success("Order updated"); setEditOrder(null); loadOrders();
+    }catch(e:any){ toast.error("Save failed: "+(e?.message||String(e)).slice(0,120)); }
+  };
+  const deleteOrder = async (o:any) => {
+    try{
+      if(o.status!=="cancelled")
+        await sb.update("sb_orders",`id=eq.${o.id}`,{status:"cancelled",updated_at:new Date().toISOString()});
+      try{ await sb.insert("sb_deleted_orders",{order_number:o.order_number}); }catch{/* dup tombstone is fine */}
+      await sb.delete("sb_orders",`id=eq.${o.id}`);
+      toast.success(`${o.order_number} deleted${o.status!=="cancelled"?" — stock restocked":""}`);
+      setSelOrderId(null); setDelArm(false); loadOrders(); refetchInv();
+    }catch(e:any){ toast.error("Delete failed: "+(e?.message||String(e)).slice(0,120)); }
+  };
+
   const setPaymentStatus = async (o:any, ps:string) => {
     try{
       await sb.update("sb_orders",`id=eq.${o.id}`,{payment_status:ps,updated_at:new Date().toISOString()});
@@ -1929,6 +2026,7 @@ export default function AdminDashboard() {
       {qrModal?.open && <QRModal itemCode={qrModal.itemCode} name={qrModal.name} onClose={()=>setQrModal(null)}/>}
       {productModal.open&&<ProductModal product={productModal.product} onClose={()=>setProductModal({open:false})} onSave={()=>{setProductModal({open:false});loadProducts();}}/>}
       {createOrder&&<CreateOrderModal inventory={inventory||[]} costMap={costMap} onClose={()=>setCreateOrder(false)} onPlaced={()=>{loadOrders();refetchInv();refreshInventory().catch(()=>{});}}/>}
+      {editOrder&&<OrderEditModal order={editOrder} onClose={()=>setEditOrder(null)} onSave={saveOrderEdit}/>}
       {scanBox&&<ScanBoxModal existingCodes={existingCodes} allRows={intakeRows} nextCode={nextCode}
         onClose={()=>setScanBox(false)}
         onSaved={()=>{loadIntake();refetchInv();refreshInventory().catch(()=>{});}}/>}
@@ -2756,6 +2854,7 @@ export default function AdminDashboard() {
                           <th className="px-1.5 py-3">Date & Time</th>
                           <th className="px-1.5 py-3">Customer</th>
                           <th className="px-1.5 py-3">Payment</th>
+                          <th className="px-1.5 py-3">Proof</th>
                           <th className="px-1.5 py-3">Shipping</th>
                           <th className="px-1.5 py-3">Status</th>
                           <th className="pl-1.5 pr-3 py-3 text-right">Total</th>
@@ -2782,6 +2881,12 @@ export default function AdminDashboard() {
                             </td>
                             <td className="px-1.5 py-2.5">{payBadge(o)}</td>
                             <td className="px-1.5 py-2.5">
+                              {o.payment_proof_url
+                                ? <a href={o.payment_proof_url} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()}
+                                    className="text-[10px] font-bold text-[#8a6d25] border border-[#C9A84C] px-2 py-0.5 rounded-full hover:bg-[#C9A84C]/10 whitespace-nowrap">View</a>
+                                : <span className="text-gray-300">—</span>}
+                            </td>
+                            <td className="px-1.5 py-2.5">
                               {o.courier||o.tracking_reference
                                 ? <div className="whitespace-nowrap"><span className="font-bold text-[#0d2430]">{o.courier||"—"}</span><div className="text-[10px] text-gray-400 font-mono max-w-[90px] truncate">{o.tracking_reference||""}</div></div>
                                 : <span className="text-gray-300">—</span>}
@@ -2790,7 +2895,7 @@ export default function AdminDashboard() {
                             <td className="pl-1.5 pr-3 py-2.5 text-right font-black text-[#0d2430] whitespace-nowrap">{fmt(o.total)}</td>
                           </tr>);
                         })}
-                        {rows.length===0&&<tr><td colSpan={7} className="py-16 text-center text-sm text-gray-400">No orders found</td></tr>}
+                        {rows.length===0&&<tr><td colSpan={8} className="py-16 text-center text-sm text-gray-400">No orders found</td></tr>}
                       </tbody>
                     </table>
                   </div>
@@ -2873,9 +2978,25 @@ export default function AdminDashboard() {
                   {/* selected order */}
                   {sel ? (
                     <div className="bg-white border border-gray-100 rounded-xl p-4">
-                      <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center justify-between mb-3 gap-2">
                         <h3 className="text-sm font-black text-[#0d2430]">Selected Order</h3>
-                        <span className="text-[10px] font-bold bg-[#C9A84C] text-[#0d2430] px-2.5 py-1 rounded-lg">{sel.order_number}</span>
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={()=>setEditOrder(sel)} title="Edit this order"
+                            className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:border-[#C9A84C] hover:text-[#8a6d25]">
+                            <Edit2 className="h-3.5 w-3.5"/>
+                          </button>
+                          {delArm
+                            ? <span className="flex items-center gap-1">
+                                <button onClick={()=>deleteOrder(sel)}
+                                  className="text-[10px] font-bold bg-red-600 text-white px-2.5 py-1.5 rounded-lg hover:bg-red-700">Delete?</button>
+                                <button onClick={()=>setDelArm(false)} className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400 hover:text-gray-600"><X className="h-3.5 w-3.5"/></button>
+                              </span>
+                            : <button onClick={()=>setDelArm(true)} title="Delete this order"
+                                className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:border-red-400 hover:text-red-500">
+                                <Trash2 className="h-3.5 w-3.5"/>
+                              </button>}
+                          <span className="text-[10px] font-bold bg-[#C9A84C] text-[#0d2430] px-2.5 py-1 rounded-lg">{sel.order_number}</span>
+                        </div>
                       </div>
                       {/* items */}
                       <div className="space-y-2 mb-3">

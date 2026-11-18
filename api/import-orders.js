@@ -117,7 +117,16 @@ export default async function handler(req, res) {
         if (it.cost == null && costMap[it.id]) { it.cost = costMap[it.id]; it.cost_source = 'inventory'; }
 
     const payload = [];
+    // Tombstones: orders deleted from the admin stay deleted — the sheet still
+    // holds their rows, so skip them here or the hourly import resurrects them.
+    const tombstones = new Set();
+    try {
+      const tr = await fetch(`${SUPABASE_URL}/rest/v1/sb_deleted_orders?select=order_number&limit=10000`, { headers: H });
+      if (tr.ok) for (const t of await tr.json()) tombstones.add(t.order_number);
+    } catch { /* best-effort — absence of tombstones must not block import */ }
+
     for (const [oid, o] of orders) {
+      if (tombstones.has(oid)) continue;
       if (!o.name && !o.items.length) continue;
       const total = o.items.reduce((s, i) => s + i.price, 0);
       let status = 'pending';
