@@ -2,7 +2,7 @@ import { trpc } from "@/lib/trpc";
 import { useInventory } from "@/hooks/useInventory";
 import { useParams, useLocation } from "wouter";
 import { useState, useMemo, useEffect } from "react";
-import { ChevronLeft, ShoppingCart, Heart, AlertCircle, Ruler, QrCode, Shirt, Check } from "lucide-react";
+import { ChevronLeft, ShoppingCart, Heart, AlertCircle, Ruler, QrCode, Check } from "lucide-react";
 import { SizeGuideModal } from "@/components/SizeGuideModal";
 import { toast } from "sonner";
 import { useCart } from "@/contexts/CartContext";
@@ -17,7 +17,6 @@ export default function InventoryDetail() {
 
   const { data: inventoryProducts, isLoading } = useInventory();
   const [selectedSize, setSelectedSize] = useState<string>("");
-  const [fittingRequested, setFittingRequested] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
 
   const { product, allSizes, selectedProduct } = useMemo(() => {
@@ -64,13 +63,6 @@ export default function InventoryDetail() {
     setAddedToCart(true);
     toast.success(`Added to cart — Size ${selectedSize}`);
     setTimeout(() => setAddedToCart(false), 2500);
-  };
-
-  const handleFittingRoom = () => {
-    if (!selectedSize) { toast.error("Please select a size first"); return; }
-    setFittingRequested(true);
-    toast.success("Staff notified — fitting room request sent!");
-    setTimeout(() => setFittingRequested(false), 4000);
   };
 
   if (isLoading) return (
@@ -129,7 +121,7 @@ export default function InventoryDetail() {
               <QrCode className="h-8 w-8 text-[#C9A84C] flex-shrink-0"/>
               <div>
                 <div className="text-[10px] font-bold tracking-[.12em] uppercase text-[#C9A84C] mb-0.5">QR Smart Shopping</div>
-                <div className="text-[11px] text-white/40 leading-relaxed">Scan this QR in-store to view live sizes, request a fitting room, or check out.</div>
+                <div className="text-[11px] text-white/40 leading-relaxed">Scan this QR in-store to view live sizes and check out.</div>
               </div>
             </div>
           </div>
@@ -193,13 +185,6 @@ export default function InventoryDetail() {
                   "bg-gray-100 text-gray-300 cursor-not-allowed"
                 }`}>
                 {addedToCart?<><Check className="h-4 w-4"/> Added to Cart!</>:<><ShoppingCart className="h-4 w-4"/> Add to Cart</>}
-              </button>
-              <button onClick={handleFittingRoom}
-                className={`w-full py-4 text-sm font-bold tracking-[.1em] uppercase flex items-center justify-center gap-2 transition-all border ${
-                  fittingRequested?"bg-amber-50 text-amber-700 border-amber-200":"bg-white text-[#0d2430] border-gray-200 hover:border-[#0d2430]"
-                }`}>
-                <Shirt className="h-4 w-4"/>
-                {fittingRequested?"Staff Notified ✓":"Request Fitting Room"}
               </button>
               <button onClick={()=>setLocation("/checkout")}
                 className="w-full py-3.5 text-xs font-bold tracking-[.12em] uppercase bg-[#C9A84C] text-[#050f12] hover:opacity-90 transition-opacity">

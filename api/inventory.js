@@ -128,7 +128,8 @@ export default async function handler(req, res) {
         sizeEur: r.size_eur || '',
         sizeCm: r.size_cm || '',
         barcode: r.barcode || '',
-        unitCost: r.unit_cost || null, // admin only
+        // unit_cost NEVER leaves the server here — this API feeds the public
+        // website. Admin reads costs through the authenticated admin channel.
         edited: !!(r.updated_at && r.created_at && r.updated_at !== r.created_at),
       });
     }

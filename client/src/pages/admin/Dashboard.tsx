@@ -366,7 +366,7 @@ function Donut({segs}:{segs:{label:string;value:number;color:string}[]}){
 type OrderLine = {code:string;name:string;sku:string;size:string;price:string;cost:number|null;found:boolean};
 const BLANK_LINE: OrderLine = {code:"",name:"",sku:"",size:"",price:"",cost:null,found:false};
 
-function CreateOrderModal({inventory,onClose,onPlaced}:{inventory:any[];onClose:()=>void;onPlaced:()=>void}){
+function CreateOrderModal({inventory,costMap,onClose,onPlaced}:{inventory:any[];costMap:Record<string,number>;onClose:()=>void;onPlaced:()=>void}){
   const [cust,setCust]=useState({name:"",fbName:"",contact:"",email:"",address:"",region:"",city:"",notes:""});
   const [pm,setPm]=useState("cod");
   const [shipFee,setShipFee]=useState("");
@@ -379,7 +379,7 @@ function CreateOrderModal({inventory,onClose,onPlaced}:{inventory:any[];onClose:
     const code=raw.toUpperCase();
     const hit=code&&code!=="PO"?lookup(code):null;
     if(hit) setLine(i,{code,name:hit.name,sku:hit.sku||"",size:hit.size||"",
-      price:String(Math.round((hit.sellingPrice||hit.srp||0)/100)),cost:hit.unitCost||null,found:true});
+      price:String(Math.round((hit.sellingPrice||hit.srp||0)/100)),cost:costMap[hit.itemCode]||null,found:true});
     else setLine(i,{code,found:false,cost:null});
   };
   const subtotal=lines.reduce((s,l)=>s+(Math.round(Number(l.price)*100)||0),0);
@@ -804,7 +804,7 @@ function parseLabel(raw:string, fxRate:number){
 function ScanEditModal({row,onClose,onSaved}:{row:any;onClose:()=>void;onSaved:()=>void}){
   const peso=(c:any)=>c?String(Math.round(c/100)):"";
   const [f,setF]=useState<any>({code:row.item_code||"",name:row.name||"",brand:row.brand||"",sku:row.sku||"",size:row.size||"",
-    eur:row.size_eur||"",cm:row.size_cm||"",barcode:row.barcode||"",srp:peso(row.srp),selling:peso(row.selling_price),
+    eur:row.size_eur||"",cm:row.size_cm||"",barcode:row.barcode||"",srp:peso(row.srp),selling:peso(row.selling_price),unitCost:peso(row.unit_cost),
     cond:(row.condition&&row.condition!=="New")?row.condition:"Good",status:row.status||"Available"});
   const [busy,setBusy]=useState(false);
   const I="w-full border border-gray-200 rounded-lg px-2.5 py-2 text-sm";
@@ -818,7 +818,7 @@ function ScanEditModal({row,onClose,onSaved}:{row:any;onClose:()=>void;onSaved:(
     if(f.size.trim()&&!(usN>=1&&usN<=16)){toast.error(`US ${f.size} can't be right — US sizes run 1–16`);return;}
     if(f.eur.trim()&&!(eN>=15&&eN<=50)){toast.error(`EUR ${f.eur} looks like the UK number — the EUR/F size on the box has 2 digits (e.g. 38)`);return;}
     if(f.cm.trim()&&!(cN>=10&&cN<=34)){toast.error(`CM ${f.cm} can't be right — J/CHN prints millimeters, 235 means 23.5 cm`);return;}
-    for(const [lbl,val] of [["SRP",f.srp],["Selling price",f.selling]] as const){
+    for(const [lbl,val] of [["SRP",f.srp],["Selling price",f.selling],["Unit cost",f.unitCost]] as const){
       const n=Number(String(val||"").replace(/[,\s]/g,""));
       if(val&&String(val).trim()&&!(n>=0&&n<=500000)){toast.error(`${lbl} ₱${val} can't be right — check the number (max ₱500,000)`);return;}
     }
@@ -836,6 +836,7 @@ function ScanEditModal({row,onClose,onSaved}:{row:any;onClose:()=>void;onSaved:(
         item_code:newCode, name:f.name.trim(), brand:f.brand.trim()||null, sku:f.sku.trim()||null,
         size:f.size.replace(/\s+/g,"").toUpperCase()||null, size_eur:f.eur.trim()||null, size_cm:f.cm.trim()||null, barcode:f.barcode.trim()||null,
         srp:srpE, selling_price:selE,
+        unit_cost:Math.round(Number(String(f.unitCost||"").replace(/[,\s]/g,""))||0)*100, // blank = no record = 0 (never shown on the website)
         condition:f.cond, status:f.status, updated_at:new Date().toISOString(),
       });
       toast.success(newCode!==row.item_code?`${row.item_code} → ${newCode} saved`:`${newCode} updated`); onSaved();
@@ -865,7 +866,10 @@ function ScanEditModal({row,onClose,onSaved}:{row:any;onClose:()=>void;onSaved:(
             <div><label className={L}>Barcode</label><input className={I} inputMode="numeric" value={f.barcode} onChange={e=>setF({...f,barcode:e.target.value})}/></div>
             <div><label className={L}>SRP ₱</label><input className={I} inputMode="numeric" value={f.srp} onChange={e=>setF({...f,srp:e.target.value})}/></div>
           </div>
-          <div><label className={L}>Selling price ₱ (store shows the pair once priced)</label><input className={I} inputMode="numeric" value={f.selling} onChange={e=>setF({...f,selling:e.target.value})}/></div>
+          <div className="grid grid-cols-2 gap-2">
+            <div><label className={L}>Selling price ₱ (website price)</label><input className={I} inputMode="numeric" value={f.selling} onChange={e=>setF({...f,selling:e.target.value})}/></div>
+            <div><label className={L}>Unit cost ₱ (internal — never on website)</label><input className={I} inputMode="numeric" value={f.unitCost} onChange={e=>setF({...f,unitCost:e.target.value})}/></div>
+          </div>
           <div>
             <label className={L}>Condition</label>
             <div className="flex gap-1.5 flex-wrap mt-1">
@@ -1366,7 +1370,22 @@ export default function AdminDashboard() {
     catch(e){console.error(e);}
   };
 
-  useEffect(()=>{if(isAdmin&&!isStaff){loadProducts();loadOrders();}}, [isAdmin]); // staff: scanner only — no order/product reads
+  // Unit costs come ONLY through the authenticated admin channel — the public
+  // /api/inventory never carries them (Pia: "unit cost should never be on website").
+  const [costMap,setCostMap]=useState<Record<string,number>>({});
+  const loadCosts=async()=>{
+    try{
+      const m:Record<string,number>={};
+      for(let off=0;off<20000;off+=1000){
+        const page=await sb.select("sb_inventory",`select=item_code,unit_cost&limit=1000&offset=${off}`);
+        (page||[]).forEach((r:any)=>{if(r.unit_cost>0)m[r.item_code]=r.unit_cost;});
+        if(!Array.isArray(page)||page.length<1000)break;
+      }
+      setCostMap(m);
+    }catch(e){console.error(e);}
+  };
+
+  useEffect(()=>{if(isAdmin&&!isStaff){loadProducts();loadOrders();loadCosts();}}, [isAdmin]); // staff: scanner only — no order/product reads
 
   // Close size dropdown on outside click
   useEffect(()=>{
@@ -1460,7 +1479,7 @@ export default function AdminDashboard() {
     const rawItems = Array.isArray(inventory) ? inventory : [];
     // Total Assets = sum of UNIT COST (what you paid) — your actual inventory investment
     const totalAssets = rawItems.reduce((s:number, item:any) =>
-      s + (item.unitCost || 0), 0);
+      s + (costMap[item.itemCode] || 0), 0);
     // Retail value = sum of selling prices
     const retailValue = rawItems.reduce((s:number, item:any) =>
       s + (item.sellingPrice > 0 ? item.sellingPrice : (item.srp || 0)), 0);
@@ -1481,7 +1500,7 @@ export default function AdminDashboard() {
       pendingOrders: sbOrders.filter(o=>o.status==="pending").length,
       revenue: sbOrders.filter(o=>o.status!=="cancelled").reduce((s,o)=>s+o.total,0),
     };
-  },[inventory,inventoryGrouped,sbOrders]);
+  },[inventory,inventoryGrouped,sbOrders,costMap]);
 
   // ── Shoebox intake / Latest Inventory ──
   const [scanBox,setScanBox]=useState(false);
@@ -1499,7 +1518,7 @@ export default function AdminDashboard() {
       // Supabase caps each request at 1000 rows — page until done (scan file is past 1,000 pairs)
       const all:any[]=[];
       for(let off=0;off<20000;off+=1000){
-        const page=await sb.select("sb_inventory",`select=item_code,name,brand,sku,size,size_eur,size_cm,barcode,srp,selling_price,status,condition,tab,added_by,created_at,notes&order=created_at.desc&limit=1000&offset=${off}`);
+        const page=await sb.select("sb_inventory",`select=item_code,name,brand,sku,size,size_eur,size_cm,barcode,srp,selling_price,unit_cost,status,condition,tab,added_by,created_at,notes&order=created_at.desc&limit=1000&offset=${off}`);
         all.push(...page);
         if(!Array.isArray(page)||page.length<1000)break;
       }
@@ -1538,14 +1557,17 @@ export default function AdminDashboard() {
   const scanTotals=useMemo(()=>{
     const s=intakeRows.filter((r:any)=>r.tab==="SCAN");
     const priced=s.filter((r:any)=>r.srp>0);
-    return {pairs:s.length, priced:priced.length,
-      srp:priced.reduce((t:number,r:any)=>t+(Number(r.srp)||0),0)/100};
+    const costed=s.filter((r:any)=>r.unit_cost>0);
+    return {pairs:s.length, priced:priced.length, costed:costed.length,
+      srp:priced.reduce((t:number,r:any)=>t+(Number(r.srp)||0),0)/100,
+      cost:costed.reduce((t:number,r:any)=>t+(Number(r.unit_cost)||0),0)/100};
   },[intakeRows]);
   useEffect(()=>{setIntakeShown(50);},[intakeSearch,intakeCond,intakeAll,intakeTab]);
   const intakeCSV=()=>{
-    const cols=["item_code","brand","name","sku","size","size_eur","size_cm","barcode","srp","status","condition","created_at"];
+    const cols=["item_code","brand","name","sku","size","size_eur","size_cm","barcode","srp","selling_price","unit_cost","status","condition","created_at"];
     const esc=(v:any)=>{const t=String(v??"");return /[",\n]/.test(t)?('"'+t.replace(/"/g,'""')+'"'):t;};
-    const csv=[cols.join(","),...filteredIntake.map((r:any)=>cols.map(c=>esc(c==="srp"?(r.srp||0)/100:r[c])).join(","))].join("\n");
+    const PESO=new Set(["srp","selling_price","unit_cost"]);
+    const csv=[cols.join(","),...filteredIntake.map((r:any)=>cols.map(c=>esc(PESO.has(c)?(r[c]||0)/100:r[c])).join(","))].join("\n");
     const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
     a.download=`sb_latest_inventory_${new Date().toISOString().slice(0,10)}.csv`;a.click();
   };
@@ -1678,17 +1700,19 @@ export default function AdminDashboard() {
 
   const INV_STATUSES=["Available","Reserved","Sold","Returned","Damaged","Archived"];
   const canonStatus=(s:string)=>INV_STATUSES.find(x=>x.toUpperCase()===(s||"").toUpperCase().trim())||"Available";
-  const startEdit = (p:any) => { setEditingRow(p.itemCode); setEditValues({name:p.name,sku:p.sku,size:p.size,srp:Math.round((p.srp||0)/100),selling_price:Math.round((p.sellingPrice||0)/100),stock:p.stock??1,status:canonStatus(p.status)}); };
+  const startEdit = (p:any) => { setEditingRow(p.itemCode); setEditValues({name:p.name,sku:p.sku,size:p.size,srp:Math.round((p.srp||0)/100),selling_price:Math.round((p.sellingPrice||0)/100),unit_cost:Math.round((costMap[p.itemCode]||0)/100),stock:p.stock??1,status:canonStatus(p.status)}); };
   const cancelEdit = () => { setEditingRow(null); setEditValues({}); };
   const saveEdit = async (itemCode:string) => {
     setSavingRow(itemCode);
     try {
       const payload = {item_code:itemCode,name:editValues.name,sku:editValues.sku,size:editValues.size,
         srp:Math.round(Number(editValues.srp)*100),selling_price:Math.round(Number(editValues.selling_price)*100),
+        unit_cost:Math.round(Number(editValues.unit_cost)||0)*100,
         stock:Number(editValues.stock),status:editValues.status||"Available",updated_at:new Date().toISOString()};
       await sb.upsert('sb_inventory','on_conflict=item_code',payload);
       toast.success('Saved!');
       setEditingRow(null); setEditValues({});
+      loadCosts(); // keep the admin cost map in step — costs never ride the public API
       const {refreshInventory} = await import('@/hooks/useInventory');
       await refreshInventory(); refetchInv();
     } catch(e:any){toast.error('Save failed');}
@@ -1848,7 +1872,7 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-[#F7F4EF] flex">
       {qrModal?.open && <QRModal itemCode={qrModal.itemCode} name={qrModal.name} onClose={()=>setQrModal(null)}/>}
       {productModal.open&&<ProductModal product={productModal.product} onClose={()=>setProductModal({open:false})} onSave={()=>{setProductModal({open:false});loadProducts();}}/>}
-      {createOrder&&<CreateOrderModal inventory={inventory||[]} onClose={()=>setCreateOrder(false)} onPlaced={()=>{loadOrders();refetchInv();refreshInventory().catch(()=>{});}}/>}
+      {createOrder&&<CreateOrderModal inventory={inventory||[]} costMap={costMap} onClose={()=>setCreateOrder(false)} onPlaced={()=>{loadOrders();refetchInv();refreshInventory().catch(()=>{});}}/>}
       {scanBox&&<ScanBoxModal existingCodes={existingCodes} allRows={intakeRows} nextCode={nextCode}
         onClose={()=>setScanBox(false)}
         onSaved={()=>{loadIntake();refetchInv();refreshInventory().catch(()=>{});}}/>}
@@ -2293,7 +2317,7 @@ export default function AdminDashboard() {
                           <td className="px-3 py-2 text-right">
                             {isEditing
                               ?<input className={inp+" text-right"} type="number" min="0" value={editValues.unit_cost??''} onChange={e=>setEditValues(v=>({...v,unit_cost:e.target.value}))} placeholder="Cost"/>
-                              :<span className="text-[11px] text-gray-400">{p.unitCost>0?("₱"+(p.unitCost/100).toLocaleString("en-PH")):"-"}</span>}
+                              :<span className="text-[11px] text-gray-400">{(costMap[p.itemCode]||0)>0?("₱"+(costMap[p.itemCode]/100).toLocaleString("en-PH")):"-"}</span>}
                           </td>
                           <td className="px-3 py-2 text-center">
                             {isEditing
@@ -2679,6 +2703,11 @@ export default function AdminDashboard() {
                   <span className="text-lg font-black text-[#C9A84C]">₱{scanTotals.srp.toLocaleString()}</span>
                   <span className="text-[10px] text-white/40">{scanTotals.priced} of {scanTotals.pairs} priced</span>
                 </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">Total Cost</span>
+                  <span className="text-lg font-black text-white">₱{scanTotals.cost.toLocaleString()}</span>
+                  <span className="text-[10px] text-white/40">{scanTotals.costed} of {scanTotals.pairs} costed</span>
+                </div>
               </div>
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div className="flex gap-2 flex-wrap">
@@ -2709,7 +2738,7 @@ export default function AdminDashboard() {
               </div>
 
               <div className="bg-white border border-gray-100 rounded-xl overflow-auto max-h-[68vh]">
-                <table className="w-full text-sm min-w-[980px]">
+                <table className="w-full text-sm min-w-[1120px]">
                   <thead className="sticky top-0 bg-white z-10 shadow-[0_1px_0_0_rgba(0,0,0,.06)]"><tr className="text-[10px] uppercase tracking-wider text-gray-400 text-left">
                     <th className="px-3 py-2.5 font-semibold">📸</th>
                     <th className="px-2 font-semibold">Item Code</th>
@@ -2721,6 +2750,8 @@ export default function AdminDashboard() {
                     <th className="px-2 font-semibold">CM</th>
                     <th className="px-2 font-semibold">Barcode</th>
                     <th className="px-2 font-semibold bg-[#C9A84C]/10">SRP ₱</th>
+                    <th className="px-2 font-semibold bg-green-50">Sale ₱</th>
+                    <th className="px-2 font-semibold">Cost ₱</th>
                     <th className="px-2 font-semibold">Status</th>
                     <th className="px-2 font-semibold">By</th>
                     <th className="px-2 font-semibold">Added</th>
@@ -2751,6 +2782,10 @@ export default function AdminDashboard() {
                           <td className="px-2 font-mono text-[10px] text-gray-400">{r.barcode?("…"+String(r.barcode).slice(-6)):"—"}</td>
                           {/* yellow = SRP didn't come from the box label (updated from adidas.com etc.) */}
                           <td className={`px-2 text-xs font-bold ${/srp updated/i.test(r.notes||"")?"bg-yellow-200 text-yellow-900":"bg-[#C9A84C]/[.06]"}`}>{r.srp?((r.srp/100).toLocaleString("en-PH")):"—"}{/srp updated/i.test(r.notes||"")?" ✦":""}</td>
+                          {/* Sale ₱ = selling_price — the website price, NOT the SRP */}
+                          <td className="px-2 text-xs font-bold bg-green-50/60 text-green-700">{r.selling_price?((r.selling_price/100).toLocaleString("en-PH")):"—"}</td>
+                          {/* Cost ₱ = unit_cost — internal only, never sent to the website */}
+                          <td className="px-2 text-xs text-gray-500">{r.unit_cost>0?((r.unit_cost/100).toLocaleString("en-PH")):"0"}</td>
                           <td className="px-2"><span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${condCls}`}>{cond}</span>
                             {r.status==="Sold"&&<span className="ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-gray-800 text-white">Sold</span>}</td>
                           <td className="px-2">{r.added_by
@@ -2763,18 +2798,18 @@ export default function AdminDashboard() {
                           </td>
                         </tr>
                       );})}
-                    {!intakeLoading&&filteredIntake.length===0&&<tr><td colSpan={14} className="px-4 py-10 text-center text-sm text-gray-400">
+                    {!intakeLoading&&filteredIntake.length===0&&<tr><td colSpan={16} className="px-4 py-10 text-center text-sm text-gray-400">
                       {!intakeSearch&&intakeCond==="All"
                         ?<>Nothing scanned yet — hit <b>📷 SCAN SHOEBOX</b> to log your first pair.<br/><span className="text-[11px]">Everything else stays in Products &amp; Inventory.</span></>
                         :"No matches"}</td></tr>}
-                    {intakeLoading&&<tr><td colSpan={14} className="px-4 py-10 text-center text-sm text-gray-400">Loading…</td></tr>}
+                    {intakeLoading&&<tr><td colSpan={16} className="px-4 py-10 text-center text-sm text-gray-400">Loading…</td></tr>}
                   </tbody>
                 </table>
               </div>
               {filteredIntake.length>intakeShown&&(
                 <AutoLoader onMore={()=>setIntakeShown(n=>n+50)} remaining={filteredIntake.length-intakeShown}/>
               )}
-              <p className="text-[10px] text-gray-400">Newest first. <b>Good/Stained</b> are sellable once priced · <b>Missing pair/Unknown</b> never reach the website · ✏️ edits the pair right here (scans never join the sheet inventory) · QR reprints the box sticker.</p>
+              <p className="text-[10px] text-gray-400">Newest first. <b>Good/Stained</b> are sellable once priced · <b>Missing pair/Unknown</b> never reach the website · <b>Sale ₱</b> is the website price (SRP is the compare-at price) · <b>Cost ₱</b> is internal — it never reaches the website · ✏️ edits the pair right here (scans never join the sheet inventory) · QR reprints the box sticker.</p>
             </div>
           )}
 
