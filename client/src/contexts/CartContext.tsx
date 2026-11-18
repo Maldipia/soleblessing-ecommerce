@@ -19,6 +19,10 @@ interface CartContextType {
   removeItem: (id: string, size: string) => void;
   updateQty: (id: string, size: string, qty: number) => void;
   clearCart: () => void;
+  // SB2.0 drawer: opens automatically on addItem so shoppers stay on the page
+  drawerOpen: boolean;
+  openDrawer: () => void;
+  closeDrawer: () => void;
 }
 
 const CartContext = createContext<CartContextType | null>(null);
@@ -34,12 +38,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(KEY, JSON.stringify(items));
   }, [items]);
 
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
   const addItem = (item: Omit<CartItem, "qty">) => {
     setItems(prev => {
       const existing = prev.find(i => i.id === item.id && i.size === item.size);
       if (existing) return prev.map(i => i.id === item.id && i.size === item.size ? { ...i, qty: i.qty + 1 } : i);
       return [...prev, { ...item, qty: 1 }];
     });
+    setDrawerOpen(true);
   };
 
   const removeItem = (id: string, size: string) =>
@@ -55,7 +62,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const total = items.reduce((s, i) => s + i.price * i.qty, 0);
 
   return (
-    <CartContext.Provider value={{ items, count, total, addItem, removeItem, updateQty, clearCart }}>
+    <CartContext.Provider value={{ items, count, total, addItem, removeItem, updateQty, clearCart,
+      drawerOpen, openDrawer: () => setDrawerOpen(true), closeDrawer: () => setDrawerOpen(false) }}>
       {children}
     </CartContext.Provider>
   );

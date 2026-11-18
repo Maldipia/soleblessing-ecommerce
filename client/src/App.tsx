@@ -35,6 +35,7 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
+import CartDrawer from "./components/CartDrawer";
 import ChatWidget from "./components/ChatWidget";
 
 function Router() {
@@ -76,6 +77,7 @@ function Router() {
         <Route component={NotFound} />
       </Switch>
       {!isAdmin && <Footer />}
+      {!isAdmin && <CartDrawer />}
       {/* ChatWidget hidden: auth is stubbed so chat can never sign in — re-enable after Next.js rebuild */}
     </>
   );
