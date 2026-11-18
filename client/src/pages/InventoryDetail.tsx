@@ -62,7 +62,8 @@ export default function InventoryDetail() {
       imageUrl: selectedProduct.imageUrl || product.imageUrl || undefined,
     });
     setAddedToCart(true);
-    toast.success(`Added to cart — Size ${selectedSize}`);
+    // no toast — the cart drawer opens and confirms, and the toast was
+    // covering the drawer's buttons on mobile (found in multi-item audit)
     setTimeout(() => setAddedToCart(false), 2500);
   };
 
