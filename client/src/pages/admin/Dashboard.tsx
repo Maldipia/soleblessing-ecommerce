@@ -1986,7 +1986,7 @@ export default function AdminDashboard() {
 
   // ─── Login ──────────────────────────────────────────────────────────────
   if (!isAdmin) return (
-    <div className="min-h-screen bg-[#050f12] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-[#050f12] flex items-center justify-center px-4" style={{fontFamily:'-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'}}>
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="w-14 h-14 bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -2022,7 +2022,7 @@ export default function AdminDashboard() {
 
   // ─── Dashboard ──────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-[#F7F4EF] flex">
+    <div className="min-h-screen bg-[#F7F4EF] flex" style={{fontFamily:'-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'}}>
       {qrModal?.open && <QRModal itemCode={qrModal.itemCode} name={qrModal.name} onClose={()=>setQrModal(null)}/>}
       {productModal.open&&<ProductModal product={productModal.product} onClose={()=>setProductModal({open:false})} onSave={()=>{setProductModal({open:false});loadProducts();}}/>}
       {createOrder&&<CreateOrderModal inventory={inventory||[]} costMap={costMap} onClose={()=>setCreateOrder(false)} onPlaced={()=>{loadOrders();refetchInv();refreshInventory().catch(()=>{});}}/>}
