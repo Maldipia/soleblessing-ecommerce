@@ -3034,28 +3034,29 @@ export default function AdminDashboard() {
                               className="text-[10px] font-bold text-emerald-700 border border-emerald-300 px-2 py-0.5 rounded-lg hover:bg-emerald-50">Verify</button>)}
                         </div>
                       </div>
-                      {/* invoice */}
+                      {/* invoice — website orders open the site's own branded invoice;
+                          the Google Sheet stays as the internal archive copy */}
                       <div className="flex items-center gap-1.5 flex-wrap border-t border-gray-100 pt-3 mb-3">
+                        <a href={`/invoice/${encodeURIComponent(sel.order_number)}`} target="_blank" rel="noopener noreferrer"
+                          className="text-[11px] font-bold bg-[#C9A84C] text-[#0d2430] px-2.5 py-1 rounded-lg hover:opacity-90 flex items-center gap-1">
+                          🧾 Invoice</a>
                         {sel.invoice_url
                           ? <>
-                              <a href={sel.invoice_url} target="_blank" rel="noopener noreferrer"
-                                title={sel.invoice_sent_at?`Emailed ${fmtDate(sel.invoice_sent_at)}`:"Invoice created — not emailed yet"}
-                                className={`text-[11px] font-bold px-2.5 py-1 rounded-lg flex items-center gap-1 ${sel.invoice_sent_at
-                                  ?"bg-green-600 text-white hover:bg-green-700"
-                                  :"text-[#8a6d25] border border-[#C9A84C] hover:bg-[#C9A84C]/10"}`}>
-                                {sel.invoice_sent_at?<>✓ Invoice</>:<><ExternalLink className="h-3 w-3"/> Invoice</>}</a>
-                              <button onClick={()=>generateInvoice(sel,true)} disabled={invBusy===sel.id}
+                              <a href={sel.invoice_url} target="_blank" rel="noopener noreferrer" title="Google Sheet archive copy"
+                                className="text-[11px] font-bold text-gray-500 border border-gray-200 px-2 py-1 rounded-lg hover:border-[#C9A84C] hover:text-[#8a6d25] flex items-center gap-1">
+                                <ExternalLink className="h-3 w-3"/> Sheet</a>
+                              <button onClick={()=>generateInvoice(sel,true)} disabled={invBusy===sel.id} title="Regenerate the sheet copy"
                                 className="text-[11px] font-bold text-gray-500 border border-gray-200 px-2 py-1 rounded-lg hover:border-[#C9A84C] hover:text-[#8a6d25] disabled:opacity-50">
-                                {invBusy===sel.id?"…":"↻ Change"}</button>
+                                {invBusy===sel.id?"…":"↻"}</button>
                               {sel.invoice_sent_at
-                                ? <button onClick={()=>sendInvoice(sel,true)} disabled={sendBusy===sel.id} title="Email again"
+                                ? <button onClick={()=>sendInvoice(sel,true)} disabled={sendBusy===sel.id} title={`Emailed ${fmtDate(sel.invoice_sent_at)} — send again`}
                                     className="text-[11px] font-bold text-green-700 border border-green-300 px-2 py-1 rounded-lg hover:bg-green-50 disabled:opacity-50">{sendBusy===sel.id?"…":"📧 ↻"}</button>
                                 : <button onClick={()=>sendInvoice(sel)} disabled={sendBusy===sel.id}
                                     className="text-[11px] font-bold bg-emerald-500 text-white px-2.5 py-1 rounded-lg hover:bg-emerald-600 disabled:opacity-50">{sendBusy===sel.id?"Sending…":"📧 Send invoice"}</button>}
                             </>
-                          : <button onClick={()=>generateInvoice(sel)} disabled={invBusy===sel.id}
-                              className="text-[11px] font-bold bg-[#C9A84C] text-[#0d2430] px-2.5 py-1 rounded-lg hover:opacity-90 disabled:opacity-50">
-                              {invBusy===sel.id?"Generating…":"Generate invoice"}</button>}
+                          : <button onClick={()=>generateInvoice(sel)} disabled={invBusy===sel.id} title="Create the Google Sheet archive copy"
+                              className="text-[11px] font-bold text-gray-500 border border-gray-200 px-2 py-1 rounded-lg hover:border-[#C9A84C] hover:text-[#8a6d25] disabled:opacity-50">
+                              {invBusy===sel.id?"Generating…":"+ Sheet copy"}</button>}
                       </div>
                       {/* shipping */}
                       <div className="flex items-center gap-1.5 flex-wrap mb-3">

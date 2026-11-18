@@ -31,7 +31,7 @@ function buildHtml(o, type) {
       : `Your order is reserved. Settle the payment and upload your proof so we can pack it right away.`;
   const cta = verified
     ? (o.invoice_url
-        ? `<a href="${esc(o.invoice_url)}" style="display:block;background:#0d2430;color:#ffffff;text-decoration:none;text-align:center;padding:15px;border-radius:10px;font-size:13px;font-weight:bold;letter-spacing:.12em;text-transform:uppercase">View My Invoice &#8594;</a>`
+        ? `<a href="https://www.soleblessingofficial.com/invoice/${encodeURIComponent(o.order_number)}" style="display:block;background:#0d2430;color:#ffffff;text-decoration:none;text-align:center;padding:15px;border-radius:10px;font-size:13px;font-weight:bold;letter-spacing:.12em;text-transform:uppercase">View My Invoice &#8594;</a>`
         : `<a href="${SITE}" style="display:block;background:#0d2430;color:#ffffff;text-decoration:none;text-align:center;padding:15px;border-radius:10px;font-size:13px;font-weight:bold;letter-spacing:.12em;text-transform:uppercase">Shop More &#8594;</a>`)
     : cod
       ? `<a href="${SITE}" style="display:block;background:#0d2430;color:#ffffff;text-decoration:none;text-align:center;padding:15px;border-radius:10px;font-size:13px;font-weight:bold;letter-spacing:.12em;text-transform:uppercase">Shop More &#8594;</a>`

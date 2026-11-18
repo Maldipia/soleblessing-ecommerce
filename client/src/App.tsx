@@ -29,6 +29,7 @@ import ShoeCleaner from "./pages/ShoeCleaner";
 import PlayAndWin from "./pages/PlayAndWin";
 import UploadPayment from "./pages/UploadPayment";
 import InventoryDetail from "./pages/InventoryDetail";
+import Invoice from "./pages/Invoice";
 import ShippingPolicy from "./pages/ShippingPolicy";
 import ReturnsPolicy from "./pages/ReturnsPolicy";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
@@ -63,6 +64,7 @@ function Router() {
         <Route path={"/wishlist"} component={Wishlist} />
         <Route path={"/loyalty"} component={LoyaltyProgram} />
         <Route path={"/order/:id"} component={OrderDetail} />
+        <Route path={"/invoice/:orderNumber"} component={Invoice} />
         <Route path={"/admin"} component={AdminDashboard} />
         <Route path={"/admin/products"} component={AdminProducts} />
         <Route path={"/admin/inquiries"} component={AdminInquiries} />
