@@ -19,7 +19,7 @@ import {
   Shield, ChevronRight, Lock, LogOut, Zap, ExternalLink,
   Search, RefreshCw, AlertTriangle, TrendingUp, Plus,
   Edit2, Trash2, X, Save, Eye, Settings, Tag,
-  Download, QrCode, Copy, Database, History, Truck, DollarSign, CheckCircle,
+  Download, QrCode, Copy, Database, History, Truck, DollarSign, CheckCircle, Users,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
@@ -28,7 +28,7 @@ import { useInventory, refreshInventory } from "@/hooks/useInventory";
 import AdminPromos from "./Promos";
 import ShoeCleanerCampaign from "./ShoeCleanerCampaign";
 
-type Section = "overview"|"products"|"orders"|"intake"|"reports"|"promos"|"campaign"|"settings"|"analytics"|"system";
+type Section = "overview"|"products"|"orders"|"customers"|"intake"|"reports"|"promos"|"campaign"|"settings"|"analytics"|"system";
 
 const ADMIN_KEY = "sb_admin_v1";
 const fmt = (c: number) => `₱${(c/100).toLocaleString("en-PH")}`;
@@ -366,6 +366,331 @@ function Donut({segs}:{segs:{label:string;value:number;color:string}[]}){
 // ─── Create Order (Manual) with item-code autofill ──────────────────────
 type OrderLine = {code:string;name:string;sku:string;size:string;price:string;cost:number|null;found:boolean};
 const BLANK_LINE: OrderLine = {code:"",name:"",sku:"",size:"",price:"",cost:null,found:false};
+
+// ── Customers tab — profiles derived live from sb_orders (grouped by phone),
+// merged with manually added people + notes in sb_customers. No mock data. ──
+const AV_COLORS=["bg-[#0d2430] text-[#C9A84C]","bg-blue-100 text-blue-700","bg-purple-100 text-purple-700","bg-emerald-100 text-emerald-700","bg-rose-100 text-rose-600","bg-amber-100 text-amber-700"];
+const fmtC=(c:number)=>`₱${(Math.round(c)/100).toLocaleString("en-PH",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+function AdminCustomers({orders,onOpenOrder}:{orders:any[];onOpenOrder:(orderNumber:string,source:string)=>void}){
+  const [manual,setManual]=useState<any[]>([]);
+  const [q,setQ]=useState("");
+  const [fTag,setFTag]=useState("all");
+  const [fOrders,setFOrders]=useState("any");
+  const [fJoin,setFJoin]=useState("all");
+  const [fStatus,setFStatus]=useState("all");
+  const [sortKey,setSortKey]=useState<"name"|"orders"|"spend"|"last">("last");
+  const [sortDir,setSortDir]=useState<1|-1>(-1);
+  const [page,setPage]=useState(0);
+  const [per,setPer]=useState(10);
+  const [selKeys,setSelKeys]=useState<Set<string>>(new Set());
+  const [profileKey,setProfileKey]=useState<string|null>(null);
+  const [addOpen,setAddOpen]=useState(false);
+  const [addF,setAddF]=useState({name:"",phone:"",email:"",address:"",notes:""});
+  const [noteDraft,setNoteDraft]=useState<string|null>(null);
+  const [busy,setBusy]=useState(false);
+
+  const loadManual=async()=>{try{setManual(await sb.select("sb_customers","order=created_at.desc"));}catch{}};
+  useEffect(()=>{loadManual();},[]);
+  useEffect(()=>{setPage(0);},[q,fTag,fOrders,fJoin,fStatus]);
+
+  const digits=(s:any)=>String(s||"").replace(/\D/g,"").replace(/^63/,"0");
+  const now=Date.now(), D30=30*864e5, D180=180*864e5;
+
+  const buildAt=(cutoff:number)=>{ // snapshot of customer aggregates using orders before `cutoff`
+    const m=new Map<string,any>();
+    for(const o of orders){
+      const t=new Date(o.created_at).getTime();
+      if(t>=cutoff) continue;
+      const key=digits(o.contact_number)||String(o.customer_email||"").toLowerCase()||`${o.facebook_name||o.customer_name||"?"}`.toLowerCase();
+      if(!key||key==="?") continue;
+      let c=m.get(key);
+      if(!c){c={key,name:o.customer_name,email:o.customer_email,fb:o.facebook_name,phone:digits(o.contact_number),address:o.shipping_address,orders:[],spend:0,live:0,first:t,last:t};m.set(key,c);}
+      c.orders.push(o);
+      if(t>c.last){c.last=t;c.name=o.customer_name||c.name;c.address=o.shipping_address||c.address;c.fb=o.facebook_name||c.fb;}
+      if(t<c.first)c.first=t;
+      if(!c.email&&o.customer_email)c.email=o.customer_email;
+      if(o.status!=="cancelled"){c.spend+=o.total||0;c.live++;}
+    }
+    return m;
+  };
+  const tagOf=(c:any)=> (c.spend>=2000000||c.live>=5)?"vip":c.live>=2?"repeat":"new";
+  const statusOf=(c:any)=> c.live===0&&c.orders.length===0?"active":(now-c.last<=D180?"active":"dormant");
+
+  const custMap=buildAt(now+1);
+  // merge manual customers (and notes/overrides) by phone
+  for(const mc of manual){
+    const key=digits(mc.phone);
+    if(!key) continue;
+    const ex=custMap.get(key);
+    if(ex){ex.notes=mc.notes;ex.manualRow=mc; if(mc.email&&!ex.email)ex.email=mc.email;}
+    else custMap.set(key,{key,name:mc.name,email:mc.email,fb:mc.fb_name,phone:key,address:mc.address,orders:[],spend:0,live:0,first:new Date(mc.created_at).getTime(),last:0,notes:mc.notes,manualRow:mc});
+  }
+  const all=[...custMap.values()];
+  const prevMap=buildAt(now-D30);
+  // honest deltas: snapshot now vs 30 days ago
+  const cnt=(m:Map<string,any>,f:(c:any)=>boolean)=>{let n=0;m.forEach(c=>{if(f(c))n++;});return n;};
+  const totalNow=all.length, totalPrev=prevMap.size;
+  const newNow=cnt(custMap,c=>now-c.first<=D30&&c.orders.length>0);
+  const newPrev=cnt(custMap,c=>{const a=now-c.first;return a>D30&&a<=2*D30&&c.orders.length>0;});
+  const repNow=cnt(custMap,c=>c.live>=2), repPrev=cnt(prevMap,c=>c.live>=2);
+  const vipNow=cnt(custMap,c=>tagOf(c)==="vip"), vipPrev=cnt(prevMap,c=>(c.spend>=2000000||c.live>=5));
+  const pct=(a:number,b:number)=>b===0?(a>0?100:0):Math.round((a-b)/b*100);
+  const dEl=(d:number,label:string)=><span className={`text-[10px] font-bold ${d>=0?"text-emerald-600":"text-red-500"}`}>{d>=0?"↑":"↓"} {Math.abs(d)}% {label}</span>;
+
+  const filtered=all.filter(c=>{
+    if(fTag!=="all"&&tagOf(c)!==fTag) return false;
+    if(fStatus!=="all"&&statusOf(c)!==fStatus) return false;
+    if(fOrders==="1"&&c.live!==1) return false;
+    if(fOrders==="2"&&c.live<2) return false;
+    if(fOrders==="5"&&c.live<5) return false;
+    if(fJoin==="30"&&now-c.first>D30) return false;
+    if(fJoin==="90"&&now-c.first>90*864e5) return false;
+    if(fJoin==="year"&&new Date(c.first).getFullYear()!==new Date().getFullYear()) return false;
+    const s=q.trim().toLowerCase();
+    if(!s) return true;
+    return [c.name,c.email,c.phone,c.fb].filter(Boolean).join(" ").toLowerCase().includes(s);
+  }).sort((a,b)=>{
+    const v=sortKey==="name"?String(a.name||"").localeCompare(String(b.name||""))
+      :sortKey==="orders"?a.live-b.live
+      :sortKey==="spend"?a.spend-b.spend
+      :a.last-b.last;
+    return v*sortDir;
+  });
+  const pages=Math.max(1,Math.ceil(filtered.length/per));
+  const pg=Math.min(page,pages-1);
+  const rows=filtered.slice(pg*per,(pg+1)*per);
+  const prof=profileKey?custMap.get(profileKey):null;
+
+  const initials=(n:string)=>String(n||"?").trim().split(/\s+/).slice(0,2).map(w=>w[0]).join("").toUpperCase()||"?";
+  const avCls=(k:string)=>AV_COLORS[(k.split("").reduce((s,ch)=>s+ch.charCodeAt(0),0))%AV_COLORS.length];
+  const sortBtn=(k:typeof sortKey,label:string,right=false)=>(
+    <button onClick={()=>{if(sortKey===k)setSortDir(d=>d===1?-1:1);else{setSortKey(k);setSortDir(k==="name"?1:-1);}}}
+      className={`flex items-center gap-1 uppercase ${right?"ml-auto":""}`}>{label}{sortKey===k&&<span>{sortDir===1?"↑":"↓"}</span>}</button>);
+
+  const exportCSV=()=>{
+    const list=selKeys.size?filtered.filter(c=>selKeys.has(c.key)):filtered;
+    const esc=(v:any)=>`"${String(v??"").replace(/"/g,'""')}"`;
+    const csv=["Name,Email,Phone,FB,Orders,Lifetime Spend (PHP),Last Order,Joined,Tag,Status,Address",
+      ...list.map(c=>[esc(c.name),esc(c.email),esc(c.phone),esc(c.fb),c.live,(c.spend/100).toFixed(2),
+        c.last?new Date(c.last).toISOString().slice(0,10):"",new Date(c.first).toISOString().slice(0,10),
+        tagOf(c).toUpperCase(),statusOf(c),esc(c.address)].join(","))].join("\n");
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+    a.download=`soleblessing-customers-${new Date().toISOString().slice(0,10)}.csv`;a.click();
+    toast.success(`Exported ${list.length} customers`);
+  };
+  const saveCustomerRow=async(payload:any,phoneKey:string)=>{
+    setBusy(true);
+    try{
+      await sb.upsert("sb_customers","on_conflict=phone",{phone:phoneKey,...payload,updated_at:new Date().toISOString()});
+      toast.success("Saved"); setAddOpen(false); setAddF({name:"",phone:"",email:"",address:"",notes:""}); loadManual();
+    }catch(e:any){toast.error("Save failed: "+(e?.message||String(e)).slice(0,100));}
+    finally{setBusy(false);}
+  };
+
+  const TAG_EL:Record<string,any>={
+    vip:<span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-[#fdf3d7] text-[#8a6414] border border-[#e6cf8a]">👑 VIP</span>,
+    repeat:<span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-orange-50 text-orange-600">🔁 Repeat</span>,
+    new:<span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-blue-50 text-blue-600">✨ New</span>,
+  };
+  const ST_EL:Record<string,any>={
+    active:<span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700">Active</span>,
+    dormant:<span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-gray-100 text-gray-500">Dormant</span>,
+  };
+
+  return (
+    <div>
+      {/* header */}
+      <div className="flex items-start gap-3 mb-5 flex-wrap">
+        <div>
+          <h2 className="text-[21px] font-black text-[#0d2430] flex items-center gap-2"><Users className="h-5 w-5"/> Customers</h2>
+          <p className="text-[11.5px] text-gray-400 font-semibold">Manage customer profiles, order history and loyalty.</p>
+        </div>
+        <div className="ml-auto flex gap-2">
+          <button onClick={exportCSV} className="flex items-center gap-1.5 border border-gray-200 bg-white text-[#0d2430] px-3.5 py-2 text-xs font-bold rounded-lg hover:bg-gray-50"><Download className="h-3.5 w-3.5"/> Export{selKeys.size?` (${selKeys.size})`:""}</button>
+          <button onClick={()=>setAddOpen(true)} className="flex items-center gap-1.5 bg-[#C9A84C] text-[#0d2430] px-4 py-2 text-xs font-black rounded-lg hover:opacity-90"><Plus className="h-3.5 w-3.5"/> Add Customer</button>
+        </div>
+      </div>
+
+      {/* summary cards */}
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
+        {[
+          {icon:"👥",bg:"bg-blue-50",l:"Total Customers",v:totalNow,d:dEl(pct(totalNow,totalPrev),"vs. 30 days ago")},
+          {icon:"✨",bg:"bg-emerald-50",l:"New This Month",v:newNow,d:dEl(pct(newNow,newPrev),"vs. last month")},
+          {icon:"🔁",bg:"bg-orange-50",l:"Repeat Customers",v:repNow,d:dEl(pct(repNow,repPrev),"vs. 30 days ago")},
+          {icon:"👑",bg:"bg-[#fdf3d7]",l:"VIP Customers",v:vipNow,d:dEl(pct(vipNow,vipPrev),"vs. 30 days ago")},
+        ].map((c,i)=>(
+          <div key={i} className="bg-white border border-gray-100 rounded-xl p-4 flex items-center gap-3">
+            <span className={`w-11 h-11 rounded-full ${c.bg} flex items-center justify-center text-lg flex-shrink-0`}>{c.icon}</span>
+            <div><div className="text-[11px] font-semibold text-gray-500">{c.l}</div>
+              <div className="text-[22px] font-black text-[#0d2430] leading-tight tabular-nums">{c.v.toLocaleString()}</div>{c.d}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* search + filters */}
+      <div className="flex items-center gap-2.5 mb-4 flex-wrap">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400"/>
+          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search customer name, email, or phone…"
+            className="h-10 w-80 max-w-full pl-9 pr-3 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-[#C9A84C]"/>
+        </div>
+        {[["Customer Tag",fTag,setFTag,[["all","All"],["vip","👑 VIP"],["repeat","🔁 Repeat"],["new","✨ New"]]],
+          ["Order Count",fOrders,setFOrders,[["any","Any"],["1","1 order"],["2","2+"],["5","5+"]]],
+          ["Date Joined",fJoin,setFJoin,[["all","All time"],["30","Last 30 days"],["90","Last 90 days"],["year","This year"]]],
+          ["Status",fStatus,setFStatus,[["all","All"],["active","Active"],["dormant","Dormant"]]]].map(([lab,val,set,opts]:any)=>(
+          <label key={lab} className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-lg px-2.5 h-10 text-[11px] font-bold text-gray-500">
+            {lab}:
+            <select value={val} onChange={e=>set(e.target.value)} className="outline-none text-[#0d2430] font-bold bg-transparent">
+              {opts.map(([v,l]:any)=><option key={v} value={v}>{l}</option>)}
+            </select>
+          </label>
+        ))}
+        <button onClick={()=>{setQ("");setFTag("all");setFOrders("any");setFJoin("all");setFStatus("all");}}
+          className="text-[11px] font-bold text-[#8a6d25] underline">Reset</button>
+      </div>
+
+      {/* table */}
+      <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-gray-100 text-[9.5px] font-bold uppercase tracking-wider text-gray-400 bg-[#fbfaf7]">
+                <th className="pl-4 pr-1 py-3 w-8"><input type="checkbox" checked={rows.length>0&&rows.every(c=>selKeys.has(c.key))}
+                  onChange={e=>{const s=new Set(selKeys); rows.forEach(c=>e.target.checked?s.add(c.key):s.delete(c.key)); setSelKeys(s);}}/></th>
+                <th className="px-1.5 py-3">{sortBtn("name","Customer")}</th>
+                <th className="px-1.5 py-3">Email</th>
+                <th className="px-1.5 py-3">Phone</th>
+                <th className="px-1.5 py-3 text-right">{sortBtn("orders","Orders",true)}</th>
+                <th className="px-1.5 py-3 text-right">{sortBtn("spend","Lifetime Spend",true)}</th>
+                <th className="px-1.5 py-3">{sortBtn("last","Last Order")}</th>
+                <th className="px-1.5 py-3">Tag</th>
+                <th className="px-1.5 py-3">Status</th>
+                <th className="pr-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(c=>(
+                <tr key={c.key} onClick={()=>{setProfileKey(c.key);setNoteDraft(null);}}
+                  className={`border-b border-gray-50 cursor-pointer text-[12px] ${profileKey===c.key?"bg-[#C9A84C]/10":"hover:bg-gray-50/70"}`}>
+                  <td className="pl-4 pr-1 py-2.5" onClick={e=>e.stopPropagation()}>
+                    <input type="checkbox" checked={selKeys.has(c.key)}
+                      onChange={e=>{const s=new Set(selKeys); e.target.checked?s.add(c.key):s.delete(c.key); setSelKeys(s);}}/></td>
+                  <td className="px-1.5 py-2.5">
+                    <div className="flex items-center gap-2.5">
+                      <span className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black flex-shrink-0 ${avCls(c.key)}`}>{initials(c.name)}</span>
+                      <span className="font-bold text-[#0d2430] whitespace-nowrap max-w-[150px] truncate">{c.name||"—"}</span>
+                    </div>
+                  </td>
+                  <td className="px-1.5 py-2.5 text-gray-500 max-w-[160px] truncate">{c.email||<span className="text-gray-300">—</span>}</td>
+                  <td className="px-1.5 py-2.5 text-gray-500 whitespace-nowrap">{c.phone||<span className="text-gray-300">—</span>}</td>
+                  <td className="px-1.5 py-2.5 text-right font-bold tabular-nums">{c.live}</td>
+                  <td className="px-1.5 py-2.5 text-right font-black text-[#0d2430] tabular-nums whitespace-nowrap">{fmtC(c.spend)}</td>
+                  <td className="px-1.5 py-2.5 text-gray-500 whitespace-nowrap">{c.last?fmtDate(new Date(c.last).toISOString()):<span className="text-gray-300">—</span>}</td>
+                  <td className="px-1.5 py-2.5">{TAG_EL[tagOf(c)]}</td>
+                  <td className="px-1.5 py-2.5">{ST_EL[statusOf(c)]}</td>
+                  <td className="pr-4 py-2.5 text-gray-300 font-black tracking-widest">⋯</td>
+                </tr>
+              ))}
+              {rows.length===0&&<tr><td colSpan={10} className="py-16 text-center text-sm text-gray-400">No customers found</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex items-center gap-2 px-4 py-3 border-t border-gray-100 flex-wrap">
+          <span className="text-[11px] text-gray-400">Showing {filtered.length===0?0:pg*per+1}–{Math.min((pg+1)*per,filtered.length)} of {filtered.length} customers</span>
+          <div className="ml-auto flex items-center gap-1">
+            <button onClick={()=>setPage(p=>Math.max(0,p-1))} disabled={pg===0} className="w-8 h-8 rounded-lg border border-gray-200 text-xs font-bold text-gray-500 disabled:opacity-30">‹</button>
+            {Array.from({length:pages},(_,i)=>i).filter(i=>i===0||i===pages-1||Math.abs(i-pg)<=2).map((i,idx,arr)=>(
+              <span key={i} className="flex items-center gap-1">
+                {idx>0&&arr[idx-1]!==i-1&&<span className="text-gray-300 text-xs px-0.5">…</span>}
+                <button onClick={()=>setPage(i)} className={`w-8 h-8 rounded-lg text-xs font-bold ${i===pg?"bg-[#C9A84C] text-[#0d2430]":"border border-gray-200 text-gray-500"}`}>{i+1}</button>
+              </span>))}
+            <button onClick={()=>setPage(p=>Math.min(pages-1,p+1))} disabled={pg>=pages-1} className="w-8 h-8 rounded-lg border border-gray-200 text-xs font-bold text-gray-500 disabled:opacity-30">›</button>
+          </div>
+          <span className="text-[11px] text-gray-400">Rows: <select value={per} onChange={e=>{setPer(Number(e.target.value));setPage(0);}} className="border border-gray-200 rounded-lg px-1.5 py-1 text-xs font-bold text-[#0d2430]">{[10,25,50].map(n=><option key={n}>{n}</option>)}</select></span>
+        </div>
+      </div>
+
+      {/* profile drawer */}
+      {prof&&(
+        <div className="fixed inset-0 z-[70]" onClick={()=>setProfileKey(null)}>
+          <div className="absolute inset-0 bg-black/40"/>
+          <div className="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl overflow-y-auto p-5" onClick={e=>e.stopPropagation()}>
+            <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
+              <span className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-black ${avCls(prof.key)}`}>{initials(prof.name)}</span>
+              <div className="min-w-0">
+                <p className="text-[15px] font-black text-[#0d2430] truncate">{prof.name}</p>
+                <p className="text-[10.5px] text-gray-400 font-semibold">Joined {fmtDate(new Date(prof.first).toISOString())} · {TAG_EL[tagOf(prof)]} {ST_EL[statusOf(prof)]}</p>
+              </div>
+              <button onClick={()=>setProfileKey(null)} className="ml-auto text-gray-400 hover:text-gray-600"><X className="h-4.5 w-4.5"/></button>
+            </div>
+            <p className="text-[9px] font-black uppercase tracking-[.14em] text-gray-300 mt-4 mb-2">Contact</p>
+            <div className="space-y-1.5 text-[12px]">
+              <div className="flex gap-2"><span className="text-gray-400 w-16 font-semibold flex-shrink-0">Email</span><span>{prof.email||"—"}</span></div>
+              <div className="flex gap-2"><span className="text-gray-400 w-16 font-semibold flex-shrink-0">Mobile</span><span>{prof.phone||"—"}</span></div>
+              {prof.fb&&<div className="flex gap-2"><span className="text-gray-400 w-16 font-semibold flex-shrink-0">FB</span><span className="text-blue-500">{prof.fb}</span></div>}
+              <div className="flex gap-2"><span className="text-gray-400 w-16 font-semibold flex-shrink-0">Address</span><span>{prof.address||"—"}</span></div>
+            </div>
+            <p className="text-[9px] font-black uppercase tracking-[.14em] text-gray-300 mt-4 mb-2">Statistics</p>
+            <div className="grid grid-cols-2 gap-2">
+              {[["Total Orders",String(prof.live)],["Lifetime Spend",fmtC(prof.spend)],
+                ["Avg Order",prof.live?fmtC(prof.spend/prof.live):"—"],
+                ["Last Order",prof.last?fmtDate(new Date(prof.last).toISOString()):"—"]].map(([l,v])=>(
+                <div key={l} className="bg-[#fbfaf7] border border-gray-100 rounded-lg px-3 py-2">
+                  <p className="text-[9px] font-bold text-gray-400 uppercase">{l}</p>
+                  <p className="text-[14px] font-black text-[#0d2430] tabular-nums">{v}</p>
+                </div>))}
+            </div>
+            <p className="text-[9px] font-black uppercase tracking-[.14em] text-gray-300 mt-4 mb-2">Order History ({prof.orders.length})</p>
+            <div className="space-y-1.5">
+              {[...prof.orders].sort((a:any,b:any)=>new Date(b.created_at).getTime()-new Date(a.created_at).getTime()).map((o:any)=>(
+                <button key={o.id} onClick={()=>{setProfileKey(null);onOpenOrder(o.order_number,o.source||"website");}}
+                  className="w-full flex items-center gap-2 border border-gray-100 rounded-lg px-3 py-2 text-left hover:border-[#C9A84C]">
+                  <span className="text-[11px] font-black text-[#8a6d25]">{o.order_number}</span>
+                  <span className="text-[10px] text-gray-400">{fmtDate(o.created_at)} · {(o.items||[]).length} item{(o.items||[]).length!==1?"s":""}</span>
+                  <span className="ml-auto text-[11px] font-black tabular-nums">{fmt(o.total)}</span>
+                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${STATUS_COLOR[o.status]||"bg-gray-100 text-gray-600"}`}>{o.status}</span>
+                </button>))}
+              {prof.orders.length===0&&<p className="text-[11px] text-gray-400">No orders yet — added manually.</p>}
+            </div>
+            <p className="text-[9px] font-black uppercase tracking-[.14em] text-gray-300 mt-4 mb-2">Notes</p>
+            {prof.phone
+              ? <>
+                  <textarea value={noteDraft??prof.notes??""} onChange={e=>setNoteDraft(e.target.value)} rows={3}
+                    placeholder="Courier preference, sizing notes, anything…"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[12px] outline-none focus:border-[#C9A84C]"/>
+                  <button disabled={busy||noteDraft===null} onClick={()=>saveCustomerRow({name:prof.name||"Customer",email:prof.email||null,fb_name:prof.fb||null,address:prof.address||null,notes:noteDraft,manual:!!prof.manualRow?.manual&&prof.orders.length===0},prof.phone)}
+                    className="mt-1.5 text-[11px] font-black bg-[#0d2430] text-white px-4 py-2 rounded-lg disabled:opacity-40">{busy?"Saving…":"Save note"}</button>
+                </>
+              : <p className="text-[11px] text-gray-400">Notes need a phone number on the customer.</p>}
+          </div>
+        </div>
+      )}
+
+      {/* add customer modal */}
+      {addOpen&&(
+        <div className="fixed inset-0 z-[80] bg-black/50 flex items-center justify-center p-4" onClick={()=>setAddOpen(false)}>
+          <div className="bg-white rounded-2xl p-5 w-full max-w-sm" onClick={e=>e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-black text-[#0d2430]">Add Customer</h3>
+              <button onClick={()=>setAddOpen(false)} className="text-gray-400"><X className="h-4 w-4"/></button>
+            </div>
+            {[["Name *","name"],["Mobile *","phone"],["Email","email"],["Address","address"],["Notes","notes"]].map(([l,k])=>(
+              <div key={k} className="mb-2.5">
+                <span className="text-[9.5px] font-bold uppercase tracking-wider text-gray-400 mb-1 block">{l}</span>
+                <input value={(addF as any)[k]} onChange={e=>setAddF({...addF,[k]:e.target.value})}
+                  className="w-full border border-gray-200 rounded-lg px-2.5 py-2 text-xs outline-none focus:border-[#C9A84C]"/>
+              </div>))}
+            <button disabled={busy||!addF.name.trim()||digits(addF.phone).length<10}
+              onClick={()=>saveCustomerRow({name:addF.name.trim(),email:addF.email.trim()||null,address:addF.address.trim()||null,notes:addF.notes.trim()||null,manual:true},digits(addF.phone))}
+              className="w-full bg-[#C9A84C] text-[#0d2430] py-2.5 text-xs font-black rounded-lg disabled:opacity-40">{busy?"Saving…":"Save Customer"}</button>
+            {addF.phone&&digits(addF.phone).length<10&&<p className="text-[10px] text-red-500 font-bold mt-1.5">Enter a valid PH mobile number</p>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── Orders 2.0: edit the whole order (customer, items, amounts) ──
 function OrderEditModal({order,onClose,onSave}:{order:any;onClose:()=>void;onSave:(id:string,payload:any)=>void}){
@@ -2013,6 +2338,7 @@ export default function AdminDashboard() {
   const NAV = [
     {id:"overview" as Section, icon:LayoutDashboard, label:"Dashboard"},
     {id:"orders"    as Section, icon:ShoppingCart,   label:"Orders"},
+    {id:"customers" as Section, icon:Users,          label:"Customers"},
     {id:"products"  as Section, icon:Package,        label:"Products & Inventory"},
     {id:"intake"    as Section, icon:QrCode,         label:"Latest Inventory"},
     {id:"reports"   as Section, icon:TrendingUp,     label:"Sales & Reports"},
@@ -2988,6 +3314,10 @@ export default function AdminDashboard() {
               </div>
             </div>);
           })()}
+
+          {/* ── CUSTOMERS ── */}
+          {section==="customers"&&<AdminCustomers orders={sbOrders}
+            onOpenOrder={(n,src)=>{setChannelFilter(src==="sheet_import"?"sheet_import":"website");setOrderSearch(n);setSection("orders");}}/>}
 
           {/* ── PROMO CODES ── */}
           {section==="promos"&&<AdminPromos/>}

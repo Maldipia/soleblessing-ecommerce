@@ -7,7 +7,7 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const ALLOWED = new Set([
   'sb_orders','sb_products','sb_promos','sb_settings','sb_reviews',
   'sb_promo_uses','sb_loyalty','sb_loyalty_transactions','sb_wishlist_log','sb_inventory',
-  'sync_log','sb_deleted_orders',
+  'sync_log','sb_deleted_orders','sb_customers',
 ]);
 
 export default async function handler(req, res) {
@@ -50,6 +50,7 @@ export default async function handler(req, res) {
       sb_inventory: ['select', 'insert', 'upsert', 'update'],
       sb_orders:    ['select', 'update', 'delete'],
       sb_deleted_orders: ['select', 'insert'],
+      sb_customers: ['select', 'insert', 'upsert', 'update', 'delete'],
       sb_products:  ['select'],
       sync_log:     ['select'],
       sb_reviews:   ['select'],
