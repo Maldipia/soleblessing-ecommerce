@@ -2755,7 +2755,6 @@ export default function AdminDashboard() {
                           <th className="pl-3 pr-1.5 py-3">Order No.</th>
                           <th className="px-1.5 py-3">Date & Time</th>
                           <th className="px-1.5 py-3">Customer</th>
-                          <th className="px-1.5 py-3">Source</th>
                           <th className="px-1.5 py-3">Payment</th>
                           <th className="px-1.5 py-3">Shipping</th>
                           <th className="px-1.5 py-3">Status</th>
@@ -2781,11 +2780,6 @@ export default function AdminDashboard() {
                               <div className="font-bold text-[#0d2430] whitespace-nowrap max-w-[130px] truncate">{o.customer_name}</div>
                               <div className="text-[10px] text-gray-400 whitespace-nowrap">{o.contact_number}</div>
                             </td>
-                            <td className="px-1.5 py-2.5">
-                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap ${(o.source||"website")==="website"?"bg-blue-100 text-blue-700":"bg-amber-100 text-amber-700"}`}>
-                                {(o.source||"website")==="website"?"🌐 Web":"📋 FB"}
-                              </span>
-                            </td>
                             <td className="px-1.5 py-2.5">{payBadge(o)}</td>
                             <td className="px-1.5 py-2.5">
                               {o.courier||o.tracking_reference
@@ -2796,7 +2790,7 @@ export default function AdminDashboard() {
                             <td className="pl-1.5 pr-3 py-2.5 text-right font-black text-[#0d2430] whitespace-nowrap">{fmt(o.total)}</td>
                           </tr>);
                         })}
-                        {rows.length===0&&<tr><td colSpan={8} className="py-16 text-center text-sm text-gray-400">No orders found</td></tr>}
+                        {rows.length===0&&<tr><td colSpan={7} className="py-16 text-center text-sm text-gray-400">No orders found</td></tr>}
                       </tbody>
                     </table>
                   </div>
