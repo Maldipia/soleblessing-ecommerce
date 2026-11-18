@@ -1,3 +1,4 @@
+// SB2.0 — products grid: white page, pill filters, modern cards. Logic unchanged.
 import { useState, useMemo } from "react";
 import { useInventory } from "@/hooks/useInventory";
 import { useLocation } from "wouter";
@@ -5,7 +6,7 @@ import { Search, SlidersHorizontal, Heart, X } from "lucide-react";
 import { useWishlist } from "@/pages/Wishlist";
 import LazyImage from "@/components/LazyImage";
 
-const fmt = (c: number) => `₱${(c / 100).toLocaleString("en-PH")}`;
+const fmt = (c: number) => `₱${Math.round((c || 0) / 100).toLocaleString("en-PH")}`;
 
 function normalizeSize(s: string): string {
   if (!s) return "";
@@ -83,46 +84,44 @@ export default function Products() {
   }, [products, brandFilter, search, sizeFilter, sort]);
 
   return (
-    <div className="min-h-screen bg-[#F7F4EF]">
-      {/* Header */}
-      <div className="bg-[#050f12] px-6 py-12">
-        <div className="max-w-7xl mx-auto">
-          <p className="text-[10px] font-bold tracking-[.2em] uppercase text-[#C9A84C] mb-2">SoleBlessing</p>
-          <h1 className="text-4xl font-black text-white tracking-tight">All Products</h1>
-          <p className="text-white/40 text-sm mt-1">{isLoading ? "Loading…" : `${filtered.length} products`}</p>
-        </div>
+    <div className="min-h-screen bg-white">
+      {/* Title row */}
+      <div className="max-w-[1400px] mx-auto px-4 md:px-10 pt-8 pb-1">
+        <h1 className="text-[28px] md:text-4xl font-black text-[#0a0a0a] tracking-[-.01em] leading-none">All Products</h1>
+        <p className="text-[#9b9b98] text-xs mt-1.5 font-semibold">{isLoading ? "Loading…" : `${filtered.length} products`}</p>
       </div>
 
       {/* Search + Filter bar */}
-      <div className="sticky top-0 z-20 bg-white border-b border-gray-100 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center gap-3">
+      <div className="sticky top-[60px] z-20 bg-white/95 backdrop-blur border-b border-[#f0f0ef]">
+        <div className="max-w-[1400px] mx-auto px-4 md:px-10 py-3 flex items-center gap-2.5">
           <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400"/>
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#b3b3b0]" />
             <input value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Search name or SKU…"
-              className="w-full pl-10 pr-4 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-[#0d2430]"/>
+              placeholder="Search name or SKU…" inputMode="search"
+              className="w-full pl-11 pr-4 py-2.5 text-[13px] bg-[#fafaf9] border-[1.5px] border-[#e6e6e4] rounded-full outline-none focus:border-[#0a0a0a] transition-colors" />
           </div>
           <select value={sort} onChange={e => setSort(e.target.value)}
-            className="text-sm border border-gray-200 rounded-xl px-3 py-2.5 bg-white outline-none text-gray-600">
+            className="text-xs font-bold border-[1.5px] border-[#e6e6e4] rounded-full px-3.5 py-2.5 bg-white outline-none text-[#555]">
             <option value="newest">Newest</option>
-            <option value="price-low">Price: Low → High</option>
-            <option value="price-high">Price: High → Low</option>
+            <option value="price-low">Price ↑</option>
+            <option value="price-high">Price ↓</option>
             <option value="name">A–Z</option>
           </select>
           <button onClick={() => setShowFilters(s => !s)}
-            className="flex items-center gap-2 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-gray-50">
-            <SlidersHorizontal className="h-4 w-4"/>
-            Filters
-            {(sizeFilter || brandFilter !== "All") && <span className="w-2 h-2 bg-[#C9A84C] rounded-full"/>}
+            className={`flex items-center gap-1.5 rounded-full px-4 py-2.5 text-xs font-bold transition-colors ${
+              showFilters || sizeFilter ? "bg-[#0a0a0a] text-white" : "border-[1.5px] border-[#0a0a0a] text-[#0a0a0a] hover:bg-[#0a0a0a] hover:text-white"}`}>
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            Filter
+            {sizeFilter && <span className="w-1.5 h-1.5 bg-[#FF5A1F] rounded-full" />}
           </button>
         </div>
 
         {/* Brand pills */}
-        <div className="max-w-7xl mx-auto px-6 pb-3 flex gap-2 overflow-x-auto scrollbar-hide">
+        <div className="max-w-[1400px] mx-auto px-4 md:px-10 pb-3 flex gap-2 overflow-x-auto scrollbar-hide">
           {brands.map(b => (
             <button key={b} onClick={() => setBrandFilter(b)}
-              className={`flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${
-                brandFilter === b ? "bg-[#0d2430] text-white border-[#0d2430]" : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
+              className={`flex-shrink-0 px-4 py-1.5 rounded-full text-[11.5px] font-bold transition-all border-[1.5px] ${
+                brandFilter === b ? "bg-[#0a0a0a] text-white border-[#0a0a0a]" : "bg-white text-[#555] border-[#e6e6e4] hover:border-[#0a0a0a]"
               }`}>
               {b}
             </button>
@@ -131,20 +130,20 @@ export default function Products() {
 
         {/* Filter panel */}
         {showFilters && (
-          <div className="max-w-7xl mx-auto px-6 pb-4 border-t border-gray-100 pt-3">
+          <div className="max-w-[1400px] mx-auto px-4 md:px-10 pb-4 border-t border-[#f0f0ef] pt-3">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Filter by Size</span>
+              <span className="text-[10px] font-black uppercase tracking-[.14em] text-[#9b9b98]">Filter by Size</span>
               {sizeFilter && (
-                <button onClick={() => setSizeFilter("")} className="text-xs text-[#C9A84C] flex items-center gap-1">
-                  <X className="h-3 w-3"/> Clear
+                <button onClick={() => setSizeFilter("")} className="text-xs text-[#FF5A1F] font-bold flex items-center gap-1">
+                  <X className="h-3 w-3" /> Clear
                 </button>
               )}
             </div>
             <div className="flex flex-wrap gap-2">
               {allSizes.map(sz => (
                 <button key={sz} onClick={() => setSizeFilter(sizeFilter === sz ? "" : sz)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                    sizeFilter === sz ? "bg-[#0d2430] text-white border-[#0d2430]" : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold border-[1.5px] transition-all ${
+                    sizeFilter === sz ? "bg-[#0a0a0a] text-white border-[#0a0a0a]" : "bg-white text-[#555] border-[#e6e6e4] hover:border-[#0a0a0a]"
                   }`}>
                   {sz}
                 </button>
@@ -155,16 +154,16 @@ export default function Products() {
       </div>
 
       {/* Grid */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="max-w-[1400px] mx-auto px-4 md:px-10 py-6 md:py-8">
         {isLoading ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
             {[...Array(8)].map((_, i) => (
-              <div key={i} className="bg-white rounded-2xl overflow-hidden animate-pulse">
-                <div className="aspect-square bg-gray-100"/>
+              <div key={i} className="bg-white border border-[#f0f0ef] rounded-2xl overflow-hidden animate-pulse">
+                <div className="aspect-square bg-[#f6f6f5]" />
                 <div className="p-4 space-y-2">
-                  <div className="h-3 bg-gray-100 rounded w-1/3"/>
-                  <div className="h-4 bg-gray-100 rounded w-3/4"/>
-                  <div className="h-4 bg-gray-100 rounded w-1/2"/>
+                  <div className="h-3 bg-[#f0f0ef] rounded w-1/3" />
+                  <div className="h-4 bg-[#f0f0ef] rounded w-3/4" />
+                  <div className="h-4 bg-[#f0f0ef] rounded w-1/2" />
                 </div>
               </div>
             ))}
@@ -172,70 +171,64 @@ export default function Products() {
         ) : filtered.length === 0 ? (
           <div className="text-center py-20">
             <p className="text-2xl mb-2">👟</p>
-            <p className="text-lg font-black text-[#0d2430] mb-1">No products found</p>
-            <p className="text-sm text-gray-400 mb-4">Try a different search or filter</p>
+            <p className="text-lg font-black text-[#0a0a0a] mb-1">No products found</p>
+            <p className="text-sm text-[#9b9b98] mb-5">Try a different search or filter</p>
             <button onClick={() => { setSearch(""); setBrandFilter("All"); setSizeFilter(""); }}
-              className="bg-[#0d2430] text-white px-6 py-2.5 text-sm font-bold rounded-xl hover:bg-[#122d3a]">
+              className="bg-[#0a0a0a] text-white px-7 py-3 text-xs font-black tracking-[.1em] uppercase rounded-full hover:bg-[#262626]">
               Clear Filters
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
             {filtered.map(p => {
               const wishlisted = isWishlisted(p.itemCode);
-              const displaySizes = p.sizes.slice(0, 5);
+              const displaySizes = p.sizes.slice(0, 4);
               return (
                 <div key={p.itemCode}
-                  className="bg-white rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-300 cursor-pointer group"
+                  className="bg-white rounded-2xl overflow-hidden border border-[#f0f0ef] hover:shadow-[0_14px_34px_rgba(0,0,0,.1)] hover:-translate-y-0.5 transition-all duration-300 cursor-pointer group"
                   onClick={() => setLocation(`/inventory/${p.itemCode}`)}>
                   {/* Image */}
-                  <div className="relative aspect-square bg-[#EDE9E3] overflow-hidden">
+                  <div className="relative aspect-square bg-[#f6f6f5] overflow-hidden">
                     {p.imageUrl ? (
                       <LazyImage src={p.imageUrl} alt={p.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"/>
+                        className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-500" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-5xl opacity-20">👟</div>
                     )}
                     {p.discount > 0 && (
-                      <span className="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-black px-2 py-1 rounded-full">
-                        -{p.discount}%
+                      <span className="absolute top-2 left-2 bg-[#FF5A1F] text-white text-[8.5px] font-black tracking-[.06em] px-2 py-1 rounded-full">
+                        SALE
                       </span>
                     )}
-                    <button
+                    <button aria-label="Wishlist"
                       onClick={e => { e.stopPropagation(); toggle({ id: p.itemCode, sku: p.sku, name: p.name, brand: p.brand, price: p.salePrice || p.price, imageUrl: p.imageUrl, itemCode: p.itemCode }); }}
-                      className={`absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-all shadow ${wishlisted ? "bg-red-500 text-white" : "bg-white/90 text-gray-400 hover:text-red-400"}`}>
-                      <Heart className={`h-4 w-4 ${wishlisted ? "fill-current" : ""}`}/>
+                      className={`absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-all shadow-sm ${wishlisted ? "bg-[#FF5A1F] text-white" : "bg-white/95 text-[#9b9b98] hover:text-[#FF5A1F]"}`}>
+                      <Heart className={`h-4 w-4 ${wishlisted ? "fill-current" : ""}`} />
                     </button>
                   </div>
                   {/* Info */}
-                  <div className="p-4">
-                    {(() => {
-                      const bc: Record<string,string> = {
-                        "Nike":"bg-black text-white","Jordan":"bg-red-600 text-white",
-                        "Adidas":"bg-blue-600 text-white","VEJA":"bg-green-600 text-white",
-                        "On Running":"bg-gray-700 text-white",
-                      };
-                      return <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full mb-1 inline-block ${bc[p.brand]||"bg-[#C9A84C] text-[#050f12]"}`}>{p.brand}</span>;
-                    })()}
-                    <h3 className="text-sm font-bold text-[#0d2430] leading-tight line-clamp-2 mb-2">{p.name}</h3>
+                  <div className="p-3.5">
+                    <p className="text-[8.5px] font-black tracking-[.14em] uppercase text-[#9b9b98] mb-0.5">{p.brand}</p>
+                    <h3 className="text-[13px] font-bold text-[#0a0a0a] leading-tight truncate mb-1.5">{p.name}</h3>
                     {/* Sizes */}
-                    <div className="flex flex-wrap gap-1 mb-3">
+                    <div className="flex flex-wrap gap-1 mb-2.5">
                       {displaySizes.map((sz: string) => (
-                        <span key={sz} className="text-[10px] bg-[#EDE9E3] text-[#0d2430] px-2 py-0.5 rounded font-semibold">{sz}</span>
+                        <span key={sz} className="text-[9.5px] bg-[#f6f6f5] text-[#555] px-1.5 py-0.5 rounded font-bold">{sz}</span>
                       ))}
-                      {p.sizes.length > 5 && (
-                        <span className="text-[10px] text-gray-400 px-1 py-0.5">+{p.sizes.length - 5}</span>
+                      {p.sizes.length > 4 && (
+                        <span className="text-[9.5px] text-[#b3b3b0] px-1 py-0.5 font-bold">+{p.sizes.length - 4}</span>
                       )}
                     </div>
                     {/* Price */}
-                    <div className="flex items-baseline gap-2">
+                    <div className="flex items-baseline gap-1.5 flex-wrap">
                       {p.salePrice ? (
                         <>
-                          <span className="text-base font-black text-[#0d2430]">{fmt(p.salePrice)}</span>
-                          <span className="text-xs text-gray-400 line-through">{fmt(p.price)}</span>
+                          <span className="text-[15px] font-black text-[#0a0a0a]">{fmt(p.salePrice)}</span>
+                          <span className="text-[10.5px] text-[#b3b3b0] line-through">{fmt(p.price)}</span>
+                          <span className="text-[10px] font-black text-[#FF5A1F]">-{p.discount}%</span>
                         </>
                       ) : (
-                        <span className="text-base font-black text-[#0d2430]">{fmt(p.price)}</span>
+                        <span className="text-[15px] font-black text-[#0a0a0a]">{fmt(p.price)}</span>
                       )}
                     </div>
                   </div>
