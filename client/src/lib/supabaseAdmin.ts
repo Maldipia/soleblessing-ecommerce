@@ -1,18 +1,27 @@
 // sbAdmin — same interface as `sb`, but routes privileged operations through the
-// password-gated /api/admin endpoint (service role server-side). The password is
-// captured at login (verified server-side) and held in sessionStorage.
+// credential-gated /api/admin endpoint (service role server-side).
+//
+// P1 session hardening: login now returns a SIGNED 7-DAY SESSION TOKEN, and that
+// token — not the password — is what the browser stores and sends. Sessions from
+// before this change still have the old stored password; it keeps working as a
+// fallback until their next login, which upgrades them to a token.
 const PW_KEY = 'sb_admin_pw';
-// Phones kill browser tabs constantly (camera app, backgrounding), wiping
-// sessionStorage and forcing a re-login loop. The credential therefore lives in
-// localStorage (cleared only by explicit Logout); sessionStorage is a fallback
-// for sessions created before this change.
+const TOKEN_KEY = 'sb_admin_token';
 const getPw = () => { try { return localStorage.getItem(PW_KEY) || sessionStorage.getItem(PW_KEY) || ''; } catch { return ''; } };
+const getToken = () => { try { return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; } };
+
+// Credential fields for any admin-gated API body: token when we have one,
+// legacy password otherwise. Spread it: { ...adminCred(), ...rest }
+export const adminCred = (): Record<string, string> => {
+  const t = getToken();
+  return t ? { token: t } : { password: getPw() };
+};
 
 async function call(op: string, table: string, query = '', data?: object) {
   const res = await fetch('/api/admin', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password: getPw(), op, table, query, data }),
+    body: JSON.stringify({ ...adminCred(), op, table, query, data }),
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
@@ -30,12 +39,17 @@ export const sbAdmin = {
       if (!res.ok) return false;
       const out = await res.json().catch(() => ({} as any));
       try {
-        localStorage.setItem(PW_KEY, password);
-        localStorage.setItem('sb_admin_role', out.role || 'OWNER');
-        localStorage.setItem('sb_admin_color', out.color || '#C9A84C');
-        sessionStorage.setItem(PW_KEY, password);
-        sessionStorage.setItem('sb_admin_role', out.role || 'OWNER');
-        sessionStorage.setItem('sb_admin_color', out.color || '#C9A84C');
+        // P1: store the session token, NOT the password. Clear any password a
+        // previous version of the app left behind.
+        for (const st of [localStorage, sessionStorage]) {
+          if (out.token) st.setItem(TOKEN_KEY, out.token);
+          st.removeItem(PW_KEY);
+          st.setItem('sb_admin_role', out.role || 'OWNER');
+          st.setItem('sb_admin_color', out.color || '#C9A84C');
+        }
+        // Legacy server without token support: fall back to the old behavior
+        // so login never bricks mid-deploy.
+        if (!out.token) { localStorage.setItem(PW_KEY, password); sessionStorage.setItem(PW_KEY, password); }
       } catch {}
       return true;
     } catch { return false; }

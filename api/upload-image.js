@@ -1,6 +1,8 @@
 // Product photo upload — gated by ADMIN_PASSWORD. Stores in the product-images
 // bucket keyed by item_code and upserts product_image_cache so the exact product
 // row shows the exact photo. Service key never reaches the browser.
+import { verifyCredential, isOwnerOrManager, cors } from '../server/auth.js';
+
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://akualfrqzaierqsfcnkp.supabase.co';
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
@@ -8,9 +10,7 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 export const config = { api: { bodyParser: { sizeLimit: '6mb' } } };
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
+  cors(req, res);
   res.setHeader('Cache-Control', 'no-store');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
@@ -23,19 +23,8 @@ export default async function handler(req, res) {
   // Canonical code: uppercase, whitespace stripped — photo lands on the exact item
   const item_code = String((body || {}).item_code || '').replace(/\s+/g, '').toUpperCase();
 
-  let authed = password === ADMIN_PASSWORD;
-  if (!authed && password) {
-    // Staff PINs may attach box photos (part of the scanner flow)
-    try {
-      const sres = await fetch(`${SUPABASE_URL}/rest/v1/sb_settings?key=eq.staff_admins&select=value`, {
-        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
-      });
-      const [row] = sres.ok ? await sres.json() : [];
-      const list = row ? JSON.parse(row.value || '[]') : [];
-      authed = !!list.find(s => s && s.active !== false && String(s.pin) === String(password));
-    } catch {}
-  }
-  if (!authed) return res.status(401).json({ error: 'unauthorized' });
+  const cred = await verifyCredential({ password, token: body && body.token });
+  if (!(cred)) return res.status(401).json({ error: 'unauthorized' });
   if (!item_code || !/^[A-Z0-9_-]{1,32}$/.test(item_code)) return res.status(400).json({ error: 'bad item_code' });
   if (!base64) return res.status(400).json({ error: 'missing image data' });
   if (!/^image\/(jpeg|png|webp)$/.test(content_type)) return res.status(400).json({ error: 'jpeg/png/webp only' });

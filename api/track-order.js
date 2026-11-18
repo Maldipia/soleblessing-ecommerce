@@ -10,6 +10,8 @@
 //  - Per-IP rate limit (in-memory, per serverless instance): 30 lookups / 10 min,
 //    then a 10-min cooldown — throttles order-number enumeration while staying
 //    invisible to a customer checking their own order a handful of times.
+import { cors } from '../server/auth.js';
+
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://akualfrqzaierqsfcnkp.supabase.co';
 const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
@@ -44,7 +46,7 @@ const ipOf = (req) =>
   req.socket?.remoteAddress || 'unknown';
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  cors(req, res);
   res.setHeader('Cache-Control', 'no-store');
   const retry = limited(ipOf(req));
   if (retry) {

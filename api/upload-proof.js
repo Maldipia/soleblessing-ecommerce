@@ -1,5 +1,7 @@
 // Public payment-proof upload. Validates the order exists, stores the file in the
 // payment-proofs bucket, links it on the order, marks payment_status=submitted.
+import { cors, logOrderEvent } from '../server/auth.js';
+
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://akualfrqzaierqsfcnkp.supabase.co';
 const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const H = { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' };
@@ -7,9 +9,7 @@ const H = { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Conten
 export const config = { api: { bodyParser: { sizeLimit: '7mb' } } };
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
+  cors(req, res);
   res.setHeader('Cache-Control', 'no-store');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
@@ -48,6 +48,10 @@ export default async function handler(req, res) {
       body: JSON.stringify({ payment_proof_url: url, payment_status: 'submitted', payment_reference: referenceNumber || null, updated_at: new Date().toISOString() }),
     });
     if (!patch.ok) return res.status(502).json({ error: await patch.text() });
+
+    // P1 audit trail: proof submission entry (no proof URL in the log payload)
+    logOrderEvent({ order_number: orderNo, actor: 'customer', action: 'payment_proof_submitted',
+      new_value: { reference: referenceNumber || null, method: paymentMethod || null } });
 
     return res.status(200).json({ ok: true, url, note });
   } catch (e) {

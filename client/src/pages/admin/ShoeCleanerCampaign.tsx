@@ -4,11 +4,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-const getPw = () => { try { return localStorage.getItem("sb_admin_pw") || sessionStorage.getItem("sb_admin_pw") || ""; } catch { return ""; } };
+import { adminCred } from "@/lib/supabaseAdmin";
 async function api(op: string, extra: Record<string, any> = {}) {
   const r = await fetch("/api/shoe-cleaner", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ op, password: getPw(), ...extra }),
+    body: JSON.stringify({ op, ...adminCred(), ...extra }),
   });
   const out = await r.json().catch(() => ({}));
   if (r.status === 401 || r.status === 403) throw new Error(out.error || "Not allowed");

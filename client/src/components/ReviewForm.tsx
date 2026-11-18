@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { sb } from "@/lib/supabase";
 import { StarRating } from "./StarRating";
 import { toast } from "sonner";
 import { Send } from "lucide-react";
@@ -26,15 +25,15 @@ export function ReviewForm({ sku, itemCode, onSuccess }: ReviewFormProps) {
 
     setSubmitting(true);
     try {
-      await sb.insert("sb_reviews", {
-        sku,
-        item_code: itemCode || null,
-        customer_name: name.trim(),
-        rating,
-        comment: comment.trim(),
-        size_purchased: size.trim() || null,
-        status: "published",
+      // P2: reviews go through the validated, rate-limited API now
+      const r = await fetch("/api/submit-review", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sku, item_code: itemCode || null, customer_name: name.trim(),
+          rating, comment: comment.trim(), size_purchased: size.trim() || null,
+        }),
       });
+      if (!r.ok) throw new Error((await r.json().catch(() => null))?.error || "submit failed");
       toast.success("Review submitted! Thank you 🙏");
       setSubmitted(true);
       setRating(0); setName(""); setComment(""); setSize("");

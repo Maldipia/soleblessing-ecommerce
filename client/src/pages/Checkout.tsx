@@ -151,9 +151,14 @@ export default function Checkout() {
         throw new Error("place-order failed");
       }
 
+      // P1: the server may detect a duplicate checkout (double-click / retry)
+      // and hand back the order that already exists — use ITS order number.
+      const placed = await placeRes.json().catch(() => ({} as any));
+      const finalOrderNumber = placed?.order?.order_number || orderNumber;
+
       clearCart();
       sessionStorage.setItem("sb_last_order", JSON.stringify({
-        orderNumber, total: grandTotal, discount, promoCode: promoApplied?.code || null,
+        orderNumber: finalOrderNumber, total: grandTotal, discount, promoCode: promoApplied?.code || null,
         paymentMethod: form.paymentMethod, customerName: form.customerName,
         contactNumber: form.contactNumber, items: orderItems,
       }));

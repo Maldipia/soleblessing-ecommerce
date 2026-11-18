@@ -1,5 +1,7 @@
 // Admin-gated: OCR a shipping receipt via NSB SYSTEM (Drive OCR), then match
 // the receiver against open orders. Returns parsed fields + ranked candidates.
+import { verifyCredential, isOwnerOrManager, cors } from '../server/auth.js';
+
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://akualfrqzaierqsfcnkp.supabase.co';
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
@@ -8,9 +10,7 @@ const GAS_HOOK = process.env.GAS_ORDER_WEBHOOK || '';
 export const config = { api: { bodyParser: { sizeLimit: '7mb' } } };
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
+  cors(req, res);
   res.setHeader('Cache-Control', 'no-store');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
@@ -19,20 +19,8 @@ export default async function handler(req, res) {
   let body = req.body;
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }
   const { password, fileBase64, mimeType = 'image/jpeg' } = body || {};
-  let authed = password === ADMIN_PASSWORD;
-  // Manager PIN (sb_settings.staff_admins entry with role:'manager') may also
-  // process orders: generate/send invoices and parse shipping receipts.
-  if (!authed && password) {
-    try {
-      const sres = await fetch(`${SUPABASE_URL}/rest/v1/sb_settings?key=eq.staff_admins&select=value`, {
-        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
-      });
-      const [row] = sres.ok ? await sres.json() : [];
-      const list = row ? JSON.parse(row.value || '[]') : [];
-      authed = !!list.find(s => s && s.active !== false && s.role === 'manager' && String(s.pin) === String(password));
-    } catch {}
-  }
-  if (!authed) return res.status(401).json({ error: 'unauthorized' });
+  const cred = await verifyCredential({ password, token: body && body.token });
+  if (!isOwnerOrManager(cred)) return res.status(401).json({ error: 'unauthorized' });
   if (!fileBase64) return res.status(400).json({ error: 'missing file' });
   if (!/^image\/(jpeg|png|webp)$/.test(mimeType)) return res.status(400).json({ error: 'jpeg/png/webp only' });
 

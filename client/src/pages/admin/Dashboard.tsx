@@ -1,5 +1,5 @@
 import { trpc } from "@/lib/trpc";
-import { sbAdmin as sb } from "@/lib/supabaseAdmin";
+import { sbAdmin as sb, adminCred } from "@/lib/supabaseAdmin";
 import { useLocation } from "wouter";
 import { useState, useMemo, useEffect, useRef } from "react";
 
@@ -121,13 +121,13 @@ function useAdminAuth() {
       // credential lives in sessionStorage (does NOT). When they drift apart the panel
       // looks logged in while every privileged write returns {"error":"unauthorized"}.
       // Force a clean re-login instead of letting saves fail silently.
-      const hasPw = !!(localStorage.getItem(PW_KEY) || sessionStorage.getItem(PW_KEY));
+      const hasPw = !!(localStorage.getItem("sb_admin_token") || sessionStorage.getItem("sb_admin_token") || localStorage.getItem(PW_KEY) || sessionStorage.getItem(PW_KEY));
       if (flagged && !hasPw) { localStorage.removeItem(ADMIN_KEY); return false; }
       return flagged;
     } catch { return false; }
   });
   const logout = () => {
-    try { localStorage.removeItem(ADMIN_KEY); for (const st of [localStorage, sessionStorage]) { st.removeItem(PW_KEY); st.removeItem("sb_admin_role"); st.removeItem("sb_admin_color"); } } catch {}
+    try { localStorage.removeItem(ADMIN_KEY); for (const st of [localStorage, sessionStorage]) { st.removeItem(PW_KEY); st.removeItem("sb_admin_token"); st.removeItem("sb_admin_role"); st.removeItem("sb_admin_color"); } } catch {}
     window.location.reload();
   };
   return { isAdmin, logout };
@@ -1359,11 +1359,11 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
       // 1st choice: Google OCR through NSB SYSTEM (reads warehouse photos the
       // browser engine can't). Falls back to on-device OCR if unavailable.
       let gasText="",gasWhy="";
-      const pw=(()=>{try{return localStorage.getItem("sb_admin_pw")||sessionStorage.getItem("sb_admin_pw")||""}catch{return ""}})();
+      
       for(let att=0;att<2&&!gasText;att++){ // GAS cold starts throw one-off errors — retry once
         try{
           const gr=await fetch("/api/ocr-label",{method:"POST",headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({password:pw,base64:shotUrl.split(",")[1],mimeType:"image/jpeg"})});
+            body:JSON.stringify({...adminCred(),base64:shotUrl.split(",")[1],mimeType:"image/jpeg"})});
           const go=await gr.json().catch(()=>({} as any));
           if(gr.ok&&go.text&&String(go.text).trim().length>8) gasText=String(go.text);
           else gasWhy=`HTTP ${gr.status}${go&&go.error?" · "+String(go.error).slice(0,80):""}`;
@@ -1507,9 +1507,9 @@ function ScanBoxModal({existingCodes,allRows,nextCode,onClose,onSaved}:{existing
       // photo upload is best-effort
       if(photo){
         try{
-          const pw=(()=>{try{return localStorage.getItem("sb_admin_pw")||sessionStorage.getItem("sb_admin_pw")||""}catch{return ""}})();
+          
           await fetch("/api/upload-image",{method:"POST",headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({password:pw,item_code:codeNorm,sku:f.sku.trim(),content_type:"image/jpeg",base64:photo.split(",")[1]})});
+            body:JSON.stringify({...adminCred(),item_code:codeNorm,sku:f.sku.trim(),content_type:"image/jpeg",base64:photo.split(",")[1]})});
         }catch{}
       }
       toast.success(claim?`${codeNorm} claimed from old inventory — now in the scan file`:`${codeNorm} saved — ${name}`);
@@ -1868,8 +1868,15 @@ export default function AdminDashboard() {
   const [editOrder,setEditOrder]=useState<any>(null);
   const [delArm,setDelArm]=useState(false);
   const [orderScan,setOrderScan]=useState<any>(null); // per-order receipt scan result
+  const [orderLog,setOrderLog]=useState<any[]>([]);   // P1 audit trail for the selected order
   useEffect(()=>{setOrdPage(0);},[orderFilter,channelFilter,orderSearch]);
-  useEffect(()=>{setDelArm(false);setOrderScan(null);},[selOrderId]);
+  useEffect(()=>{setDelArm(false);setOrderScan(null);setOrderLog([]);
+    if(!selOrderId) return;
+    const o=sbOrders.find(x=>String(x.id)===selOrderId);
+    if(!o) return;
+    sb.select("sb_order_log",`order_number=eq.${encodeURIComponent(o.order_number)}&order=created_at.desc&limit=15`)
+      .then(rows=>setOrderLog(Array.isArray(rows)?rows:[])).catch(()=>{});
+  },[selOrderId]);
   useEffect(()=>{setOrdersShown(25);},[orderFilter,channelFilter,orderSearch]);
   const filteredOrders = useMemo(()=>{
     const q=orderSearch.trim().toLowerCase();
@@ -2129,9 +2136,9 @@ export default function AdminDashboard() {
     setUploadingRow(p.itemCode);
     try{
       const base64:string = await new Promise((ok,err)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(",")[1]);r.onerror=()=>err(new Error("read failed"));r.readAsDataURL(file);});
-      const pw = (()=>{try{return localStorage.getItem(PW_KEY)||sessionStorage.getItem(PW_KEY)||""}catch{return ""}})();
+      
       const res = await fetch("/api/upload-image",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({password:pw,item_code:p.itemCode,sku:p.sku||"",content_type:file.type,base64})});
+        body:JSON.stringify({...adminCred(),item_code:p.itemCode,sku:p.sku||"",content_type:file.type,base64})});
       const out = await res.json().catch(()=>({}));
       if(!res.ok) throw new Error(out.error||"upload failed");
       toast.success("Photo linked to "+p.itemCode);
@@ -2176,6 +2183,7 @@ export default function AdminDashboard() {
   const updateOrderStatus = async (id:string,status:string) => {
     await sb.update("sb_orders",`id=eq.${id}`,{status,updated_at:new Date().toISOString()});
     toast.success("Order updated"); loadOrders(); refetchInv();
+    if(status==="shipped"){ const o=sbOrders.find(x=>String(x.id)===String(id)); if(o) sendShippedEmail(o); }
   };
   const [shipEdit,setShipEdit]=useState<Record<string,{courier?:string;tracking_reference?:string}>>({});
   const saveFulfillment = async (o:any) => {
@@ -2197,9 +2205,9 @@ export default function AdminDashboard() {
     if(regenerate && !confirm("Create a new invoice for "+o.order_number+"? The link on the order (and column O in the sheet) will point to the new one.")) return;
     setInvBusy(o.id);
     try{
-      const pw=(()=>{try{return localStorage.getItem("sb_admin_pw")||sessionStorage.getItem("sb_admin_pw")||""}catch{return ""}})();
+      
       const r=await fetch("/api/generate-invoice",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({password:pw,order_number:o.order_number})});
+        body:JSON.stringify({...adminCred(),order_number:o.order_number})});
       const out=await r.json().catch(()=>({} as any));
       if(!r.ok) throw new Error(out.error||"Invoice generation failed");
       toast.success(regenerate?"New invoice created — link updated":"Invoice created — link saved on the order");
@@ -2213,9 +2221,9 @@ export default function AdminDashboard() {
     if(resend && !confirm("Email the invoice to "+o.customer_email+" again?")) return;
     setSendBusy(o.id);
     try{
-      const pw=(()=>{try{return localStorage.getItem("sb_admin_pw")||sessionStorage.getItem("sb_admin_pw")||""}catch{return ""}})();
+      
       const r=await fetch("/api/send-invoice",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({password:pw,order_number:o.order_number})});
+        body:JSON.stringify({...adminCred(),order_number:o.order_number})});
       const out=await r.json().catch(()=>({} as any));
       if(!r.ok) throw new Error(out.error||"Send failed");
       toast.success("Invoice emailed to "+(out.email||o.customer_email));
@@ -2231,9 +2239,9 @@ export default function AdminDashboard() {
     setReceiptBusy(true); setReceiptScan(null);
     try{
       const base64:string = await new Promise((ok,err)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(",")[1]);r.onerror=()=>err(new Error("read failed"));r.readAsDataURL(file);});
-      const pw=(()=>{try{return localStorage.getItem("sb_admin_pw")||sessionStorage.getItem("sb_admin_pw")||""}catch{return ""}})();
+      
       const res=await fetch("/api/parse-shipping-receipt",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({password:pw,fileBase64:base64,mimeType:file.type})});
+        body:JSON.stringify({...adminCred(),fileBase64:base64,mimeType:file.type})});
       const out=await res.json().catch(()=>({} as any));
       if(!res.ok) throw new Error(out.error||"Scan failed");
       setReceiptScan({...out, chosen: out.match?.order_number || out.candidates?.[0]?.order_number || ""});
@@ -2262,9 +2270,9 @@ export default function AdminDashboard() {
     setReceiptBusy(true);
     try{
       const base64:string = await new Promise((ok,err)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(",")[1]);r.onerror=()=>err(new Error("read failed"));r.readAsDataURL(file);});
-      const pw=(()=>{try{return localStorage.getItem("sb_admin_pw")||sessionStorage.getItem("sb_admin_pw")||""}catch{return ""}})();
+      
       const res=await fetch("/api/parse-shipping-receipt",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({password:pw,fileBase64:base64,mimeType:file.type})});
+        body:JSON.stringify({...adminCred(),fileBase64:base64,mimeType:file.type})});
       const out=await res.json().catch(()=>({} as any));
       if(!res.ok) throw new Error(out.error||"Scan failed");
       setOrderScan({forId:String(o.id),courier:out.courier||"",tracking:out.tracking||"",receipt_url:out.receipt_url||"",ts:Date.now()});
@@ -2276,6 +2284,16 @@ export default function AdminDashboard() {
     }catch(e:any){toast.error(e.message||"Scan failed");}
     finally{setReceiptBusy(false);}
   };
+  // best-effort: email the customer their tracking when an order ships
+  // (gated server-side on the GAS email patch, same as the other emails)
+  const sendShippedEmail = async (o:any) => {
+    if(!o?.customer_email) return;
+    try{
+      const r=await fetch("/api/send-order-email",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({...adminCred(),order_number:o.order_number,type:"shipped"})});
+      if(r.ok) toast.success("Tracking emailed to "+o.customer_email);
+    }catch{}
+  };
   const saveShipAndMarkShipped = async (o:any) => {
     const se=shipEdit[o.id]||{};
     const courier=(se.courier??o.courier??"").trim();
@@ -2286,6 +2304,7 @@ export default function AdminDashboard() {
       await sb.update("sb_orders",`id=eq.${o.id}`,payload);
       toast.success(`${o.order_number} — tracking saved, marked shipped`);
       setOrderScan(null); loadOrders();
+      sendShippedEmail({...o,courier,tracking_reference:track});
     }catch(e:any){toast.error("Save failed: "+(e?.message||String(e)).slice(0,120));}
   };
 
@@ -2320,13 +2339,13 @@ export default function AdminDashboard() {
       if(ps==="verified" && o.customer_email && !o.invoice_sent_at){
         try{
           if(!o.invoice_url) await generateInvoice(o);
-          const pw=(()=>{try{return localStorage.getItem("sb_admin_pw")||sessionStorage.getItem("sb_admin_pw")||""}catch{return ""}})();
+          
           // branded "payment confirmed" email (photos + totals), logged in sb_email_log
           let r=await fetch("/api/send-order-email",{method:"POST",headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({password:pw,order_number:o.order_number,type:"payment_verified"})});
+            body:JSON.stringify({...adminCred(),order_number:o.order_number,type:"payment_verified"})});
           if(!r.ok){ // fall back to the legacy invoice email until the GAS patch lands
             r=await fetch("/api/send-invoice",{method:"POST",headers:{"Content-Type":"application/json"},
-              body:JSON.stringify({password:pw,order_number:o.order_number})});
+              body:JSON.stringify({...adminCred(),order_number:o.order_number})});
           }
           if(r.ok){toast.success("Confirmation emailed to "+o.customer_email);loadOrders();}
           else{const out=await r.json().catch(()=>({} as any));toast.error("Auto-email failed: "+(out.error||"—")+" — use 📧 Send invoice");}
@@ -3288,6 +3307,37 @@ export default function AdminDashboard() {
                           className="w-full bg-emerald-600 text-white py-2.5 mb-3 text-[11px] font-black rounded-lg hover:bg-emerald-700">
                           ✓ Save & Mark Shipped
                         </button>
+                      )}
+                      {/* activity timeline (P1 audit trail) */}
+                      {orderLog.length>0&&(
+                        <div className="border-t border-gray-100 pt-3 mb-3">
+                          <p className="text-[9px] font-black uppercase tracking-[.14em] text-gray-300 mb-2">Activity</p>
+                          <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                            {orderLog.map((l:any)=>{
+                              const nv=l.new_value||{}, ov=l.old_value||{};
+                              let what=l.action;
+                              if(l.action==="create") what=`Order placed · ${fmt(nv.total||0)}`;
+                              else if(l.action==="payment_proof_submitted") what=`Payment proof submitted${nv.reference?` · ref ${nv.reference}`:""}`;
+                              else if(l.action==="duplicate_checkout_blocked") what="Duplicate checkout blocked";
+                              else if(l.action==="delete") what="Order deleted";
+                              else if(l.action==="update"){
+                                const bits:string[]=[];
+                                if("status" in nv) bits.push(`status ${ov.status??"?"} → ${nv.status}`);
+                                if("payment_status" in nv) bits.push(`payment ${ov.payment_status??"?"} → ${nv.payment_status}`);
+                                if("tracking_reference" in nv&&nv.tracking_reference) bits.push(`tracking ${nv.tracking_reference}`);
+                                if("courier" in nv&&nv.courier) bits.push(String(nv.courier));
+                                if(!bits.length) bits.push("details edited");
+                                what=bits.join(" · ");
+                              }
+                              return (
+                                <div key={l.id} className="flex items-start gap-2 text-[10.5px]">
+                                  <span className="text-gray-300 whitespace-nowrap font-mono">{new Date(l.created_at).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}</span>
+                                  <span className="text-[#0d2430] font-semibold flex-1">{what}</span>
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 ${l.actor==="customer"?"bg-blue-50 text-blue-600":"bg-[#C9A84C]/20 text-[#8a6d25]"}`}>{l.actor||"system"}</span>
+                                </div>);
+                            })}
+                          </div>
+                        </div>
                       )}
                       {/* status */}
                       <div className="flex items-center gap-2">

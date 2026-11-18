@@ -4,6 +4,8 @@
 //   payment_verified → sent when admin verifies the payment
 // Sending goes through the GAS webhook's send_html_email action (her Gmail);
 // every attempt is logged to sb_email_log and stamps sb_orders.
+import { verifyCredential, isOwnerOrManager, cors } from '../server/auth.js';
+
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://akualfrqzaierqsfcnkp.supabase.co';
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
@@ -16,15 +18,23 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, m => ({ '&': '&am
 
 function buildHtml(o, type) {
   const verified = type === 'payment_verified';
+  const shipped = type === 'shipped';
   const cod = (o.payment_method || '').toLowerCase() === 'cod';
   const firstName = esc((o.customer_name || 'there').trim().split(/\s+/)[0]);
-  const pill = verified
+  const pill = shipped
+    ? `<span style="background:#6d4fc3;color:#ffffff;font-size:10px;font-weight:bold;padding:4px 12px;border-radius:999px;letter-spacing:.05em">SHIPPED &#128666;</span>`
+    : verified
     ? `<span style="background:#1a7f4e;color:#ffffff;font-size:10px;font-weight:bold;padding:4px 12px;border-radius:999px;letter-spacing:.05em">PAID &#10003;</span>`
     : cod
       ? `<span style="background:#0d2430;color:#ffffff;font-size:10px;font-weight:bold;padding:4px 12px;border-radius:999px;letter-spacing:.05em">COD — PAY ON DELIVERY</span>`
       : `<span style="background:#b7791f;color:#ffffff;font-size:10px;font-weight:bold;padding:4px 12px;border-radius:999px;letter-spacing:.05em">AWAITING PAYMENT</span>`;
-  const heading = verified ? `Salamat, ${firstName}! Payment confirmed.` : `Salamat, ${firstName}! Order received.`;
-  const sub = verified
+  const heading = shipped ? `On the way, ${firstName}! &#128666;` : verified ? `Salamat, ${firstName}! Payment confirmed.` : `Salamat, ${firstName}! Order received.`;
+  const trackLine = shipped && (o.courier || o.tracking_reference)
+    ? `${esc(o.courier || 'Courier')}${o.tracking_reference ? ` — tracking no. <b style="font-family:monospace">${esc(o.tracking_reference)}</b>` : ''}`
+    : '';
+  const sub = shipped
+    ? `Your pairs are with the courier${trackLine ? `: ${trackLine}` : ''}. Keep your phone open for the delivery!`
+    : verified
     ? `Payment verified — your order is being packed. We'll email the tracking number once it ships.`
     : cod
       ? `Your order is in! Pay cash when it arrives — we'll email the tracking number once it ships.`
@@ -96,9 +106,7 @@ function buildHtml(o, type) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
+  cors(req, res);
   res.setHeader('Cache-Control', 'no-store');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
@@ -108,18 +116,10 @@ export default async function handler(req, res) {
   let body = req.body;
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }
   const { password, order_number, type } = body || {};
-  if (!['order_received', 'payment_verified'].includes(type)) return res.status(400).json({ error: 'type must be order_received or payment_verified' });
+  if (!['order_received', 'payment_verified', 'shipped'].includes(type)) return res.status(400).json({ error: 'type must be order_received, payment_verified or shipped' });
 
-  let authed = password === ADMIN_PASSWORD;
-  if (!authed && password) { // manager PIN may also send
-    try {
-      const sres = await fetch(`${SUPABASE_URL}/rest/v1/sb_settings?key=eq.staff_admins&select=value`, { headers: H });
-      const [row] = sres.ok ? await sres.json() : [];
-      const list = row ? JSON.parse(row.value || '[]') : [];
-      authed = !!list.find(s => s && s.active !== false && s.role === 'manager' && String(s.pin) === String(password));
-    } catch {}
-  }
-  if (!authed) return res.status(401).json({ error: 'unauthorized' });
+  const cred = await verifyCredential({ password, token: body && body.token });
+  if (!isOwnerOrManager(cred)) return res.status(401).json({ error: 'unauthorized' });
   if (!order_number) return res.status(400).json({ error: 'order_number required' });
 
   try {
@@ -135,7 +135,9 @@ export default async function handler(req, res) {
     if (!o) return res.status(404).json({ error: 'order not found' });
     if (!o.customer_email) return res.status(422).json({ error: 'no email on this order' });
 
-    const subject = type === 'payment_verified'
+    const subject = type === 'shipped'
+      ? `Shipped! ${o.courier ? o.courier + ' ' : ''}${o.tracking_reference || ''} — ${o.order_number} · SoleBlessing`
+      : type === 'payment_verified'
       ? `Payment confirmed — ${o.order_number} · SoleBlessing`
       : `Order received — ${o.order_number} · SoleBlessing`;
     const html = buildHtml(o, type);
@@ -155,7 +157,9 @@ export default async function handler(req, res) {
 
     if (!out.success) return res.status(422).json({ error: out.message || 'send failed' });
 
-    const stamp = type === 'payment_verified' ? { invoice_sent_at: new Date().toISOString() } : { confirmation_sent_at: new Date().toISOString() };
+    const stamp = type === 'shipped' ? { tracking_sent_at: new Date().toISOString() }
+      : type === 'payment_verified' ? { invoice_sent_at: new Date().toISOString() }
+      : { confirmation_sent_at: new Date().toISOString() };
     await fetch(`${SUPABASE_URL}/rest/v1/sb_orders?order_number=eq.${encodeURIComponent(order_number)}`, {
       method: 'PATCH', headers: H, body: JSON.stringify({ ...stamp, updated_at: new Date().toISOString() }),
     }).catch(() => {});

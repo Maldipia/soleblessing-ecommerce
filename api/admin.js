@@ -1,6 +1,7 @@
 // Privileged admin endpoint — uses the Supabase SERVICE ROLE key (bypasses RLS),
-// gated by ADMIN_PASSWORD. The service key NEVER reaches the browser.
-import { timingSafeEqual } from 'node:crypto';
+// gated by ADMIN_PASSWORD / staff PIN at login, then by a signed 7-day session
+// token (P1: the browser no longer stores the password).
+import { verifyCredential, makeToken, cors, logOrderEvent } from '../server/auth.js';
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://akualfrqzaierqsfcnkp.supabase.co';
 const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -37,15 +38,6 @@ function memState(ip) {
   return e;
 }
 
-// Constant-time string compare (pads to equal length so length isn't leaked
-// through timingSafeEqual's length requirement).
-function safeEq(a, b) {
-  const max = Math.max(Buffer.byteLength(a), Buffer.byteLength(b), 1);
-  const ba = Buffer.alloc(max), bb = Buffer.alloc(max);
-  ba.write(String(a)); bb.write(String(b));
-  return timingSafeEqual(ba, bb) && a.length === b.length;
-}
-
 const H_SVC = () => ({ apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' });
 
 // Best-effort: an unreachable log table must never take the admin down.
@@ -79,13 +71,11 @@ function reject429(res, lockUntil) {
 const ALLOWED = new Set([
   'sb_orders','sb_products','sb_promos','sb_settings','sb_reviews',
   'sb_promo_uses','sb_loyalty','sb_loyalty_transactions','sb_wishlist_log','sb_inventory',
-  'sync_log','sb_deleted_orders','sb_customers',
+  'sync_log','sb_deleted_orders','sb_customers','sb_order_log',
 ]);
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
+  cors(req, res);
   res.setHeader('Cache-Control', 'no-store');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST')   return res.status(405).json({ error: 'POST only' });
@@ -94,45 +84,39 @@ export default async function handler(req, res) {
 
   let body = req.body;
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }
-  const { password, op, table, query = '', data } = body || {};
+  const { password, token, op, table, query = '', data } = body || {};
 
   // ── P0.1: reject locked-out IPs before any credential check ──
   const ip = ipOf(req);
   const rl = memState(ip);
   if (rl.lockUntil > Date.now()) return reject429(res, rl.lockUntil);
 
-  // Staff admins (SA01…): scanner-only accounts defined in sb_settings.staff_admins.
-  // Each staff PIN can ONLY read + add inventory; added_by is stamped SERVER-SIDE
-  // from the authenticated PIN, so accountability can't be spoofed from the client.
-  let staff = null;
-  const isOwner = ADMIN_PASSWORD && safeEq(String(password ?? ''), ADMIN_PASSWORD);
-  if (!isOwner) {
-    try {
-      const sres = await fetch(`${SUPABASE_URL}/rest/v1/sb_settings?key=eq.staff_admins&select=value`, {
-        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
-      });
-      const [row] = sres.ok ? await sres.json() : [];
-      const list = row ? JSON.parse(row.value || '[]') : [];
-      staff = list.find(s => s && s.active !== false && String(s.pin) === String(password)) || null;
-    } catch { staff = null; }
-    if (!staff) {
-      // failed authentication: record it, count it, lock the IP if over limits
-      rl.fails.push(Date.now());
-      await logAuthEvent(ip, false, null, op);
-      const dbFails = rl.fails.length >= MEM_MAX_FAILS ? DB_MAX_FAILS : await recentDbFails(ip);
-      if (rl.fails.length >= MEM_MAX_FAILS || dbFails >= DB_MAX_FAILS) {
-        rl.lockUntil = Date.now() + LOCK_MS;
-        return reject429(res, rl.lockUntil);
-      }
-      return res.status(401).json({ error: 'unauthorized' });
+  // Credential check: session token (preferred) or password/PIN (login + legacy).
+  // Staff perms stay least-privilege; added_by is stamped SERVER-SIDE below.
+  const cred = await verifyCredential({ password, token });
+  const staff = cred?.kind === 'staff' ? cred.staff : null;
+  if (!cred) {
+    // failed authentication: record it, count it, lock the IP if over limits
+    rl.fails.push(Date.now());
+    await logAuthEvent(ip, false, null, op);
+    const dbFails = rl.fails.length >= MEM_MAX_FAILS ? DB_MAX_FAILS : await recentDbFails(ip);
+    if (rl.fails.length >= MEM_MAX_FAILS || dbFails >= DB_MAX_FAILS) {
+      rl.lockUntil = Date.now() + LOCK_MS;
+      return reject429(res, rl.lockUntil);
     }
+    return res.status(401).json({ error: 'unauthorized' });
   }
 
   // successful authentication: clear this IP's failure streak; log logins
   rl.fails = [];
+  const actor = staff ? staff.id : 'OWNER';
   if (op === 'auth') {
-    logAuthEvent(ip, true, staff ? staff.id : 'OWNER', op); // fire-and-forget
-    return res.status(200).json({ ok: true, role: staff ? staff.id : 'OWNER', color: staff ? staff.color : '#C9A84C' });
+    logAuthEvent(ip, true, actor, op); // fire-and-forget
+    return res.status(200).json({
+      ok: true, role: actor, color: staff ? staff.color : '#C9A84C',
+      // P1: signed 7-day session token — the client stores THIS, not the password
+      token: makeToken(actor, staff ? (staff.role || 'staff') : 'OWNER'),
+    });
   }
 
   if (staff) {
@@ -144,6 +128,7 @@ export default async function handler(req, res) {
       sb_orders:    ['select', 'update', 'delete'],
       sb_deleted_orders: ['select', 'insert'],
       sb_customers: ['select', 'insert', 'upsert', 'update', 'delete'],
+      sb_order_log: ['select'],
       sb_products:  ['select'],
       sync_log:     ['select'],
       sb_reviews:   ['select'],
@@ -174,12 +159,35 @@ export default async function handler(req, res) {
     Prefer: op === 'upsert' ? 'resolution=merge-duplicates,return=representation' : 'return=representation',
   };
   try {
+    // P1 audit trail: snapshot order rows BEFORE a mutation so the log carries
+    // old→new values — and a full snapshot on delete (recoverable from the log).
+    let before = null;
+    if (table === 'sb_orders' && (op === 'update' || op === 'delete')) {
+      try {
+        const pre = await fetch(`${SUPABASE_URL}/rest/v1/sb_orders${query ? ('?' + query + '&') : '?'}limit=5`, { headers: H_SVC() });
+        before = pre.ok ? await pre.json() : null;
+      } catch { before = null; }
+    }
+
     const r = await fetch(url, {
       method, headers,
       body: (op === 'insert' || op === 'upsert' || op === 'update') ? JSON.stringify(body.data) : undefined,
     });
     const text = await r.text();
     if (!r.ok) return res.status(r.status).json({ error: text });
+
+    if (Array.isArray(before) && before.length) {
+      const entries = before.map((row) => {
+        if (op === 'delete') {
+          return { order_number: row.order_number, actor, action: 'delete', old_value: row, new_value: null };
+        }
+        const changed = {};
+        for (const k of Object.keys(body.data || {})) if (k !== 'updated_at') changed[k] = row[k];
+        return { order_number: row.order_number, actor, action: 'update', old_value: changed, new_value: Object.fromEntries(Object.entries(body.data || {}).filter(([k]) => k !== 'updated_at')) };
+      });
+      logOrderEvent(entries); // fire-and-forget
+    }
+
     try { return res.status(200).json(JSON.parse(text || '[]')); }
     catch { return res.status(200).json([]); }
   } catch (e) {
