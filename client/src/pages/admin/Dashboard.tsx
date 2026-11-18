@@ -1562,6 +1562,39 @@ export default function AdminDashboard() {
       srp:priced.reduce((t:number,r:any)=>t+(Number(r.srp)||0),0)/100,
       cost:costed.reduce((t:number,r:any)=>t+(Number(r.unit_cost)||0),0)/100};
   },[intakeRows]);
+
+  // Click-to-edit for SRP / Sale / Cost right in the scan table (Pia: "let me edit these 3")
+  const [cellEdit,setCellEdit]=useState<{code:string;field:"srp"|"selling_price"|"unit_cost";val:string}|null>(null);
+  const saveCell=async(ce:{code:string;field:string;val:string}|null)=>{
+    if(!ce)return;
+    const cents=Math.round(Number(String(ce.val).replace(/[^0-9.]/g,""))||0)*100;
+    const row=(intakeRows as any[]).find((r:any)=>r.item_code===ce.code);
+    setCellEdit(null);
+    if(row&&Number(row[ce.field]||0)===cents)return; // unchanged
+    try{
+      await sb.update("sb_inventory",`item_code=eq.${encodeURIComponent(ce.code)}`,{[ce.field]:cents,updated_at:new Date().toISOString()});
+      setIntakeRows((rows:any[])=>rows.map((r:any)=>r.item_code===ce.code?{...r,[ce.field]:cents}:r));
+      toast.success("Saved ₱"+(cents/100).toLocaleString("en-PH"));
+    }catch(e){console.error(e);toast.error("Save failed — try again");}
+  };
+  // rendered as a plain function (not a component) so the input keeps focus across re-renders
+  const priceCell=(r:any,field:"srp"|"selling_price"|"unit_cost",cls:string,display:any)=>{
+    const ed=cellEdit&&cellEdit.code===r.item_code&&cellEdit.field===field;
+    return (
+      <td className={cls+" cursor-pointer"} title="Click to edit"
+        onClick={()=>{if(!ed)setCellEdit({code:r.item_code,field,val:r[field]?String(Math.round(r[field]/100)):""});}}>
+        {ed?<input autoFocus inputMode="numeric"
+            className="w-16 px-1 py-0.5 text-xs font-bold border-2 border-[#C9A84C] rounded outline-none bg-white text-[#0d2430]"
+            value={cellEdit!.val}
+            onChange={e=>setCellEdit({code:r.item_code,field,val:e.target.value})}
+            onKeyDown={e=>{const el=e.currentTarget as HTMLInputElement;
+              if(e.key==="Enter")el.blur();
+              if(e.key==="Escape"){el.dataset.cancel="1";el.blur();}}}
+            onBlur={e=>{if((e.currentTarget as HTMLInputElement).dataset.cancel){setCellEdit(null);return;}saveCell(cellEdit);}}/>
+          :display}
+      </td>
+    );
+  };
   useEffect(()=>{setIntakeShown(50);},[intakeSearch,intakeCond,intakeAll,intakeTab]);
   const intakeCSV=()=>{
     const cols=["item_code","brand","name","sku","size","size_eur","size_cm","barcode","srp","selling_price","unit_cost","status","condition","created_at"];
@@ -2780,12 +2813,15 @@ export default function AdminDashboard() {
                           <td className="px-2 text-xs text-gray-500">{r.size_eur||"—"}</td>
                           <td className="px-2 text-xs text-gray-500">{r.size_cm||"—"}</td>
                           <td className="px-2 font-mono text-[10px] text-gray-400">{r.barcode?("…"+String(r.barcode).slice(-6)):"—"}</td>
-                          {/* yellow = SRP didn't come from the box label (updated from adidas.com etc.) */}
-                          <td className={`px-2 text-xs font-bold ${/srp updated/i.test(r.notes||"")?"bg-yellow-200 text-yellow-900":"bg-[#C9A84C]/[.06]"}`}>{r.srp?((r.srp/100).toLocaleString("en-PH")):"—"}{/srp updated/i.test(r.notes||"")?" ✦":""}</td>
+                          {/* SRP / Sale / Cost — click any to edit in place. yellow ✦ = SRP didn't come from the box label */}
+                          {priceCell(r,"srp",`px-2 text-xs font-bold ${/srp updated/i.test(r.notes||"")?"bg-yellow-200 text-yellow-900":"bg-[#C9A84C]/[.06]"}`,
+                            <>{r.srp?((r.srp/100).toLocaleString("en-PH")):"—"}{/srp updated/i.test(r.notes||"")?" ✦":""}</>)}
                           {/* Sale ₱ = selling_price — the website price, NOT the SRP */}
-                          <td className="px-2 text-xs font-bold bg-green-50/60 text-green-700">{r.selling_price?((r.selling_price/100).toLocaleString("en-PH")):"—"}</td>
+                          {priceCell(r,"selling_price","px-2 text-xs font-bold bg-green-50/60 text-green-700",
+                            <>{r.selling_price?((r.selling_price/100).toLocaleString("en-PH")):"—"}</>)}
                           {/* Cost ₱ = unit_cost — internal only, never sent to the website */}
-                          <td className="px-2 text-xs text-gray-500">{r.unit_cost>0?((r.unit_cost/100).toLocaleString("en-PH")):"0"}</td>
+                          {priceCell(r,"unit_cost","px-2 text-xs text-gray-500",
+                            <>{r.unit_cost>0?((r.unit_cost/100).toLocaleString("en-PH")):"0"}</>)}
                           <td className="px-2"><span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${condCls}`}>{cond}</span>
                             {r.status==="Sold"&&<span className="ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-gray-800 text-white">Sold</span>}</td>
                           <td className="px-2">{r.added_by
