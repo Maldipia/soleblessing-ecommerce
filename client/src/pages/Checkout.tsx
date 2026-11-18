@@ -168,11 +168,11 @@ export default function Checkout() {
   const selectedPayment = paymentMethods.find(m => m.id === form.paymentMethod);
 
   return (
-    <div className="min-h-screen bg-[#F7F4EF]">
+    <div className="min-h-screen bg-white">
       <div className="max-w-4xl mx-auto px-6 md:px-10 py-10">
         <div className="mb-8">
-          <p className="text-[10px] font-bold tracking-[.18em] uppercase text-[#C9A84C] mb-1">Checkout</p>
-          <h1 className="text-4xl font-black text-[#0d2430] tracking-tight">Complete Your Order</h1>
+          <p className="text-[10px] font-bold tracking-[.18em] uppercase text-[#FF5A1F] mb-1">Checkout</p>
+          <h1 className="text-[30px] md:text-4xl font-black text-[#0a0a0a] tracking-[-.01em]">Complete Your Order</h1>
         </div>
 
         {/* Steps */}
@@ -180,9 +180,9 @@ export default function Checkout() {
           {(["info","payment","confirm"] as const).map((s, i) => (
             <div key={s} className="flex items-center gap-2">
               <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
-                step === s ? "bg-[#0d2430] text-white" :
-                (["info","payment","confirm"].indexOf(step) > i) ? "bg-[#C9A84C] text-[#050f12]" :
-                "bg-gray-200 text-gray-500"
+                step === s ? "bg-[#0a0a0a] text-white" :
+                (["info","payment","confirm"].indexOf(step) > i) ? "bg-[#FF5A1F] text-white" :
+                "bg-[#ececeb] text-[#9b9b98]"
               }`}>{i + 1}</div>
               <span className="text-xs font-medium text-gray-500 capitalize hidden sm:block">
                 {s === "info" ? "Your Info" : s === "payment" ? "Payment" : "Review"}
@@ -197,8 +197,8 @@ export default function Checkout() {
 
             {/* STEP 1 */}
             {step === "info" && (
-              <div className="bg-white border border-gray-100 p-6 rounded-xl space-y-5">
-                <h2 className="text-sm font-bold uppercase tracking-wider text-[#0d2430]">Delivery Information</h2>
+              <div className="bg-white border border-[#f0f0ef] p-5 md:p-6 rounded-2xl space-y-5">
+                <h2 className="text-[12px] font-black uppercase tracking-[.12em] text-[#0a0a0a]">Delivery Information</h2>
                 {[
                   { label: "Full Name *", key: "customerName", placeholder: "Juan dela Cruz", type: "text" },
                   { label: "Facebook Name *", key: "facebookName", placeholder: "Your FB name (for order updates)", type: "text" },
@@ -206,23 +206,23 @@ export default function Checkout() {
                   { label: "Email *", key: "customerEmail", placeholder: "email@example.com — your order confirmation goes here", type: "email" },
                 ].map(f => (
                   <div key={f.key}>
-                    <label className="text-xs font-semibold text-gray-500 block mb-1.5">{f.label}</label>
+                    <label className="text-[10.5px] font-black tracking-[.06em] uppercase text-[#6b6b68] block mb-1.5">{f.label}</label>
                     <input type={f.type} value={(form as any)[f.key]} onChange={e => set(f.key, e.target.value)}
                       placeholder={f.placeholder}
-                      className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm outline-none focus:border-[#0d2430] transition-colors" />
+                      className="w-full border-[1.5px] border-[#e6e6e4] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#0a0a0a] transition-colors" />
                   </div>
                 ))}
                 <div>
-                  <label className="text-xs font-semibold text-gray-500 block mb-1.5">Complete Shipping Address *</label>
+                  <label className="text-[10.5px] font-black tracking-[.06em] uppercase text-[#6b6b68] block mb-1.5">Complete Shipping Address *</label>
                   <textarea value={form.shippingAddress} onChange={e => set("shippingAddress", e.target.value)}
                     placeholder="House/Unit No., Street, Barangay, City, Province, ZIP" rows={3}
-                    className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm outline-none focus:border-[#0d2430] resize-none" />
+                    className="w-full border-[1.5px] border-[#e6e6e4] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#0a0a0a] resize-none" />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-gray-500 block mb-1.5">Order Notes (optional)</label>
+                  <label className="text-[10.5px] font-black tracking-[.06em] uppercase text-[#6b6b68] block mb-1.5">Order Notes (optional)</label>
                   <textarea value={form.notes} onChange={e => set("notes", e.target.value)}
                     placeholder="Special instructions, preferred delivery time..." rows={2}
-                    className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm outline-none focus:border-[#0d2430] resize-none" />
+                    className="w-full border-[1.5px] border-[#e6e6e4] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#0a0a0a] resize-none" />
                 </div>
                 {error && <p className="text-red-500 text-xs">{error}</p>}
                 <button onClick={() => {
@@ -240,7 +240,7 @@ export default function Checkout() {
                     setError("Please enter a valid email address."); return;
                   }
                   setError(""); setStep("payment");
-                }} className="w-full bg-[#0d2430] text-white py-3.5 text-sm font-bold tracking-[.1em] uppercase hover:bg-[#122d3a] transition-colors rounded-lg">
+                }} className="w-full bg-[#0a0a0a] text-white py-4 text-xs font-black tracking-[.12em] uppercase hover:bg-[#262626] transition-colors rounded-full">
                   Continue to Payment →
                 </button>
               </div>
@@ -249,21 +249,21 @@ export default function Checkout() {
             {/* STEP 2 */}
             {step === "payment" && (
               <div className="space-y-4">
-                <div className="bg-white border border-gray-100 p-6 rounded-xl space-y-4">
-                  <h2 className="text-sm font-bold uppercase tracking-wider text-[#0d2430]">Select Payment Method</h2>
+                <div className="bg-white border border-[#f0f0ef] p-5 md:p-6 rounded-2xl space-y-4">
+                  <h2 className="text-[12px] font-black uppercase tracking-[.12em] text-[#0a0a0a]">Select Payment Method</h2>
                   <div className="space-y-2">
                     {paymentMethods.map(pm => (
                       <label key={pm.id}
-                        className={`flex items-center gap-4 p-4 border rounded-xl cursor-pointer transition-all ${
-                          form.paymentMethod === pm.id ? "border-[#0d2430] bg-[#0d2430]/[.03]" : "border-gray-200 hover:border-gray-300"
+                        className={`flex items-center gap-4 p-4 border-[1.5px] rounded-2xl cursor-pointer transition-all ${
+                          form.paymentMethod === pm.id ? "border-[#FF5A1F] bg-[#fff7f3] shadow-[0_0_0_3px_rgba(255,90,31,.12)]" : "border-[#e6e6e4] hover:border-[#0a0a0a]"
                         }`}>
                         <input type="radio" name="payment" value={pm.id}
                           checked={form.paymentMethod === pm.id}
                           onChange={() => set("paymentMethod", pm.id)}
-                          className="accent-[#0d2430]" />
+                          className="accent-[#FF5A1F]" />
                         <span className="text-xl">{pm.icon}</span>
                         <div>
-                          <div className="text-sm font-semibold text-[#0d2430]">{pm.label}</div>
+                          <div className="text-sm font-bold text-[#0a0a0a]">{pm.label}</div>
                           {pm.detail && <div className="text-xs text-gray-400 mt-0.5">{pm.detail}</div>}
                         </div>
                       </label>
@@ -279,9 +279,9 @@ export default function Checkout() {
                 </div>
 
                 {/* Promo Code */}
-                <div className="bg-white border border-gray-100 p-6 rounded-xl">
-                  <h3 className="text-sm font-bold uppercase tracking-wider text-[#0d2430] mb-4 flex items-center gap-2">
-                    <Tag className="h-4 w-4 text-[#C9A84C]" /> Promo Code
+                <div className="bg-white border border-[#f0f0ef] p-5 md:p-6 rounded-2xl">
+                  <h3 className="text-[12px] font-black uppercase tracking-[.12em] text-[#0a0a0a] mb-4 flex items-center gap-2">
+                    <Tag className="h-4 w-4 text-[#FF5A1F]" /> Promo Code
                   </h3>
                   {promoApplied ? (
                     <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-xl px-4 py-3">
@@ -307,9 +307,9 @@ export default function Checkout() {
                         <input value={promoCode} onChange={e => { setPromoCode(e.target.value.toUpperCase()); setPromoError(""); }}
                           onKeyDown={e => e.key === "Enter" && applyPromo()}
                           placeholder="Enter promo code"
-                          className="flex-1 border border-gray-200 rounded-lg px-4 py-2.5 text-sm font-mono tracking-widest uppercase outline-none focus:border-[#C9A84C] transition-colors" />
+                          className="flex-1 border-[1.5px] border-[#e6e6e4] rounded-xl px-4 py-3 text-sm font-mono tracking-widest uppercase outline-none focus:border-[#FF5A1F] transition-colors" />
                         <button onClick={applyPromo} disabled={promoChecking || !promoCode}
-                          className="px-5 py-2.5 bg-[#C9A84C] text-[#050f12] text-xs font-bold rounded-lg hover:opacity-90 disabled:opacity-40 whitespace-nowrap">
+                          className="px-5 py-2.5 bg-[#0a0a0a] text-white text-xs font-black rounded-xl hover:bg-[#262626] disabled:opacity-40 whitespace-nowrap">
                           {promoChecking ? "…" : "Apply"}
                         </button>
                       </div>
@@ -319,17 +319,17 @@ export default function Checkout() {
                 </div>
 
                 <div className="flex gap-3">
-                  <button onClick={() => setStep("info")} className="flex-1 border border-gray-200 text-[#0d2430] py-3 text-sm font-semibold hover:bg-gray-50 rounded-lg">← Back</button>
-                  <button onClick={() => setStep("confirm")} className="flex-1 bg-[#0d2430] text-white py-3 text-sm font-bold tracking-[.1em] uppercase hover:bg-[#122d3a] rounded-lg">Review Order →</button>
+                  <button onClick={() => setStep("info")} className="flex-1 border-[1.5px] border-[#0a0a0a] text-[#0a0a0a] py-3.5 text-xs font-black tracking-[.08em] uppercase hover:bg-[#f6f6f5] rounded-full">← Back</button>
+                  <button onClick={() => setStep("confirm")} className="flex-1 bg-[#0a0a0a] text-white py-3.5 text-xs font-black tracking-[.1em] uppercase hover:bg-[#262626] rounded-full">Review Order →</button>
                 </div>
               </div>
             )}
 
             {/* STEP 3 */}
             {step === "confirm" && (
-              <div className="bg-white border border-gray-100 p-6 rounded-xl space-y-5">
-                <h2 className="text-sm font-bold uppercase tracking-wider text-[#0d2430]">Review Your Order</h2>
-                <div className="bg-[#F7F4EF] rounded-xl p-4 space-y-2 text-sm">
+              <div className="bg-white border border-[#f0f0ef] p-5 md:p-6 rounded-2xl space-y-5">
+                <h2 className="text-[12px] font-black uppercase tracking-[.12em] text-[#0a0a0a]">Review Your Order</h2>
+                <div className="bg-[#f6f6f5] rounded-2xl p-4 space-y-2 text-sm">
                   {[
                     ["Name", form.customerName],
                     ...(form.facebookName ? [["FB Name", form.facebookName]] : []),
@@ -360,17 +360,17 @@ export default function Checkout() {
                         <span>−{fmt(discount)}</span>
                       </div>
                     )}
-                    <div className="flex justify-between text-base font-black text-[#0d2430] pt-2 border-t border-gray-200">
-                      <span>Total</span><span className="text-[#C9A84C]">{fmt(grandTotal)}</span>
+                    <div className="flex justify-between text-base font-black text-[#0a0a0a] pt-2 border-t-2 border-[#0a0a0a]">
+                      <span>Total</span><span>{fmt(grandTotal)}</span>
                     </div>
                   </div>
                 </div>
 
                 {error && <p className="text-red-500 text-xs">{error}</p>}
                 <div className="flex gap-3">
-                  <button onClick={() => setStep("payment")} className="flex-1 border border-gray-200 text-[#0d2430] py-3 text-sm font-semibold hover:bg-gray-50 rounded-lg">← Back</button>
+                  <button onClick={() => setStep("payment")} className="flex-1 border-[1.5px] border-[#0a0a0a] text-[#0a0a0a] py-3.5 text-xs font-black tracking-[.08em] uppercase hover:bg-[#f6f6f5] rounded-full">← Back</button>
                   <button onClick={handleSubmit} disabled={submitting}
-                    className="flex-1 bg-[#C9A84C] text-[#050f12] py-3 text-sm font-black tracking-[.1em] uppercase hover:opacity-90 disabled:opacity-50 rounded-lg">
+                    className="flex-1 bg-[#FF5A1F] text-white py-3.5 text-xs font-black tracking-[.12em] uppercase hover:opacity-90 disabled:opacity-50 rounded-full">
                     {submitting ? "Placing Order…" : "Place Order ✓"}
                   </button>
                 </div>
@@ -380,19 +380,19 @@ export default function Checkout() {
 
           {/* Summary sidebar */}
           <div>
-            <div className="bg-white border border-gray-100 p-5 rounded-xl sticky top-24">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[#0d2430] mb-4">Order Summary</h3>
+            <div className="bg-white border border-[#f0f0ef] p-5 rounded-2xl sticky top-24">
+              <h3 className="text-[11px] font-black uppercase tracking-[.12em] text-[#0a0a0a] mb-4">Order Summary</h3>
               <div className="space-y-3 mb-4">
                 {items.map(i => (
                   <div key={`${i.id}-${i.size}`} className="flex gap-3">
-                    <div className="w-12 h-12 bg-[#EDE9E3] flex-shrink-0 overflow-hidden rounded">
+                    <div className="w-12 h-12 bg-[#f6f6f5] flex-shrink-0 overflow-hidden rounded-lg">
                       {i.imageUrl ? <img src={i.imageUrl} alt={i.name} className="w-full h-full object-cover" />
                         : <div className="w-full h-full flex items-center justify-center text-xl opacity-30">👟</div>}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-[#0d2430] truncate">{i.name}</p>
+                      <p className="text-xs font-bold text-[#0a0a0a] truncate">{i.name}</p>
                       <p className="text-[10px] text-gray-400">Size {i.size} · ×{i.qty}</p>
-                      <p className="text-xs font-bold text-[#0d2430]">{fmt(i.price * i.qty)}</p>
+                      <p className="text-xs font-black text-[#0a0a0a]">{fmt(i.price * i.qty)}</p>
                     </div>
                   </div>
                 ))}
@@ -401,8 +401,8 @@ export default function Checkout() {
                 <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>{fmt(total)}</span></div>
                 <div className="flex justify-between text-gray-500"><span>Shipping</span><span>{shipping === 0 ? "FREE" : fmt(shipping)}</span></div>
                 {discount > 0 && <div className="flex justify-between text-green-600 font-semibold"><span>Discount</span><span>−{fmt(discount)}</span></div>}
-                <div className="flex justify-between text-sm font-black text-[#0d2430] pt-1.5 border-t border-gray-100">
-                  <span>Total</span><span className="text-[#C9A84C]">{fmt(grandTotal)}</span>
+                <div className="flex justify-between text-sm font-black text-[#0a0a0a] pt-1.5 border-t-2 border-[#0a0a0a]">
+                  <span>Total</span><span>{fmt(grandTotal)}</span>
                 </div>
               </div>
               {promoApplied && (
