@@ -2724,7 +2724,6 @@ export default function AdminDashboard() {
                           <th className="px-1.5 py-3">Payment</th>
                           <th className="px-1.5 py-3">Proof</th>
                           <th className="px-1.5 py-3">Shipping</th>
-                          <th className="px-1.5 py-3">Status</th>
                           <th className="pl-1.5 pr-3 py-3 text-right">Total</th>
                         </tr>
                       </thead>
@@ -2759,11 +2758,10 @@ export default function AdminDashboard() {
                                 ? <div className="whitespace-nowrap"><span className="font-bold text-[#0d2430]">{o.courier||"—"}</span><div className="text-[10px] text-gray-400 font-mono max-w-[90px] truncate">{o.tracking_reference||""}</div></div>
                                 : <span className="text-gray-300">—</span>}
                             </td>
-                            <td className="px-1.5 py-2.5"><span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap ${STATUS_COLOR[o.status]||"bg-gray-100 text-gray-600"}`}>{TAB_LABEL[o.status]||o.status}</span></td>
                             <td className="pl-1.5 pr-3 py-2.5 text-right font-black text-[#0d2430] whitespace-nowrap">{fmt(o.total)}</td>
                           </tr>);
                         })}
-                        {rows.length===0&&<tr><td colSpan={8} className="py-16 text-center text-sm text-gray-400">No orders found</td></tr>}
+                        {rows.length===0&&<tr><td colSpan={7} className="py-16 text-center text-sm text-gray-400">No orders found</td></tr>}
                       </tbody>
                     </table>
                   </div>
