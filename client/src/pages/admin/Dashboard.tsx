@@ -19,7 +19,7 @@ import {
   Shield, ChevronRight, Lock, LogOut, Zap, ExternalLink,
   Search, RefreshCw, AlertTriangle, TrendingUp, Plus,
   Edit2, Trash2, X, Save, Eye, Settings, Tag,
-  Download, QrCode, Copy, Database, History,
+  Download, QrCode, Copy, Database, History, Truck, DollarSign, CheckCircle,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
@@ -33,6 +33,7 @@ type Section = "overview"|"products"|"orders"|"intake"|"reports"|"promos"|"campa
 const ADMIN_KEY = "sb_admin_v1";
 const fmt = (c: number) => `₱${(c/100).toLocaleString("en-PH")}`;
 const fmtDate = (d: string) => new Date(d).toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"});
+const fmtDT = (d: string) => { const x=new Date(d); return `${x.toLocaleDateString("en-PH",{month:"short",day:"numeric"})} · ${x.toLocaleTimeString("en-PH",{hour:"numeric",minute:"2-digit"})}`; };
 const STATUS_COLOR: Record<string,string> = {
   pending:"bg-amber-100 text-amber-800", paid:"bg-blue-100 text-blue-800",
   processing:"bg-indigo-100 text-indigo-800", shipped:"bg-purple-100 text-purple-800",
@@ -1460,6 +1461,11 @@ export default function AdminDashboard() {
   const [channelFilter,setChannelFilter]=useState<"all"|"website"|"sheet_import">("all");
   const [orderSearch,setOrderSearch]=useState("");
   const [ordersShown,setOrdersShown]=useState(25);
+  // Orders 2.0 dashboard layout (table + side panel)
+  const [selOrderId,setSelOrderId]=useState<string|null>(null);
+  const [ordPage,setOrdPage]=useState(0);
+  const [ordPer,setOrdPer]=useState(10);
+  useEffect(()=>{setOrdPage(0);},[orderFilter,channelFilter,orderSearch]);
   useEffect(()=>{setOrdersShown(25);},[orderFilter,channelFilter,orderSearch]);
   const filteredOrders = useMemo(()=>{
     const q=orderSearch.trim().toLowerCase();
@@ -2507,37 +2513,49 @@ export default function AdminDashboard() {
           )}
 
           {/* ── ORDERS ── */}
-          {section==="orders"&&(
+          {section==="orders"&&(()=>{
+            // ── Orders 2.0 (per approved mockup): stat cards → tabs → table + side panel ──
+            const sel = selOrderId ? sbOrders.find(o=>String(o.id)===selOrderId) || null : null;
+            const now=Date.now(), WK=7*864e5;
+            const in7=sbOrders.filter(o=>now-new Date(o.created_at).getTime()<WK);
+            const prev7=sbOrders.filter(o=>{const t=now-new Date(o.created_at).getTime();return t>=WK&&t<2*WK;});
+            const liveSales=(arr:any[])=>arr.filter(o=>o.status!=="cancelled").reduce((s,o)=>s+(o.total||0),0);
+            const delta7=(a:number,b:number)=>b===0?(a>0?100:0):Math.round(((a-b)/b)*100);
+            const dOrd=delta7(in7.length,prev7.length), dSales=delta7(liveSales(in7),liveSales(prev7));
+            const cnt=(s:string)=>sbOrders.filter(o=>o.status===s).length;
+            const srcCnt=(s:string)=>sbOrders.filter(o=>(o.source||"website")===s).length;
+            const pages=Math.max(1,Math.ceil(filteredOrders.length/ordPer));
+            const page=Math.min(ordPage,pages-1);
+            const rows=filteredOrders.slice(page*ordPer,(page+1)*ordPer);
+            const thumbOf=(o:any)=>(o.items||[]).find((i:any)=>i.imageUrl)?.imageUrl||null;
+            const payBadge=(o:any)=> o.payment_status==="verified"
+              ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-600 text-white">Paid</span>
+              : o.payment_method==="cod"
+              ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-[#0d2430] text-[#0d2430]">COD</span>
+              : o.payment_status==="submitted"
+              ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Proof ↑</span>
+              : <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Pending</span>;
+            const TAB_LABEL:Record<string,string>={all:"All Orders",pending:"New",paid:"Paid",processing:"To Pack",shipped:"Shipped",delivered:"Delivered",cancelled:"Cancelled"};
+            const deltaEl=(d:number)=><span className={`text-[10px] font-bold ${d>=0?"text-emerald-600":"text-red-500"}`}>{d>=0?"↑":"↓"} {Math.abs(d)}% vs. last 7 days</span>;
+            return (
             <div>
-              <div className="flex items-center gap-3 mb-6 flex-wrap">
+              {/* header controls */}
+              <div className="flex items-center gap-3 mb-5 flex-wrap">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400"/>
                   <input value={orderSearch} onChange={e=>setOrderSearch(e.target.value)}
-                    placeholder="Search order #, name, FB, contact, item…"
+                    placeholder="Search order no., name, FB, or contact…"
                     className="h-10 w-72 max-w-full pl-9 pr-8 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-[#C9A84C]"/>
                   {orderSearch&&<button onClick={()=>setOrderSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm font-bold">✕</button>}
                 </div>
-                <Select value={orderFilter} onValueChange={setOrderFilter}>
-                  <SelectTrigger className="w-44 bg-white border-gray-200 text-sm h-10"><SelectValue/></SelectTrigger>
-                  <SelectContent>
-                    {["all","pending","paid","processing","shipped","delivered","cancelled"].map(s=>(
-                      <SelectItem key={s} value={s}>{s==="all"?"All Orders":s.charAt(0).toUpperCase()+s.slice(1)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <div className="flex items-center gap-1">
-                  {([["all","All"],["website","🌐 Website"],["sheet_import","📋 FB Form"]] as const).map(([v,l])=>(
+                <div className="flex items-center rounded-lg border border-gray-200 bg-white overflow-hidden">
+                  {([["all",`All ${sbOrders.length}`],["website",`Website ${srcCnt("website")}`],["sheet_import",`FB Form ${srcCnt("sheet_import")}`]] as const).map(([v,l])=>(
                     <button key={v} onClick={()=>setChannelFilter(v)}
-                      className={`px-2.5 py-1.5 text-[11px] font-bold rounded-lg border ${channelFilter===v?"bg-[#0d2430] text-white border-[#0d2430]":"bg-white text-gray-500 border-gray-200 hover:border-gray-300"}`}>{l}</button>
+                      className={`px-3 py-2 text-[11px] font-bold ${channelFilter===v?"bg-[#0d2430] text-white":"text-gray-500 hover:bg-gray-50"}`}>{l}</button>
                   ))}
                 </div>
                 <span className="text-xs text-gray-400">{filteredOrders.length} orders</span>
-                <label className={`ml-auto flex items-center gap-2 bg-[#C9A84C] text-[#0d2430] px-3 py-2 text-xs font-bold rounded-lg cursor-pointer hover:opacity-90 ${receiptBusy?"opacity-50 pointer-events-none":""}`}>
-                  <Download className="h-3.5 w-3.5 rotate-180"/> {receiptBusy?"Scanning…":"Scan courier receipt"}
-                  <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
-                    onChange={e=>{const f=e.target.files?.[0]; e.currentTarget.value=""; if(f) scanReceipt(f);}}/>
-                </label>
-                <button onClick={loadOrders} className="flex items-center gap-2 border border-gray-200 bg-white text-[#0d2430] px-3 py-2 text-xs font-semibold rounded-lg hover:bg-gray-50">
+                <button onClick={loadOrders} className="ml-auto flex items-center gap-2 border border-gray-200 bg-white text-[#0d2430] px-3 py-2 text-xs font-semibold rounded-lg hover:bg-gray-50">
                   <RefreshCw className="h-3.5 w-3.5"/> Refresh
                 </button>
                 <a href="https://docs.google.com/spreadsheets/d/13eM-zpN--AVOwN4uFUSVeQX0e6YA922VzgjOomhfk-Y/edit" target="_blank" rel="noopener noreferrer"
@@ -2545,138 +2563,280 @@ export default function AdminDashboard() {
                   <ExternalLink className="h-3.5 w-3.5"/> Sheet archive
                 </a>
               </div>
-              {receiptScan&&(
-                <div className={`border rounded-xl p-4 mb-4 ${receiptScan.candidates?.length?"border-emerald-300 bg-emerald-50":"border-amber-300 bg-amber-50"}`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-bold uppercase tracking-wider text-[#0d2430]">
-                      {receiptScan.candidates?.length?"Receipt scanned — match found":"Receipt scanned — no confident match"}
-                    </p>
-                    <button onClick={()=>setReceiptScan(null)} className="text-gray-400 hover:text-gray-600"><X className="h-4 w-4"/></button>
+
+              {/* stat cards */}
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mb-5">
+                <div className="bg-white border border-gray-100 rounded-xl p-4">
+                  <div className="flex items-center gap-2 text-[11px] font-semibold text-gray-500 mb-1"><ShoppingCart className="h-3.5 w-3.5 text-[#C9A84C]"/> Total Orders</div>
+                  <div className="text-2xl font-black text-[#0d2430]">{sbOrders.length}</div>
+                  {deltaEl(dOrd)}
+                </div>
+                <div className="bg-white border border-gray-100 rounded-xl p-4">
+                  <div className="flex items-center gap-2 text-[11px] font-semibold text-gray-500 mb-1"><DollarSign className="h-3.5 w-3.5 text-[#C9A84C]"/> Total Sales</div>
+                  <div className="text-2xl font-black text-[#0d2430]">{fmt(liveSales(sbOrders))}</div>
+                  {deltaEl(dSales)}
+                </div>
+                <button onClick={()=>setOrderFilter("processing")} className="bg-white border border-gray-100 rounded-xl p-4 text-left hover:border-[#C9A84C] transition-colors">
+                  <div className="flex items-center gap-2 text-[11px] font-semibold text-gray-500 mb-1"><Package className="h-3.5 w-3.5 text-amber-500"/> To Pack</div>
+                  <div className="text-2xl font-black text-[#0d2430]">{cnt("paid")+cnt("processing")}</div>
+                  <span className="text-[10px] text-gray-400">paid + processing</span>
+                </button>
+                <button onClick={()=>setOrderFilter("shipped")} className="bg-white border border-gray-100 rounded-xl p-4 text-left hover:border-[#C9A84C] transition-colors">
+                  <div className="flex items-center gap-2 text-[11px] font-semibold text-gray-500 mb-1"><Truck className="h-3.5 w-3.5 text-blue-500"/> In Transit</div>
+                  <div className="text-2xl font-black text-[#0d2430]">{cnt("shipped")}</div>
+                  <span className="text-[10px] text-gray-400">shipped, on the way</span>
+                </button>
+                <button onClick={()=>setOrderFilter("delivered")} className="bg-white border border-gray-100 rounded-xl p-4 text-left hover:border-[#C9A84C] transition-colors">
+                  <div className="flex items-center gap-2 text-[11px] font-semibold text-gray-500 mb-1"><CheckCircle className="h-3.5 w-3.5 text-emerald-500"/> Delivered</div>
+                  <div className="text-2xl font-black text-[#0d2430]">{cnt("delivered")}</div>
+                  <span className="text-[10px] text-gray-400">completed</span>
+                </button>
+              </div>
+
+              {/* status tabs */}
+              <div className="flex items-center gap-1.5 mb-4 flex-wrap">
+                {["all","pending","paid","processing","shipped","delivered","cancelled"].map(s=>(
+                  <button key={s} onClick={()=>setOrderFilter(s)}
+                    className={`px-3.5 py-2 text-[11.5px] font-bold rounded-lg border ${orderFilter===s?"bg-[#0d2430] text-white border-[#0d2430]":"bg-white text-gray-500 border-gray-200 hover:border-gray-300"}`}>
+                    {TAB_LABEL[s]} ({s==="all"?sbOrders.length:cnt(s)})
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 items-start">
+                {/* ── table ── */}
+                <div className="xl:col-span-2 bg-white border border-gray-100 rounded-xl overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="border-b border-gray-100 text-[9.5px] font-bold uppercase tracking-wider text-gray-400">
+                          <th className="pl-3 pr-1.5 py-3">Order No.</th>
+                          <th className="px-1.5 py-3">Date & Time</th>
+                          <th className="px-1.5 py-3">Customer</th>
+                          <th className="px-1.5 py-3">Source</th>
+                          <th className="px-1.5 py-3">Payment</th>
+                          <th className="px-1.5 py-3">Shipping</th>
+                          <th className="px-1.5 py-3">Status</th>
+                          <th className="pl-1.5 pr-3 py-3 text-right">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map(o=>{
+                          const t=thumbOf(o);
+                          return (
+                          <tr key={o.id} onClick={()=>setSelOrderId(String(o.id))}
+                            className={`border-b border-gray-50 cursor-pointer text-[11px] ${String(o.id)===selOrderId?"bg-[#C9A84C]/10":"hover:bg-gray-50/70"}`}>
+                            <td className="pl-3 pr-1.5 py-2.5">
+                              <div className="flex items-center gap-2">
+                                <div className="w-9 h-9 rounded-lg bg-[#F7F4EF] overflow-hidden flex items-center justify-center flex-shrink-0">
+                                  {t?<img src={t} alt="" className="w-full h-full object-cover"/>:<span className="opacity-40">👟</span>}
+                                </div>
+                                <span className="font-black text-[#0d2430] whitespace-nowrap">{o.order_number}</span>
+                              </div>
+                            </td>
+                            <td className="px-1.5 py-2.5 text-gray-500 whitespace-nowrap">{fmtDT(o.created_at)}</td>
+                            <td className="px-1.5 py-2.5">
+                              <div className="font-bold text-[#0d2430] whitespace-nowrap max-w-[130px] truncate">{o.customer_name}</div>
+                              <div className="text-[10px] text-gray-400 whitespace-nowrap">{o.contact_number}</div>
+                            </td>
+                            <td className="px-1.5 py-2.5">
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap ${(o.source||"website")==="website"?"bg-blue-100 text-blue-700":"bg-amber-100 text-amber-700"}`}>
+                                {(o.source||"website")==="website"?"🌐 Web":"📋 FB"}
+                              </span>
+                            </td>
+                            <td className="px-1.5 py-2.5">{payBadge(o)}</td>
+                            <td className="px-1.5 py-2.5">
+                              {o.courier||o.tracking_reference
+                                ? <div className="whitespace-nowrap"><span className="font-bold text-[#0d2430]">{o.courier||"—"}</span><div className="text-[10px] text-gray-400 font-mono max-w-[90px] truncate">{o.tracking_reference||""}</div></div>
+                                : <span className="text-gray-300">—</span>}
+                            </td>
+                            <td className="px-1.5 py-2.5"><span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap ${STATUS_COLOR[o.status]||"bg-gray-100 text-gray-600"}`}>{TAB_LABEL[o.status]||o.status}</span></td>
+                            <td className="pl-1.5 pr-3 py-2.5 text-right font-black text-[#0d2430] whitespace-nowrap">{fmt(o.total)}</td>
+                          </tr>);
+                        })}
+                        {rows.length===0&&<tr><td colSpan={8} className="py-16 text-center text-sm text-gray-400">No orders found</td></tr>}
+                      </tbody>
+                    </table>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-[#0d2430] mb-3">
-                    <span>Courier: <b>{receiptScan.courier||"—"}</b></span>
-                    <span>Tracking: <b className="font-mono">{receiptScan.tracking||"not detected"}</b></span>
-                    <span className="col-span-2">{receiptScan.receipt_url&&<a href={receiptScan.receipt_url} target="_blank" rel="noopener noreferrer" className="text-[#8a6d25] font-semibold underline">View saved receipt</a>}</span>
-                  </div>
-                  {receiptScan.candidates?.length ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs text-gray-500">Attach to:</span>
-                      {receiptScan.candidates.map((c:any)=>(
-                        <button key={c.order_number} onClick={()=>setReceiptScan({...receiptScan,chosen:c.order_number})}
-                          className={`text-xs font-bold px-3 py-1.5 rounded-lg border ${receiptScan.chosen===c.order_number?"bg-[#0d2430] text-white border-[#0d2430]":"bg-white text-[#0d2430] border-gray-200 hover:border-[#C9A84C]"}`}>
-                          {c.order_number} · {c.customer_name} · {c.score}%
-                        </button>
+                  {/* pagination */}
+                  <div className="flex items-center gap-2 px-4 py-3 border-t border-gray-100 flex-wrap">
+                    <span className="text-[11px] text-gray-400">Showing {filteredOrders.length===0?0:page*ordPer+1}–{Math.min((page+1)*ordPer,filteredOrders.length)} of {filteredOrders.length} orders</span>
+                    <div className="ml-auto flex items-center gap-1">
+                      <button onClick={()=>setOrdPage(p=>Math.max(0,p-1))} disabled={page===0}
+                        className="w-8 h-8 rounded-lg border border-gray-200 text-xs font-bold text-gray-500 disabled:opacity-30 hover:border-gray-300">‹</button>
+                      {Array.from({length:pages},(_,i)=>i).filter(i=>i===0||i===pages-1||Math.abs(i-page)<=2).map((i,idx,arr)=>(
+                        <span key={i} className="flex items-center gap-1">
+                          {idx>0&&arr[idx-1]!==i-1&&<span className="text-gray-300 text-xs px-0.5">…</span>}
+                          <button onClick={()=>setOrdPage(i)}
+                            className={`w-8 h-8 rounded-lg text-xs font-bold ${i===page?"bg-[#C9A84C] text-[#0d2430]":"border border-gray-200 text-gray-500 hover:border-gray-300"}`}>{i+1}</button>
+                        </span>
                       ))}
-                      <button onClick={confirmReceipt}
-                        className="ml-auto text-xs font-bold bg-emerald-600 text-white px-4 py-2 rounded-lg hover:opacity-90">
-                        Confirm — save tracking & mark shipped
-                      </button>
+                      <button onClick={()=>setOrdPage(p=>Math.min(pages-1,p+1))} disabled={page>=pages-1}
+                        className="w-8 h-8 rounded-lg border border-gray-200 text-xs font-bold text-gray-500 disabled:opacity-30 hover:border-gray-300">›</button>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
+                      Rows:
+                      <select value={ordPer} onChange={e=>{setOrdPer(Number(e.target.value));setOrdPage(0);}}
+                        className="border border-gray-200 rounded-lg px-1.5 py-1 text-xs font-bold text-[#0d2430] outline-none">
+                        {[10,25,50].map(n=><option key={n} value={n}>{n}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── side panel ── */}
+                <div className="space-y-4">
+                  {/* receipt scan */}
+                  <div className="bg-white border border-gray-100 rounded-xl p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-base">📄</span>
+                      <h3 className="text-sm font-black text-[#0d2430]">Scan Courier Receipt</h3>
+                    </div>
+                    <p className="text-[11px] text-gray-400 mb-3">Upload the LBC / J&T receipt to link the tracking number to an order.</p>
+                    <label onDragOver={e=>e.preventDefault()}
+                      onDrop={e=>{e.preventDefault();const f=e.dataTransfer.files?.[0];if(f&&!receiptBusy)scanReceipt(f);}}
+                      className={`block border-2 border-dashed border-[#C9A84C]/60 rounded-xl p-5 text-center cursor-pointer hover:bg-[#C9A84C]/5 ${receiptBusy?"opacity-50 pointer-events-none":""}`}>
+                      <Download className="h-5 w-5 rotate-180 mx-auto text-[#C9A84C] mb-1.5"/>
+                      <p className="text-[11px] text-gray-500 font-semibold">{receiptBusy?"Scanning…":"Drag & drop receipt here"}</p>
+                      {!receiptBusy&&<span className="inline-block mt-2 bg-[#C9A84C] text-[#0d2430] text-[11px] font-bold px-3 py-1.5 rounded-lg">or click to upload / scan</span>}
+                      <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+                        onChange={e=>{const f=e.target.files?.[0]; e.currentTarget.value=""; if(f) scanReceipt(f);}}/>
+                    </label>
+                    {receiptScan&&(
+                      <div className={`border rounded-xl p-3 mt-3 ${receiptScan.candidates?.length?"border-emerald-300 bg-emerald-50":"border-amber-300 bg-amber-50"}`}>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-[#0d2430]">
+                            {receiptScan.candidates?.length?"Match found":"No confident match"}
+                          </p>
+                          <button onClick={()=>setReceiptScan(null)} className="text-gray-400 hover:text-gray-600"><X className="h-3.5 w-3.5"/></button>
+                        </div>
+                        <div className="text-[11px] text-[#0d2430] space-y-0.5 mb-2">
+                          <div>Courier: <b>{receiptScan.courier||"—"}</b> · Tracking: <b className="font-mono">{receiptScan.tracking||"not detected"}</b></div>
+                          {receiptScan.receipt_url&&<a href={receiptScan.receipt_url} target="_blank" rel="noopener noreferrer" className="text-[#8a6d25] font-semibold underline">View saved receipt</a>}
+                        </div>
+                        {receiptScan.candidates?.length ? (<>
+                          <div className="flex flex-wrap gap-1.5 mb-2">
+                            {receiptScan.candidates.map((c:any)=>(
+                              <button key={c.order_number} onClick={()=>setReceiptScan({...receiptScan,chosen:c.order_number})}
+                                className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border ${receiptScan.chosen===c.order_number?"bg-[#0d2430] text-white border-[#0d2430]":"bg-white text-[#0d2430] border-gray-200 hover:border-[#C9A84C]"}`}>
+                                {c.order_number} · {c.customer_name} · {c.score}%
+                              </button>
+                            ))}
+                          </div>
+                          <button onClick={confirmReceipt}
+                            className="w-full text-[11px] font-bold bg-emerald-600 text-white px-3 py-2 rounded-lg hover:opacity-90">
+                            Confirm — save tracking & mark shipped
+                          </button>
+                        </>) : (
+                          <p className="text-[11px] text-amber-700">No open order matched this receipt. Pick the order and enter courier/tracking in the panel below.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* selected order */}
+                  {sel ? (
+                    <div className="bg-white border border-gray-100 rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-black text-[#0d2430]">Selected Order</h3>
+                        <span className="text-[10px] font-bold bg-[#C9A84C] text-[#0d2430] px-2.5 py-1 rounded-lg">{sel.order_number}</span>
+                      </div>
+                      {/* items */}
+                      <div className="space-y-2 mb-3">
+                        {(sel.items||[]).map((item:any,i:number)=>(
+                          <div key={i} className="flex items-center gap-2.5">
+                            <div className="w-11 h-11 rounded-lg bg-[#F7F4EF] overflow-hidden flex items-center justify-center flex-shrink-0">
+                              {item.imageUrl?<img src={item.imageUrl} alt="" className="w-full h-full object-cover"/>:<span className="opacity-40">👟</span>}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-bold text-[#0d2430] truncate">{item.name}</p>
+                              <p className="text-[10px] text-gray-400">Size {item.size} · Qty {item.qty}</p>
+                            </div>
+                            <span className="text-xs font-black text-[#0d2430]">{fmt(item.price*item.qty)}</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between items-baseline border-t border-gray-100 pt-2">
+                          <span className="text-[11px] font-bold text-gray-500">Total{sel.discount_amount>0?<span className="text-green-600 font-semibold"> (saved {fmt(sel.discount_amount)}{sel.promo_code?` · ${sel.promo_code}`:""})</span>:null}</span>
+                          <span className="text-base font-black text-[#0d2430]">{fmt(sel.total)}</span>
+                        </div>
+                      </div>
+                      {/* customer / address */}
+                      <div className="space-y-2.5 text-xs border-t border-gray-100 pt-3 mb-3">
+                        <div className="flex gap-2"><span className="text-gray-400 w-16 flex-shrink-0 font-semibold">Customer</span>
+                          <span className="text-[#0d2430]"><b>{sel.customer_name}</b>{sel.facebook_name?<span className="text-blue-500"> · FB: {sel.facebook_name}</span>:null}<br/>{sel.customer_email||"no email"} · {sel.contact_number}</span></div>
+                        <div className="flex gap-2"><span className="text-gray-400 w-16 flex-shrink-0 font-semibold">Address</span>
+                          <span className="text-[#0d2430]">{sel.shipping_address}</span></div>
+                        {sel.notes&&<div className="flex gap-2"><span className="text-gray-400 w-16 flex-shrink-0 font-semibold">Notes</span>
+                          <span className="text-[#0d2430]">{sel.notes}</span></div>}
+                        <div className="flex gap-2 items-center flex-wrap"><span className="text-gray-400 w-16 flex-shrink-0 font-semibold">Payment</span>
+                          {payBadge(sel)}
+                          <span className="text-[#0d2430] capitalize font-semibold">{sel.payment_method?.replace(/_/g," ")}</span>
+                          {sel.payment_proof_url&&<a href={sel.payment_proof_url} target="_blank" rel="noopener noreferrer" className="text-[#8a6d25] font-semibold underline">proof</a>}
+                          {sel.payment_status==="submitted"&&(
+                            <button onClick={()=>setPaymentStatus(sel,"verified")}
+                              className="text-[10px] font-bold text-emerald-700 border border-emerald-300 px-2 py-0.5 rounded-lg hover:bg-emerald-50">Verify</button>)}
+                        </div>
+                      </div>
+                      {/* invoice */}
+                      <div className="flex items-center gap-1.5 flex-wrap border-t border-gray-100 pt-3 mb-3">
+                        {sel.invoice_url
+                          ? <>
+                              <a href={sel.invoice_url} target="_blank" rel="noopener noreferrer"
+                                title={sel.invoice_sent_at?`Emailed ${fmtDate(sel.invoice_sent_at)}`:"Invoice created — not emailed yet"}
+                                className={`text-[11px] font-bold px-2.5 py-1 rounded-lg flex items-center gap-1 ${sel.invoice_sent_at
+                                  ?"bg-green-600 text-white hover:bg-green-700"
+                                  :"text-[#8a6d25] border border-[#C9A84C] hover:bg-[#C9A84C]/10"}`}>
+                                {sel.invoice_sent_at?<>✓ Invoice</>:<><ExternalLink className="h-3 w-3"/> Invoice</>}</a>
+                              <button onClick={()=>generateInvoice(sel,true)} disabled={invBusy===sel.id}
+                                className="text-[11px] font-bold text-gray-500 border border-gray-200 px-2 py-1 rounded-lg hover:border-[#C9A84C] hover:text-[#8a6d25] disabled:opacity-50">
+                                {invBusy===sel.id?"…":"↻ Change"}</button>
+                              {sel.invoice_sent_at
+                                ? <button onClick={()=>sendInvoice(sel,true)} disabled={sendBusy===sel.id} title="Email again"
+                                    className="text-[11px] font-bold text-green-700 border border-green-300 px-2 py-1 rounded-lg hover:bg-green-50 disabled:opacity-50">{sendBusy===sel.id?"…":"📧 ↻"}</button>
+                                : <button onClick={()=>sendInvoice(sel)} disabled={sendBusy===sel.id}
+                                    className="text-[11px] font-bold bg-emerald-500 text-white px-2.5 py-1 rounded-lg hover:bg-emerald-600 disabled:opacity-50">{sendBusy===sel.id?"Sending…":"📧 Send invoice"}</button>}
+                            </>
+                          : <button onClick={()=>generateInvoice(sel)} disabled={invBusy===sel.id}
+                              className="text-[11px] font-bold bg-[#C9A84C] text-[#0d2430] px-2.5 py-1 rounded-lg hover:opacity-90 disabled:opacity-50">
+                              {invBusy===sel.id?"Generating…":"Generate invoice"}</button>}
+                      </div>
+                      {/* shipping */}
+                      <div className="flex items-center gap-1.5 flex-wrap mb-3">
+                        <Truck className="h-3.5 w-3.5 text-gray-400"/>
+                        <input key={`c-${sel.id}`} placeholder="Courier" defaultValue={sel.courier||""}
+                          onChange={e=>setShipEdit(prev=>({...prev,[sel.id]:{...prev[sel.id],courier:e.target.value}}))}
+                          className="w-24 border border-gray-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-[#C9A84C]"/>
+                        <input key={`t-${sel.id}`} placeholder="Tracking #" defaultValue={sel.tracking_reference||""}
+                          onChange={e=>setShipEdit(prev=>({...prev,[sel.id]:{...prev[sel.id],tracking_reference:e.target.value}}))}
+                          className="flex-1 min-w-[120px] border border-gray-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-[#C9A84C] font-mono"/>
+                        <button onClick={()=>saveFulfillment(sel)} disabled={!shipEdit[sel.id]}
+                          className="text-[11px] font-bold bg-[#0d2430] text-white px-3 py-1.5 rounded-lg hover:opacity-90 disabled:opacity-40">Save</button>
+                      </div>
+                      {/* status */}
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_COLOR[sel.status]||"bg-gray-100 text-gray-600"}`}>{TAB_LABEL[sel.status]||sel.status}</span>
+                        <div className="ml-auto flex items-center gap-1.5">
+                          <span className="text-[11px] text-gray-400 font-semibold">Update Status</span>
+                          <Select value={sel.status} onValueChange={val=>updateOrderStatus(sel.id,val)}>
+                            <SelectTrigger className="w-32 h-8 text-xs font-bold bg-[#C9A84C] text-[#0d2430] border-[#C9A84C] rounded-lg"><SelectValue/></SelectTrigger>
+                            <SelectContent>
+                              {["pending","paid","processing","shipped","delivered","cancelled"].map(s=>(
+                                <SelectItem key={s} value={s} className="text-xs">{TAB_LABEL[s]||s}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
                     </div>
                   ) : (
-                    <p className="text-xs text-amber-700">No open order matched the receiver on this receipt. Enter courier/tracking manually on the right order below.</p>
+                    <div className="bg-white border border-dashed border-gray-200 rounded-xl py-10 text-center text-xs text-gray-400">
+                      Click an order in the table to see its details here
+                    </div>
                   )}
                 </div>
-              )}
-              <div className="space-y-3">
-                {filteredOrders.slice(0,ordersShown).map(o=>(
-                  <div key={o.id} className="bg-white border border-gray-100 rounded-xl p-5">
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <div className="flex items-center gap-3">
-                          <span className="font-black text-[#0d2430]">{o.order_number}</span>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_COLOR[o.status]||"bg-gray-100 text-gray-600"}`}>{o.status}</span>
-                          {o.promo_code&&<span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">🏷 {o.promo_code}</span>}
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${(o.source||"website")==="website"?"bg-blue-100 text-blue-700":"bg-amber-100 text-amber-700"}`}>
-                            {(o.source||"website")==="website"?"🌐 Website":"📋 FB Form"}
-                          </span>
-                        </div>
-                        <div className="text-xs text-gray-400 mt-0.5">{o.customer_name}{o.facebook_name?<span className="text-blue-500"> · FB: {o.facebook_name}</span>:null} · {o.contact_number} · {fmtDate(o.created_at)}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-lg font-black text-[#0d2430]">{fmt(o.total)}</div>
-                        {o.discount_amount>0&&<div className="text-[10px] text-green-600">Saved {fmt(o.discount_amount)}</div>}
-                        <div className="text-[10px] text-gray-400 capitalize">{o.payment_method?.replace("_"," ")}</div>
-                      </div>
-                    </div>
-                    <div className="bg-[#F7F4EF] rounded-lg p-3 mb-3 text-xs text-gray-600 space-y-1">
-                      {(o.items||[]).slice(0,3).map((item:any,i:number)=>(
-                        <div key={i} className="flex justify-between">
-                          <span>{item.name} · Size {item.size} × {item.qty}</span>
-                          <span className="font-semibold">{fmt(item.price*item.qty)}</span>
-                        </div>
-                      ))}
-                      {(o.items||[]).length>3&&<div className="text-gray-400">+{o.items.length-3} more</div>}
-                    </div>
-                    <div className="text-xs text-gray-500 mb-3"><strong>Ship to:</strong> {o.shipping_address}</div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-gray-500 font-medium">Update:</span>
-                      <Select value={o.status} onValueChange={val=>updateOrderStatus(o.id,val)}>
-                        <SelectTrigger className="w-36 h-8 text-xs border-gray-200"><SelectValue/></SelectTrigger>
-                        <SelectContent>
-                          {["pending","paid","processing","shipped","delivered","cancelled"].map(s=>(
-                            <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {o.payment_proof_url&&(
-                        <a href={o.payment_proof_url} target="_blank" rel="noopener noreferrer"
-                          className="text-xs text-[#C9A84C] font-semibold hover:underline flex items-center gap-1">
-                          <ExternalLink className="h-3 w-3"/> View Proof
-                        </a>
-                      )}
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${o.payment_status==="verified"?"bg-emerald-600 text-white":o.payment_status==="submitted"?"bg-blue-100 text-blue-700":"bg-gray-100 text-gray-500"}`}>
-                        pay: {o.payment_status||"pending"}
-                      </span>
-                      {o.payment_status==="submitted"&&(
-                        <button onClick={()=>setPaymentStatus(o,"verified")}
-                          className="text-[11px] font-bold text-emerald-700 border border-emerald-300 px-2 py-0.5 rounded-lg hover:bg-emerald-50">Verify payment</button>
-                      )}
-                      {o.invoice_url
-                        ? <span className="flex items-center gap-1 flex-wrap">
-                            <a href={o.invoice_url} target="_blank" rel="noopener noreferrer"
-                              title={o.invoice_sent_at?`Emailed to customer ${fmtDate(o.invoice_sent_at)}`:"Invoice created — not emailed yet"}
-                              className={`text-[11px] font-bold px-2.5 py-0.5 rounded-lg flex items-center gap-1 ${o.invoice_sent_at
-                                ?"bg-green-600 text-white border border-green-600 hover:bg-green-700 shadow-sm"
-                                :"text-[#8a6d25] border border-[#C9A84C] hover:bg-[#C9A84C]/10"}`}>
-                              {o.invoice_sent_at?<>✓ Invoice</>:<><ExternalLink className="h-3 w-3"/> Invoice</>}</a>
-                            <button onClick={()=>generateInvoice(o,true)} disabled={invBusy===o.id} title="Create a new invoice and replace the link"
-                              className="text-[11px] font-bold text-gray-500 border border-gray-200 px-2 py-0.5 rounded-lg hover:border-[#C9A84C] hover:text-[#8a6d25] disabled:opacity-50">
-                              {invBusy===o.id?"…":"↻ Change"}</button>
-                            {o.invoice_sent_at
-                              ? <button onClick={()=>sendInvoice(o,true)} disabled={sendBusy===o.id} title="Email the invoice again"
-                                  className="text-[11px] font-bold text-green-700 border border-green-300 px-2 py-0.5 rounded-lg hover:bg-green-50 disabled:opacity-50">
-                                  {sendBusy===o.id?"…":"📧 ↻"}</button>
-                              : <button onClick={()=>sendInvoice(o)} disabled={sendBusy===o.id}
-                                  title={o.customer_email?`Email the invoice to ${o.customer_email}`:"No email on this order"}
-                                  className="text-[11px] font-bold bg-emerald-500 text-white px-2.5 py-0.5 rounded-lg hover:bg-emerald-600 disabled:opacity-50">
-                                  {sendBusy===o.id?"Sending…":"📧 Send invoice"}</button>}
-                          </span>
-                        : <button onClick={()=>generateInvoice(o)} disabled={invBusy===o.id}
-                            className="text-[11px] font-bold bg-[#C9A84C] text-[#0d2430] px-2.5 py-0.5 rounded-lg hover:opacity-90 disabled:opacity-50">
-                            {invBusy===o.id?"Generating…":"Generate invoice"}</button>}
-                    </div>
-                    <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-50">
-                      <span className="text-xs text-gray-500 font-medium">Ship:</span>
-                      <input placeholder="Courier (J&T, LBC…)" defaultValue={o.courier||""}
-                        onChange={e=>setShipEdit(prev=>({...prev,[o.id]:{...prev[o.id],courier:e.target.value}}))}
-                        className="w-32 border border-gray-200 rounded-lg px-2 py-1 text-xs outline-none focus:border-[#C9A84C]"/>
-                      <input placeholder="Tracking #" defaultValue={o.tracking_reference||""}
-                        onChange={e=>setShipEdit(prev=>({...prev,[o.id]:{...prev[o.id],tracking_reference:e.target.value}}))}
-                        className="w-40 border border-gray-200 rounded-lg px-2 py-1 text-xs outline-none focus:border-[#C9A84C] font-mono"/>
-                      <button onClick={()=>saveFulfillment(o)} disabled={!shipEdit[o.id]}
-                        className="text-[11px] font-bold bg-[#0d2430] text-white px-3 py-1 rounded-lg hover:opacity-90 disabled:opacity-40">Save</button>
-                      {o.courier&&o.tracking_reference&&!shipEdit[o.id]&&
-                        <span className="text-[11px] text-gray-400">{o.courier} · {o.tracking_reference}</span>}
-                    </div>
-                  </div>
-                ))}
-                {filteredOrders.length===0&&<div className="bg-white border border-gray-100 rounded-xl py-16 text-center text-sm text-gray-400">No orders found</div>}
-                {filteredOrders.length>ordersShown&&(
-                  <AutoLoader onMore={()=>setOrdersShown(n=>n+50)} remaining={filteredOrders.length-ordersShown}/>
-                )}
               </div>
-            </div>
-          )}
+            </div>);
+          })()}
 
           {/* ── PROMO CODES ── */}
           {section==="promos"&&<AdminPromos/>}
