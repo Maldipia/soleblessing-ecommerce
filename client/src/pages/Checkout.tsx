@@ -201,9 +201,9 @@ export default function Checkout() {
                 <h2 className="text-sm font-bold uppercase tracking-wider text-[#0d2430]">Delivery Information</h2>
                 {[
                   { label: "Full Name *", key: "customerName", placeholder: "Juan dela Cruz", type: "text" },
-                  { label: "Facebook Name", key: "facebookName", placeholder: "Your FB name (for order updates)", type: "text" },
+                  { label: "Facebook Name *", key: "facebookName", placeholder: "Your FB name (for order updates)", type: "text" },
                   { label: "Contact Number *", key: "contactNumber", placeholder: "09XX-XXX-XXXX", type: "tel" },
-                  { label: "Email (optional)", key: "customerEmail", placeholder: "email@example.com", type: "email" },
+                  { label: "Email *", key: "customerEmail", placeholder: "email@example.com — your order confirmation goes here", type: "email" },
                 ].map(f => (
                   <div key={f.key}>
                     <label className="text-xs font-semibold text-gray-500 block mb-1.5">{f.label}</label>
@@ -226,8 +226,18 @@ export default function Checkout() {
                 </div>
                 {error && <p className="text-red-500 text-xs">{error}</p>}
                 <button onClick={() => {
-                  if (!form.customerName || !form.contactNumber || !form.shippingAddress) {
-                    setError("Please fill in all required fields."); return;
+                  // All five are required — order + payment confirmation emails go
+                  // to the customer (Nike/Adidas-style), FB name for order updates.
+                  const missing = [
+                    [!form.customerName, "Full Name"],
+                    [!form.facebookName, "Facebook Name"],
+                    [!form.contactNumber, "Contact Number"],
+                    [!form.customerEmail, "Email"],
+                    [!form.shippingAddress, "Shipping Address"],
+                  ].filter(m => m[0]).map(m => m[1]);
+                  if (missing.length) { setError(`Please fill in: ${missing.join(", ")}`); return; }
+                  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.customerEmail)) {
+                    setError("Please enter a valid email address."); return;
                   }
                   setError(""); setStep("payment");
                 }} className="w-full bg-[#0d2430] text-white py-3.5 text-sm font-bold tracking-[.1em] uppercase hover:bg-[#122d3a] transition-colors rounded-lg">

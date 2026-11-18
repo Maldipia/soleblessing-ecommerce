@@ -1848,6 +1848,18 @@ export default function AdminDashboard() {
     try{
       await sb.update("sb_orders",`id=eq.${o.id}`,{payment_status:ps,updated_at:new Date().toISOString()});
       toast.success("Payment "+ps); loadOrders();
+      // Order + payment confirmed → the confirmation email goes out by itself
+      // (Nike/Adidas-style). Skips quietly if there's no email or already sent.
+      if(ps==="verified" && o.customer_email && !o.invoice_sent_at){
+        try{
+          if(!o.invoice_url) await generateInvoice(o);
+          const pw=(()=>{try{return localStorage.getItem("sb_admin_pw")||sessionStorage.getItem("sb_admin_pw")||""}catch{return ""}})();
+          const r=await fetch("/api/send-invoice",{method:"POST",headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({password:pw,order_number:o.order_number})});
+          if(r.ok){toast.success("Confirmation emailed to "+o.customer_email);loadOrders();}
+          else{const out=await r.json().catch(()=>({} as any));toast.error("Auto-email failed: "+(out.error||"—")+" — use 📧 Send invoice");}
+        }catch{toast.error("Auto-email failed — use 📧 Send invoice");}
+      }
     }catch(err:any){toast.error("Save failed: "+(err.message||err));}
   };
 
