@@ -23,8 +23,7 @@ export default function Checkout() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
-  const [freeThreshold, setFreeThreshold] = useState(300000);
-  const [flatRate, setFlatRate] = useState(15000);
+  const [perPairFee, setPerPairFee] = useState(25000); // ₱250 shipping per pair
 
   // Promo code state
   const [promoCode, setPromoCode] = useState("");
@@ -54,8 +53,7 @@ export default function Checkout() {
             if (enabled.length > 0) setForm(f => ({ ...f, paymentMethod: enabled[0].id }));
           }
           if (r.key === "shipping") {
-            if (typeof v.free_threshold === "number") setFreeThreshold(v.free_threshold);
-            if (typeof v.flat_rate === "number") setFlatRate(v.flat_rate);
+            if (typeof v.per_item === "number" && v.per_item > 0) setPerPairFee(v.per_item);
           }
         });
       } catch(e) {
@@ -70,7 +68,8 @@ export default function Checkout() {
     })();
   }, []);
 
-  const shipping = total >= freeThreshold ? 0 : flatRate;
+  const pairCount = items.reduce((s, i) => s + i.qty, 0);
+  const shipping = perPairFee * pairCount; // ₱250 per pair, no free-shipping tier
   const discount = promoApplied ? (() => {
     const p = promoApplied;
     if (p.discount_type === "percent") return Math.round(total * p.discount_value / 100);

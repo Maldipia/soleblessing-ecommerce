@@ -8,7 +8,7 @@ const fmt = (c: number) => `₱${Math.round((c || 0) / 100).toLocaleString("en-P
 export default function Cart() {
   const { items, total, removeItem, updateQty, count } = useCart();
   const [, setLocation] = useLocation();
-  const shipping = total >= 300000 ? 0 : 15000; // free shipping over ₱3000
+  const shipping = 25000 * count; // ₱250 shipping per pair
 
   if (items.length === 0) return (
     <div className="min-h-screen bg-white flex items-center justify-center px-6">
@@ -80,12 +80,9 @@ export default function Cart() {
                   <span>Subtotal</span><span className="font-black text-[#0a0a0a]">{fmt(total)}</span>
                 </div>
                 <div className="flex justify-between text-[13px] text-[#555] font-semibold">
-                  <span>Shipping</span>
-                  <span className="font-black">{shipping === 0 ? <span className="text-[#1a7f4e]">FREE</span> : fmt(shipping)}</span>
+                  <span>Shipping (₱250/pair)</span>
+                  <span className="font-black">{fmt(shipping)}</span>
                 </div>
-                {shipping > 0 && (
-                  <p className="text-[10px] text-[#9b9b98] font-semibold">Add {fmt(300000 - total)} more for free shipping</p>
-                )}
                 <div className="border-t-2 border-[#0a0a0a] pt-3 flex justify-between items-baseline">
                   <span className="font-black text-[#0a0a0a]">Total</span>
                   <span className="text-[22px] font-black text-[#0a0a0a]">{fmt(total + shipping)}</span>

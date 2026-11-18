@@ -105,7 +105,7 @@ export default function Home() {
       {/* MARQUEE */}
       <div className="bg-[#0a0a0a] py-2.5 overflow-hidden">
         <div className="flex gap-0 whitespace-nowrap" style={{ animation: "marquee 28s linear infinite" }}>
-          {["Authentic & Verified", "✦", "Adidas · Nike · Jordan", "✦", "COD Nationwide", "✦", "GCash · Maya · BDO · BPI", "✦", "Free Shipping ₱3K+", "✦", "Authentic & Verified", "✦", "Adidas · Nike · Jordan", "✦", "COD Nationwide", "✦", "GCash · Maya · BDO · BPI", "✦", "Free Shipping ₱3K+", "✦"].map((t, i) => (
+          {["Authentic & Verified", "✦", "Adidas · Nike · Jordan", "✦", "COD Nationwide", "✦", "GCash · Maya · BDO · BPI", "✦", "Ships Nationwide 🇵🇭", "✦", "Authentic & Verified", "✦", "Adidas · Nike · Jordan", "✦", "COD Nationwide", "✦", "GCash · Maya · BDO · BPI", "✦", "Ships Nationwide 🇵🇭", "✦"].map((t, i) => (
             <span key={i} className={`text-[12px] font-black tracking-[.2em] uppercase px-8 ${t === "✦" ? "text-[#FF5A1F]" : "text-white/25"}`}>{t}</span>
           ))}
         </div>

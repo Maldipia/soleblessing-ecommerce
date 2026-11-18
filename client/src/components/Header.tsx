@@ -71,7 +71,7 @@ export default function Header() {
     <>
       {/* Announcement Bar — slim, black, orange highlights */}
       <div className="bg-[#0a0a0a] text-white text-center py-[7px] text-[10px] font-semibold tracking-[.14em] uppercase px-4">
-        🚚 Free Shipping ₱3,000+ &nbsp;·&nbsp; <span className="text-[#FF5A1F] font-bold">COD Available</span> &nbsp;·&nbsp; GCash · Maya · BDO · BPI
+        🚚 Nationwide Delivery &nbsp;·&nbsp; <span className="text-[#FF5A1F] font-bold">COD Available</span> &nbsp;·&nbsp; GCash · Maya · BDO · BPI
       </div>
 
       <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur border-b border-[#f0f0ef]">

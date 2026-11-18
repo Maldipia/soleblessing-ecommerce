@@ -62,7 +62,7 @@ function buildHtml(o, type) {
       <div style="color:#ffffff;font-size:22px;font-weight:900;letter-spacing:.18em">SOLE<span style="color:#C9A84C">BLESSING</span></div>
       <div style="color:#8f969b;font-size:10px;letter-spacing:.3em;margin-top:6px;text-transform:uppercase">Sneakers &middot; Fashion &middot; Lifestyle</div>
     </td></tr>
-    <tr><td style="background:#C9A84C;color:#050f12;text-align:center;padding:10px;font-size:12px;font-weight:bold;letter-spacing:.08em">&#128666; FREE SHIPPING &#8369;3,000+ &middot; LEGIT. FRESH. YOURS.</td></tr>
+    <tr><td style="background:#C9A84C;color:#050f12;text-align:center;padding:10px;font-size:12px;font-weight:bold;letter-spacing:.08em">&#128666; SHIPS NATIONWIDE &middot; LEGIT. FRESH. YOURS.</td></tr>
     <tr><td style="padding:32px">
       <div style="width:54px;height:54px;border-radius:50%;background:${verified ? '#e8f5ee' : '#faf3e3'};color:${verified ? '#1a7f4e' : '#b7791f'};font-size:28px;line-height:54px;text-align:center;margin:0 auto 14px">${verified ? '&#10003;' : '&#128230;'}</div>
       <h1 style="font-size:20px;color:#0d2430;text-align:center;margin:0 0 6px">${heading}</h1>

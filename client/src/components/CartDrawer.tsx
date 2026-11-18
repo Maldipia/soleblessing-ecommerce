@@ -5,14 +5,13 @@ import { useLocation } from "wouter";
 import { X, Trash2, Plus, Minus, Check } from "lucide-react";
 
 const fmt = (c: number) => `₱${Math.round((c || 0) / 100).toLocaleString("en-PH")}`;
-const FREE_SHIP = 300000; // centavos
+const SHIP_PER_PAIR = 25000; // ₱250 shipping per pair
 
 export default function CartDrawer() {
   const { items, total, count, removeItem, updateQty, drawerOpen, closeDrawer } = useCart();
   const [, setLocation] = useLocation();
   if (!drawerOpen) return null;
 
-  const freeShip = total >= FREE_SHIP;
   const go = (path: string) => { closeDrawer(); setLocation(path); };
 
   return (
@@ -79,14 +78,12 @@ export default function CartDrawer() {
           </div>
           <div className="flex justify-between text-[12px] font-semibold mb-3">
             <span className="text-[#555]">Shipping</span>
-            {freeShip
-              ? <span className="text-[#1a7f4e] font-black">FREE — over ₱3,000 ✓</span>
-              : <span className="text-[#9b9b98]">+{fmt(15000)} · free over ₱3,000</span>}
+            <span className="text-[#9b9b98]">+{fmt(SHIP_PER_PAIR * count)} · ₱250/pair</span>
           </div>
           {items.length > 0 && (
             <button onClick={() => go("/checkout")}
               className="w-full bg-[#FF5A1F] text-white py-4 text-xs font-black tracking-[.12em] uppercase rounded-full hover:opacity-90 transition-opacity">
-              Checkout — {fmt(total + (freeShip ? 0 : 15000))}
+              Checkout — {fmt(total + SHIP_PER_PAIR * count)}
             </button>
           )}
           <button onClick={closeDrawer}
