@@ -1542,8 +1542,9 @@ export default function AdminDashboard() {
   const [ordPer,setOrdPer]=useState(10);
   const [editOrder,setEditOrder]=useState<any>(null);
   const [delArm,setDelArm]=useState(false);
+  const [orderScan,setOrderScan]=useState<any>(null); // per-order receipt scan result
   useEffect(()=>{setOrdPage(0);},[orderFilter,channelFilter,orderSearch]);
-  useEffect(()=>{setDelArm(false);},[selOrderId]);
+  useEffect(()=>{setDelArm(false);setOrderScan(null);},[selOrderId]);
   useEffect(()=>{setOrdersShown(25);},[orderFilter,channelFilter,orderSearch]);
   const filteredOrders = useMemo(()=>{
     const q=orderSearch.trim().toLowerCase();
@@ -1928,6 +1929,41 @@ export default function AdminDashboard() {
       setReceiptScan(null); loadOrders();
     }catch(e:any){toast.error("Save failed: "+(e.message||e));}
   };
+  // Orders 2.0: per-order receipt scan — attaches straight to the selected order,
+  // no matching step; courier & tracking prefill the inputs below.
+  const scanForOrder = async (o:any, file:File) => {
+    if(!/^image\/(jpeg|png|webp)$/.test(file.type)){toast.error("JPEG/PNG/WebP only");return;}
+    if(file.size>5*1024*1024){toast.error("Max 5MB");return;}
+    setReceiptBusy(true);
+    try{
+      const base64:string = await new Promise((ok,err)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(",")[1]);r.onerror=()=>err(new Error("read failed"));r.readAsDataURL(file);});
+      const pw=(()=>{try{return localStorage.getItem("sb_admin_pw")||sessionStorage.getItem("sb_admin_pw")||""}catch{return ""}})();
+      const res=await fetch("/api/parse-shipping-receipt",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({password:pw,fileBase64:base64,mimeType:file.type})});
+      const out=await res.json().catch(()=>({} as any));
+      if(!res.ok) throw new Error(out.error||"Scan failed");
+      setOrderScan({forId:String(o.id),courier:out.courier||"",tracking:out.tracking||"",receipt_url:out.receipt_url||"",ts:Date.now()});
+      setShipEdit(prev=>({...prev,[o.id]:{
+        courier: out.courier || prev[o.id]?.courier || o.courier || "",
+        tracking_reference: out.tracking || prev[o.id]?.tracking_reference || o.tracking_reference || "",
+      }}));
+      if(!out.tracking) toast.info("No tracking number detected — type it in, the receipt photo is still saved");
+    }catch(e:any){toast.error(e.message||"Scan failed");}
+    finally{setReceiptBusy(false);}
+  };
+  const saveShipAndMarkShipped = async (o:any) => {
+    const se=shipEdit[o.id]||{};
+    const courier=(se.courier??o.courier??"").trim();
+    const track=(se.tracking_reference??o.tracking_reference??"").trim();
+    const payload:any={courier:courier||null,tracking_reference:track||null,status:"shipped",updated_at:new Date().toISOString()};
+    if(orderScan&&orderScan.forId===String(o.id)&&orderScan.receipt_url) payload.shipping_receipt_url=orderScan.receipt_url;
+    try{
+      await sb.update("sb_orders",`id=eq.${o.id}`,payload);
+      toast.success(`${o.order_number} — tracking saved, marked shipped`);
+      setOrderScan(null); loadOrders();
+    }catch(e:any){toast.error("Save failed: "+(e?.message||String(e)).slice(0,120));}
+  };
+
   // Orders 2.0: full-order edit + delete (delete cancels first so stock restocks,
   // then tombstones the order number so the hourly sheet import can't resurrect it)
   const saveOrderEdit = async (id:string, payload:any) => {
@@ -2793,54 +2829,6 @@ export default function AdminDashboard() {
 
                 {/* ── side panel ── */}
                 <div className="space-y-4">
-                  {/* receipt scan */}
-                  <div className="bg-white border border-gray-100 rounded-xl p-4">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-base">📄</span>
-                      <h3 className="text-sm font-black text-[#0d2430]">Scan Courier Receipt</h3>
-                    </div>
-                    <p className="text-[11px] text-gray-400 mb-3">Upload the LBC / J&T receipt to link the tracking number to an order.</p>
-                    <label onDragOver={e=>e.preventDefault()}
-                      onDrop={e=>{e.preventDefault();const f=e.dataTransfer.files?.[0];if(f&&!receiptBusy)scanReceipt(f);}}
-                      className={`block border-2 border-dashed border-[#C9A84C]/60 rounded-xl p-5 text-center cursor-pointer hover:bg-[#C9A84C]/5 ${receiptBusy?"opacity-50 pointer-events-none":""}`}>
-                      <Download className="h-5 w-5 rotate-180 mx-auto text-[#C9A84C] mb-1.5"/>
-                      <p className="text-[11px] text-gray-500 font-semibold">{receiptBusy?"Scanning…":"Drag & drop receipt here"}</p>
-                      {!receiptBusy&&<span className="inline-block mt-2 bg-[#C9A84C] text-[#0d2430] text-[11px] font-bold px-3 py-1.5 rounded-lg">or click to upload / scan</span>}
-                      <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
-                        onChange={e=>{const f=e.target.files?.[0]; e.currentTarget.value=""; if(f) scanReceipt(f);}}/>
-                    </label>
-                    {receiptScan&&(
-                      <div className={`border rounded-xl p-3 mt-3 ${receiptScan.candidates?.length?"border-emerald-300 bg-emerald-50":"border-amber-300 bg-amber-50"}`}>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-[#0d2430]">
-                            {receiptScan.candidates?.length?"Match found":"No confident match"}
-                          </p>
-                          <button onClick={()=>setReceiptScan(null)} className="text-gray-400 hover:text-gray-600"><X className="h-3.5 w-3.5"/></button>
-                        </div>
-                        <div className="text-[11px] text-[#0d2430] space-y-0.5 mb-2">
-                          <div>Courier: <b>{receiptScan.courier||"—"}</b> · Tracking: <b className="font-mono">{receiptScan.tracking||"not detected"}</b></div>
-                          {receiptScan.receipt_url&&<a href={receiptScan.receipt_url} target="_blank" rel="noopener noreferrer" className="text-[#8a6d25] font-semibold underline">View saved receipt</a>}
-                        </div>
-                        {receiptScan.candidates?.length ? (<>
-                          <div className="flex flex-wrap gap-1.5 mb-2">
-                            {receiptScan.candidates.map((c:any)=>(
-                              <button key={c.order_number} onClick={()=>setReceiptScan({...receiptScan,chosen:c.order_number})}
-                                className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border ${receiptScan.chosen===c.order_number?"bg-[#0d2430] text-white border-[#0d2430]":"bg-white text-[#0d2430] border-gray-200 hover:border-[#C9A84C]"}`}>
-                                {c.order_number} · {c.customer_name} · {c.score}%
-                              </button>
-                            ))}
-                          </div>
-                          <button onClick={confirmReceipt}
-                            className="w-full text-[11px] font-bold bg-emerald-600 text-white px-3 py-2 rounded-lg hover:opacity-90">
-                            Confirm — save tracking & mark shipped
-                          </button>
-                        </>) : (
-                          <p className="text-[11px] text-amber-700">No open order matched this receipt. Pick the order and enter courier/tracking in the panel below.</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
                   {/* selected order */}
                   {sel ? (
                     <div className="bg-white border border-gray-100 rounded-xl p-4">
@@ -2937,18 +2925,44 @@ export default function AdminDashboard() {
                                 :"bg-[#C9A84C] text-[#0d2430] hover:opacity-90"}`}>
                               {invBusy===sel.id?"Generating…":(sel.source||"website")==="website"?"+ Sheet copy":"Generate invoice"}</button>}
                       </div>
+                      {/* per-order receipt scan — above tracking (per approved mockup) */}
+                      <label className={`flex items-center gap-2.5 border-[1.5px] border-dashed border-[#C9A84C]/70 bg-[#fffdf7] rounded-xl px-3 py-2.5 mb-2.5 cursor-pointer hover:bg-[#C9A84C]/10 ${receiptBusy?"opacity-50 pointer-events-none":""}`}>
+                        <span className="text-[15px]">📄</span>
+                        <span className="min-w-0">
+                          <span className="block text-[11px] font-bold text-[#0d2430]">Courier receipt for this order</span>
+                          <span className="block text-[9.5px] text-gray-400 font-semibold">Photo or scan — courier & tracking auto-fill below</span>
+                        </span>
+                        <span className="ml-auto bg-[#C9A84C] text-[#0d2430] text-[10px] font-black px-2.5 py-1.5 rounded-lg whitespace-nowrap">{receiptBusy?"Scanning…":"⬆ Upload / Scan"}</span>
+                        <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+                          onChange={e=>{const f=e.target.files?.[0]; e.currentTarget.value=""; if(f) scanForOrder(sel,f);}}/>
+                      </label>
+                      {orderScan&&orderScan.forId===String(sel.id)&&(
+                        <div className="border border-emerald-200 bg-emerald-50 rounded-xl px-3 py-2 mb-2.5 text-[11px]">
+                          ✅ <b className="text-emerald-700">Receipt scanned</b>
+                          {orderScan.receipt_url&&<> · <a href={orderScan.receipt_url} target="_blank" rel="noopener noreferrer" className="text-[#8a6d25] font-bold underline">view saved receipt</a></>}
+                          <div className="text-[10.5px] text-[#0d2430] mt-0.5">Courier: <b>{orderScan.courier||"—"}</b> · Tracking: <b className="font-mono">{orderScan.tracking||"not detected"}</b></div>
+                        </div>
+                      )}
                       {/* shipping */}
                       <div className="flex items-center gap-1.5 flex-wrap mb-3">
                         <Truck className="h-3.5 w-3.5 text-gray-400"/>
-                        <input key={`c-${sel.id}`} placeholder="Courier" defaultValue={sel.courier||""}
+                        <input key={`c-${sel.id}-${orderScan?.forId===String(sel.id)?orderScan.ts:0}`} placeholder="Courier"
+                          defaultValue={shipEdit[sel.id]?.courier ?? sel.courier ?? ""}
                           onChange={e=>setShipEdit(prev=>({...prev,[sel.id]:{...prev[sel.id],courier:e.target.value}}))}
                           className="w-24 border border-gray-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-[#C9A84C]"/>
-                        <input key={`t-${sel.id}`} placeholder="Tracking #" defaultValue={sel.tracking_reference||""}
+                        <input key={`t-${sel.id}-${orderScan?.forId===String(sel.id)?orderScan.ts:0}`} placeholder="Tracking #"
+                          defaultValue={shipEdit[sel.id]?.tracking_reference ?? sel.tracking_reference ?? ""}
                           onChange={e=>setShipEdit(prev=>({...prev,[sel.id]:{...prev[sel.id],tracking_reference:e.target.value}}))}
                           className="flex-1 min-w-[120px] border border-gray-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-[#C9A84C] font-mono"/>
                         <button onClick={()=>saveFulfillment(sel)} disabled={!shipEdit[sel.id]}
                           className="text-[11px] font-bold bg-[#0d2430] text-white px-3 py-1.5 rounded-lg hover:opacity-90 disabled:opacity-40">Save</button>
                       </div>
+                      {orderScan&&orderScan.forId===String(sel.id)&&(
+                        <button onClick={()=>saveShipAndMarkShipped(sel)}
+                          className="w-full bg-emerald-600 text-white py-2.5 mb-3 text-[11px] font-black rounded-lg hover:bg-emerald-700">
+                          ✓ Save & Mark Shipped
+                        </button>
+                      )}
                       {/* status */}
                       <div className="flex items-center gap-2">
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_COLOR[sel.status]||"bg-gray-100 text-gray-600"}`}>{TAB_LABEL[sel.status]||sel.status}</span>
