@@ -65,6 +65,26 @@ export default async function handler(req, res) {
           });
         } catch (e) { /* non-fatal */ }
       }
+
+      // Website orders get their invoice AUTO-generated (FB-form orders stay
+      // admin-triggered). Capped so a slow GAS run never breaks checkout — if
+      // it misses, the admin "Generate invoice" button is the fallback.
+      try {
+        const g = await fetch(GAS_HOOK, {
+          method: 'POST', redirect: 'follow',
+          signal: AbortSignal.timeout(25000),
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'generate_invoice', orderId: order.order_number }),
+        });
+        const out = JSON.parse(await g.text());
+        if (out && out.success && out.invoiceUrl) {
+          await fetch(`${SUPABASE_URL}/rest/v1/sb_orders?order_number=eq.${encodeURIComponent(order.order_number)}`, {
+            method: 'PATCH', headers: H,
+            body: JSON.stringify({ invoice_url: out.invoiceUrl, updated_at: new Date().toISOString() }),
+          }).catch(() => {});
+          order.invoice_url = out.invoiceUrl;
+        }
+      } catch (e) { /* non-fatal — admin button covers it */ }
     }
     return res.status(200).json({ order });
   } catch (e) {
