@@ -34,6 +34,15 @@ const ADMIN_KEY = "sb_admin_v1";
 const fmt = (c: number) => `₱${(c/100).toLocaleString("en-PH")}`;
 const fmtDate = (d: string) => new Date(d).toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"});
 const fmtDT = (d: string) => { const x=new Date(d); return `${x.toLocaleDateString("en-PH",{month:"short",day:"numeric"})} · ${x.toLocaleTimeString("en-PH",{hour:"numeric",minute:"2-digit"})}`; };
+// MOP buckets: straight = paid-in-full (straight payment / GCash / Maya / bank / CC),
+// cod = cash on delivery, other = lay away / walk in / COP / blank
+const mopOf = (o:any):"straight"|"cod"|"other" => {
+  const m = String(o?.payment_method||"").toLowerCase();
+  if (!m) return "other";
+  if (/\bcod\b|cash on delivery/.test(m)) return "cod";
+  if (m.includes("straight")||m.includes("gcash")||m.includes("maya")||m.includes("bank")||m.includes("union")||m.includes("cc payment")||m.includes("card")) return "straight";
+  return "other";
+};
 const STATUS_COLOR: Record<string,string> = {
   pending:"bg-amber-100 text-amber-800", paid:"bg-blue-100 text-blue-800",
   processing:"bg-indigo-100 text-indigo-800", shipped:"bg-purple-100 text-purple-800",
@@ -1867,9 +1876,11 @@ export default function AdminDashboard() {
   const [ordPer,setOrdPer]=useState(10);
   const [editOrder,setEditOrder]=useState<any>(null);
   const [delArm,setDelArm]=useState(false);
+  // MOP (mode of payment) filter: straight = paid-in-full digital/CC, cod, other = lay away / walk in / COP / blank
+  const [mopFilter,setMopFilter]=useState<"all"|"straight"|"cod"|"other">("all");
   const [orderScan,setOrderScan]=useState<any>(null); // per-order receipt scan result
   const [orderLog,setOrderLog]=useState<any[]>([]);   // P1 audit trail for the selected order
-  useEffect(()=>{setOrdPage(0);},[orderFilter,channelFilter,orderSearch]);
+  useEffect(()=>{setOrdPage(0);},[orderFilter,channelFilter,orderSearch,mopFilter]);
   useEffect(()=>{setDelArm(false);setOrderScan(null);setOrderLog([]);
     if(!selOrderId) return;
     const o=sbOrders.find(x=>String(x.id)===selOrderId);
@@ -1883,13 +1894,14 @@ export default function AdminDashboard() {
     return sbOrders.filter(o=>{
       if(orderFilter!=="all"&&o.status!==orderFilter) return false;
       if(channelFilter!=="all"&&(o.source||"website")!==channelFilter) return false;
+      if(mopFilter!=="all"&&mopOf(o)!==mopFilter) return false;
       if(!q) return true;
       const hay=[o.order_number,o.customer_name,o.facebook_name,o.contact_number,o.customer_email,
         o.tracking_reference,o.shipping_address,...(o.items||[]).map((i:any)=>`${i.name} ${i.id} ${i.sku}`)]
         .filter(Boolean).join(" ").toLowerCase();
       return q.split(/\s+/).every(w=>hay.includes(w));
     });
-  },[sbOrders,orderFilter,channelFilter,orderSearch]);
+  },[sbOrders,orderFilter,channelFilter,orderSearch,mopFilter]);
 
   const stats = useMemo(()=>{
     // Raw inventory items (each row = 1 unit in stock)
@@ -3088,6 +3100,17 @@ export default function AdminDashboard() {
                   <button key={s} onClick={()=>setOrderFilter(s)}
                     className={`px-3.5 py-2 text-[11.5px] font-bold rounded-lg border ${orderFilter===s?"bg-[#0d2430] text-white border-[#0d2430]":"bg-white text-gray-500 border-gray-200 hover:border-gray-300"}`}>
                     {TAB_LABEL[s]} ({s==="all"?base.length:cnt(s)})
+                  </button>
+                ))}
+              </div>
+
+              {/* MOP (mode of payment) tabs */}
+              <div className="flex items-center gap-1.5 mb-4 flex-wrap">
+                <span className="text-[10px] font-black uppercase tracking-[.12em] text-gray-400 mr-1">MOP</span>
+                {([["all","All"],["straight","💳 Straight Payment"],["cod","💵 COD"],["other","📦 Others"]] as const).map(([v,l])=>(
+                  <button key={v} onClick={()=>setMopFilter(v)}
+                    className={`px-3.5 py-2 text-[11.5px] font-bold rounded-lg border ${mopFilter===v?"bg-[#C9A84C] text-[#0d2430] border-[#C9A84C]":"bg-white text-gray-500 border-gray-200 hover:border-gray-300"}`}>
+                    {l} ({v==="all"?base.length:base.filter(o=>mopOf(o)===v).length})
                   </button>
                 ))}
               </div>
