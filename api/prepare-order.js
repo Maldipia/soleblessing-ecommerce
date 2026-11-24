@@ -27,6 +27,10 @@ const LEGACY_MOPS = ['cod', 'gcash', 'maya', 'bdo', 'bpi', 'bank'];
 
 const newOrderNumber = () => `SB-${String(Math.floor(1e9 + Math.random() * 9e9))}`;
 
+// A claim older than this is considered abandoned (the function died mid-run)
+// and may be recovered. A fresh claim is NEVER cleared or taken over.
+const STALE_CLAIM_MS = 10 * 60 * 1000;
+
 export default async function handler(req, res) {
   cors(req, res);
   res.setHeader('Cache-Control', 'no-store');
@@ -67,16 +71,55 @@ export default async function handler(req, res) {
       },
     );
     const claimed = claim.ok ? await claim.json() : [];
-    if (!claimed.length) {
-      // Why not? give the admin an honest reason.
-      const q = await fetch(`${SUPABASE_URL}/rest/v1/sb_order_requests?request_ref=eq.${encodeURIComponent(requestRef)}&select=status,converted_order_number`, { headers: H() });
+    let request = claimed[0] || null;
+    if (!request) {
+      // Why not? Inspect the row and, for an ABANDONED claim, recover safely.
+      const q = await fetch(`${SUPABASE_URL}/rest/v1/sb_order_requests?request_ref=eq.${encodeURIComponent(requestRef)}&select=status,converted_order_number,reviewed_at`, { headers: H() });
       const row = q.ok ? (await q.json())[0] : null;
       if (!row) return res.status(404).json({ error: 'request not found' });
       if (row.converted_order_number && row.converted_order_number !== 'CONVERTING')
         return res.status(409).json({ error: `already converted to ${row.converted_order_number}`, order_number: row.converted_order_number });
-      return res.status(409).json({ error: `request is ${row.status} — cannot convert` });
+
+      if (row.converted_order_number === 'CONVERTING') {
+        const age = Date.now() - new Date(row.reviewed_at || 0).getTime();
+        if (!(age >= STALE_CLAIM_MS))
+          return res.status(409).json({ error: 'conversion already in progress — try again in a few minutes' });
+
+        // STALE CLAIM (≥10 min): the previous attempt died mid-run.
+        // 1) Orphan check FIRST — if that attempt already created the order,
+        //    finalize the linkage instead of ever creating a second order
+        //    (this is also what makes duplicate PRE-ORDER conversion impossible).
+        const oq = await fetch(
+          `${SUPABASE_URL}/rest/v1/sb_orders?notes=ilike.${encodeURIComponent('*From order request ' + requestRef + '*')}&select=order_number,invoice_url,payment_method&limit=1`,
+          { headers: H() },
+        );
+        const orphan = oq.ok ? (await oq.json())[0] : null;
+        if (orphan) {
+          await fetch(`${SUPABASE_URL}/rest/v1/sb_order_requests?request_ref=eq.${encodeURIComponent(requestRef)}&converted_order_number=eq.CONVERTING`, {
+            method: 'PATCH', headers: H(),
+            body: JSON.stringify({ status: 'converted', converted_order_number: orphan.order_number, reviewed_by: actor, reviewed_at: new Date().toISOString() }),
+          });
+          logOrderEvent({ order_number: requestRef, actor, action: 'request_convert',
+            old_value: { status: row.status, stale_claim: true },
+            new_value: { status: 'converted', converted_order_number: orphan.order_number, recovered_orphan: true } });
+          return res.status(200).json({ ok: true, order_number: orphan.order_number, invoice_url: orphan.invoice_url || null,
+            preorder: String(orphan.payment_method || '').toUpperCase() === 'PRE-ORDER', recovered: true });
+        }
+        // 2) No order was created — take over the stale claim, atomically
+        //    (the reviewed_at guard means a FRESH claim can never be taken).
+        const cutoff = new Date(Date.now() - STALE_CLAIM_MS).toISOString();
+        const tk = await fetch(
+          `${SUPABASE_URL}/rest/v1/sb_order_requests?request_ref=eq.${encodeURIComponent(requestRef)}&converted_order_number=eq.CONVERTING&reviewed_at=lt.${encodeURIComponent(cutoff)}`,
+          { method: 'PATCH', headers: { ...H(), Prefer: 'return=representation' },
+            body: JSON.stringify({ reviewed_by: actor, reviewed_at: new Date().toISOString() }) },
+        );
+        const took = tk.ok ? await tk.json() : [];
+        if (!took.length) return res.status(409).json({ error: 'conversion already in progress — try again in a few minutes' });
+        request = took[0];
+      } else {
+        return res.status(409).json({ error: `request is ${row.status} — cannot convert` });
+      }
     }
-    const request = claimed[0];
 
     const release = () =>
       fetch(`${SUPABASE_URL}/rest/v1/sb_order_requests?request_ref=eq.${encodeURIComponent(requestRef)}&converted_order_number=eq.CONVERTING`, {
@@ -105,6 +148,19 @@ export default async function handler(req, res) {
     let order = null;
     if (isPreorder) {
       // ── 3a. PRE-ORDER: direct insert. No stock move, no loyalty, no GAS.
+      // INVENTORY PROTECTION: the cancel/un-cancel stock trigger matches lines
+      // by items[].id against sb_inventory.item_code. PRE-ORDER never deducted
+      // stock, so its lines must never carry a live code there — otherwise a
+      // later cancellation would phantom-RESTOCK a pair that was never taken.
+      // The REAL code is preserved in preorder_item_code (and sku stays as
+      // encoded) for Phase 3: after payment verification, a confirm step can
+      // atomically deduct stock using preorder_item_code, then clear it.
+      orderData.items = items.map((it) => {
+        const orig = String(it.id || '').trim();
+        return orig && orig.toUpperCase() !== 'PO'
+          ? { ...it, id: 'PO', preorder_item_code: orig }
+          : { ...it, id: 'PO' };
+      });
       const ins = await fetch(`${SUPABASE_URL}/rest/v1/sb_orders`, {
         method: 'POST', headers: { ...H(), Prefer: 'return=representation' },
         body: JSON.stringify({ ...orderData, status: 'pending', payment_status: 'awaiting_full_payment' }),
