@@ -375,8 +375,9 @@ function Donut({segs}:{segs:{label:string;value:number;color:string}[]}){
 }
 
 // ─── Create Order (Manual) with item-code autofill ──────────────────────
-type OrderLine = {code:string;name:string;sku:string;size:string;price:string;cost:number|null;found:boolean};
-const BLANK_LINE: OrderLine = {code:"",name:"",sku:"",size:"",price:"",cost:null,found:false};
+type OrderLine = {code:string;name:string;sku:string;size:string;price:string;qty:string;cost:number|null;found:boolean};
+const BLANK_LINE: OrderLine = {code:"",name:"",sku:"",size:"",price:"",qty:"1",cost:null,found:false};
+const GAS_MOPS = ["STRAIGHT PAYMENT","COD","COP","LAY AWAY","WALK-IN","PRE-ORDER"] as const;
 
 // ── Customers tab — profiles derived live from sb_orders (grouped by phone),
 // merged with manually added people + notes in sb_customers. No mock data. ──
@@ -778,12 +779,24 @@ function OrderEditModal({order,onClose,onSave}:{order:any;onClose:()=>void;onSav
   );
 }
 
-function CreateOrderModal({inventory,costMap,onClose,onPlaced}:{inventory:any[];costMap:Record<string,number>;onClose:()=>void;onPlaced:()=>void}){
-  const [cust,setCust]=useState({name:"",fbName:"",contact:"",email:"",address:"",region:"",city:"",notes:""});
-  const [pm,setPm]=useState("cod");
-  const [shipFee,setShipFee]=useState("");
-  const [lines,setLines]=useState<OrderLine[]>([{...BLANK_LINE}]);
+function CreateOrderModal({inventory,costMap,onClose,onPlaced,prefill}:{inventory:any[];costMap:Record<string,number>;onClose:()=>void;onPlaced:()=>void;prefill?:{requestRef:string;cust:any;pm:string}|null}){
+  // Convert mode: preparing an order for a native order-form request. A draft
+  // is kept per request (browser storage) so encoding work survives closing
+  // the modal WITHOUT creating any order, stock move, or loyalty points.
+  const DRAFT_KEY = prefill ? `sb_req_draft_${prefill.requestRef}` : "";
+  const draft = (()=>{ if(!DRAFT_KEY) return null; try{ return JSON.parse(localStorage.getItem(DRAFT_KEY)||"null"); }catch{ return null; } })();
+  const [cust,setCust]=useState(draft?.cust || prefill?.cust || {name:"",fbName:"",contact:"",email:"",address:"",region:"",city:"",notes:""});
+  const [pm,setPm]=useState(draft?.pm || prefill?.pm || "cod");
+  const [shipFee,setShipFee]=useState(draft?.shipFee || "");
+  const [discount,setDiscount]=useState(draft?.discount || "");
+  const [lines,setLines]=useState<OrderLine[]>(draft?.lines?.length ? draft.lines : [{...BLANK_LINE}]);
   const [placing,setPlacing]=useState(false);
+  const [draftSavedAt,setDraftSavedAt]=useState<string|null>(null);
+  const saveDraft=()=>{
+    if(!DRAFT_KEY) return;
+    try{ localStorage.setItem(DRAFT_KEY, JSON.stringify({cust,pm,shipFee,discount,lines,savedAt:new Date().toISOString()})); setDraftSavedAt(new Date().toLocaleTimeString("en-PH",{timeZone:"Asia/Manila"})); toast.success("Draft saved — no order created, no stock touched"); }
+    catch{ toast.error("Draft save failed"); }
+  };
 
   const lookup=(code:string)=> (inventory||[]).find((p:any)=>(p.itemCode||"").toUpperCase()===code.trim().toUpperCase());
   const setLine=(i:number,patch:Partial<OrderLine>)=>setLines(ls=>ls.map((l,j)=>j===i?{...l,...patch}:l));
@@ -794,27 +807,41 @@ function CreateOrderModal({inventory,costMap,onClose,onPlaced}:{inventory:any[];
       price:String(Math.round((hit.sellingPrice||hit.srp||0)/100)),cost:costMap[hit.itemCode]||null,found:true});
     else setLine(i,{code,found:false,cost:null});
   };
-  const subtotal=lines.reduce((s,l)=>s+(Math.round(Number(l.price)*100)||0),0);
+  const subtotal=lines.reduce((s,l)=>s+((Math.round(Number(l.price)*100)||0)*(parseInt(l.qty)||1)),0);
   const fee=Math.round(Number(shipFee||0)*100)||0;
+  const disc=Math.round(Number(discount||0)*100)||0;
+  const total=Math.max(0,subtotal+fee-disc);
 
   const place=async()=>{
     const items=lines.filter(l=>l.name.trim()&&Number(l.price)>0).map(l=>({
       id:l.found?l.code:(l.code.trim().toUpperCase()==="PO"?"PO":l.code.trim()),
       name:l.name.trim(),sku:l.sku.trim(),size:l.size.trim(),
-      price:Math.round(Number(l.price)*100),qty:1,brand:"",imageUrl:"",
+      price:Math.round(Number(l.price)*100),qty:parseInt(l.qty)||1,brand:"",imageUrl:"",
     }));
     if(!cust.name.trim()){toast.error("Customer name is required");return;}
     if(!items.length){toast.error("Add at least one item with a name and price");return;}
     setPlacing(true);
     try{
-      const orderData:any={
-        order_number:`SB-${String(Math.floor(1e9+Math.random()*9e9))}`,
+      const base:any={
         customer_name:cust.name.trim(),facebook_name:cust.fbName.trim()||null,customer_email:cust.email.trim(),
         contact_number:cust.contact.trim(),shipping_address:cust.address.trim(),
         region:cust.region.trim(),city:cust.city.trim(),notes:cust.notes.trim(),
-        items,subtotal,shipping_fee:fee,discount_amount:0,total:subtotal+fee,
+        items,subtotal,shipping_fee:fee,discount_amount:disc,total,
         payment_method:pm,source:"manual",
       };
+      if(prefill){
+        // Convert the order-form request — server does the atomic claim, order
+        // creation (PRE-ORDER: direct, no GAS, no points), linkage and audit.
+        const r=await fetch("/api/prepare-order",{method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({...adminCred(),request_ref:prefill.requestRef,orderData:base})});
+        const out=await r.json().catch(()=>({} as any));
+        if(r.status===409&&out.error==="out_of_stock") throw new Error(`Out of stock: ${out.item_code} was just sold`);
+        if(!r.ok) throw new Error(out.error||"Conversion failed");
+        try{ if(DRAFT_KEY) localStorage.removeItem(DRAFT_KEY); }catch{}
+        toast.success(`${prefill.requestRef} → Order ${out.order_number} created${out.preorder?" (PRE-ORDER — awaiting full payment)":""}`);
+        onPlaced(); onClose(); return;
+      }
+      const orderData:any={order_number:`SB-${String(Math.floor(1e9+Math.random()*9e9))}`,...base};
       const r=await fetch("/api/place-order",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({orderData})});
       const out=await r.json().catch(()=>({} as any));
@@ -832,12 +859,18 @@ function CreateOrderModal({inventory,costMap,onClose,onPlaced}:{inventory:any[];
       <div className="bg-white rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
         <div className="bg-[#050f12] px-6 py-4 flex items-center justify-between flex-shrink-0">
           <div>
-            <p className="text-[10px] font-bold tracking-[.15em] uppercase text-[#C9A84C]">Create Order — Manual</p>
-            <p className="text-sm font-black text-white">FB / Walk-in / Phone order → same system as website</p>
+            <p className="text-[10px] font-bold tracking-[.15em] uppercase text-[#C9A84C]">{prefill?"Prepare Order — from Order Form":"Create Order — Manual"}</p>
+            <p className="text-sm font-black text-white">{prefill?<>Converting <span className="text-[#C9A84C] font-mono">{prefill.requestRef}</span> — encode the products below</>:"FB / Walk-in / Phone order → same system as website"}</p>
           </div>
           <button onClick={onClose} className="text-white/40 hover:text-white"><X className="h-5 w-5"/></button>
         </div>
         <div className="p-6 space-y-5 overflow-y-auto">
+          {prefill&&(
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 text-[11.5px] font-semibold text-amber-800 flex items-center gap-2 flex-wrap">
+              <span>Customer info came from the request — review it, encode products, then convert. Nothing is created until you click the button below.</span>
+              {pm==="PRE-ORDER"&&<span className="font-black text-orange-700">PRE-ORDER: awaiting full payment · zero points · no stock deduction.</span>}
+            </div>
+          )}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <input className={inp} placeholder="Customer name *" value={cust.name} onChange={e=>setCust({...cust,name:e.target.value})}/>
             <input className={inp} placeholder="Facebook name" value={cust.fbName} onChange={e=>setCust({...cust,fbName:e.target.value})}/>
@@ -845,8 +878,10 @@ function CreateOrderModal({inventory,costMap,onClose,onPlaced}:{inventory:any[];
             <input className={inp} placeholder="Email (optional)" value={cust.email} onChange={e=>setCust({...cust,email:e.target.value})}/>
             <input className={`${inp} col-span-2`} placeholder="Delivery address" value={cust.address} onChange={e=>setCust({...cust,address:e.target.value})}/>
             <select className={inp} value={pm} onChange={e=>setPm(e.target.value)}>
-              <option value="cod">COD</option><option value="gcash">GCash</option><option value="maya">Maya</option>
-              <option value="bdo">BDO</option><option value="bpi">BPI</option><option value="bank">Bank Transfer</option>
+              {prefill
+                ? GAS_MOPS.map(m=><option key={m} value={m}>{m}{m==="PRE-ORDER"?" — full payment required":""}</option>)
+                : <><option value="cod">COD</option><option value="gcash">GCash</option><option value="maya">Maya</option>
+                  <option value="bdo">BDO</option><option value="bpi">BPI</option><option value="bank">Bank Transfer</option></>}
             </select>
             <input className={inp} placeholder="Region" value={cust.region} onChange={e=>setCust({...cust,region:e.target.value})}/>
             <input className={inp} placeholder="City" value={cust.city} onChange={e=>setCust({...cust,city:e.target.value})}/>
@@ -854,17 +889,18 @@ function CreateOrderModal({inventory,costMap,onClose,onPlaced}:{inventory:any[];
           </div>
 
           <div>
-            <div className="grid grid-cols-[110px_1fr_90px_64px_90px] gap-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1 px-0.5">
-              <span>Item code</span><span>Model</span><span>SKU</span><span>Size</span><span>Price ₱</span>
+            <div className="grid grid-cols-[110px_1fr_80px_56px_48px_84px] gap-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1 px-0.5">
+              <span>Item code</span><span>Model</span><span>SKU</span><span>Size</span><span>Qty</span><span>Price ₱</span>
             </div>
             {lines.map((l,i)=>(
               <div key={i} className="mb-2">
-                <div className="grid grid-cols-[110px_1fr_90px_64px_90px_28px] gap-2 items-center">
+                <div className="grid grid-cols-[110px_1fr_80px_56px_48px_84px_28px] gap-2 items-center">
                   <input className={`${inp} font-mono font-bold ${l.found?"border-green-400 bg-green-50":""}`} placeholder="Code / PO"
                     value={l.code} onChange={e=>onCode(i,e.target.value)}/>
                   <input className={`${inp} ${l.found?"bg-green-50":""}`} placeholder="Model name" value={l.name} onChange={e=>setLine(i,{name:e.target.value})}/>
                   <input className={`${inp} ${l.found?"bg-green-50":""}`} placeholder="SKU" value={l.sku} onChange={e=>setLine(i,{sku:e.target.value})}/>
                   <input className={`${inp} ${l.found?"bg-green-50":""}`} placeholder="—" value={l.size} onChange={e=>setLine(i,{size:e.target.value})}/>
+                  <input className={inp} placeholder="1" inputMode="numeric" value={l.qty??"1"} onChange={e=>setLine(i,{qty:e.target.value})}/>
                   <input className={inp} placeholder="0" inputMode="decimal" value={l.price} onChange={e=>setLine(i,{price:e.target.value})}/>
                   <button onClick={()=>setLines(ls=>ls.length>1?ls.filter((_,j)=>j!==i):ls)} className="text-gray-300 hover:text-red-500"><X className="h-4 w-4"/></button>
                 </div>
@@ -878,21 +914,32 @@ function CreateOrderModal({inventory,costMap,onClose,onPlaced}:{inventory:any[];
             <button onClick={()=>setLines(ls=>[...ls,{...BLANK_LINE}])} className="text-xs font-bold text-[#C9A84C] hover:opacity-70">+ Add item</button>
           </div>
 
-          <div className="flex items-center justify-between border-t border-gray-100 pt-4">
-            <div className="flex items-center gap-2 text-sm">
+          <div className="flex items-center justify-between border-t border-gray-100 pt-4 flex-wrap gap-3">
+            <div className="flex items-center gap-2 text-sm flex-wrap">
               <span className="text-gray-500">Shipping ₱</span>
-              <input className={`${inp} w-24`} placeholder="0" inputMode="decimal" value={shipFee} onChange={e=>setShipFee(e.target.value)}/>
+              <input className={inp} style={{width:96,flex:"0 0 auto"}} placeholder="0" inputMode="decimal" value={shipFee} onChange={e=>setShipFee(e.target.value)}/>
+              <span className="text-gray-500">Discount ₱</span>
+              <input className={inp} style={{width:96,flex:"0 0 auto"}} placeholder="0" inputMode="decimal" value={discount} onChange={e=>setDiscount(e.target.value)}/>
             </div>
             <div className="text-right">
-              <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Total</p>
-              <p className="text-2xl font-black text-[#0d2430]">{fmt(subtotal+fee)}</p>
+              <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Subtotal {fmt(subtotal)}{disc>0?` − ${fmt(disc)}`:""} · Total</p>
+              <p className="text-2xl font-black text-[#0d2430]">{fmt(total)}</p>
             </div>
           </div>
+          {prefill&&(
+            <button onClick={saveDraft} className="w-full border-2 border-dashed border-gray-300 text-gray-600 py-2.5 text-xs font-black rounded-xl hover:border-[#C9A84C] hover:text-[#8a6d25]">
+              💾 Save Draft — keep this encoding, create nothing{draftSavedAt?` (saved ${draftSavedAt})`:draft?.savedAt?` (draft loaded)`:""}
+            </button>
+          )}
           <button onClick={place} disabled={placing}
             className="w-full bg-[#0d2430] text-white py-3.5 text-sm font-bold rounded-xl hover:bg-[#122d3a] disabled:opacity-50">
-            {placing?"Placing order…":"Place Order — deduct stock & mirror to Google Sheet"}
+            {placing?(prefill?"Converting…":"Placing order…")
+              :prefill?(pm==="PRE-ORDER"?`Convert ${prefill.requestRef} → PRE-ORDER (no stock, no points, awaiting payment)`:`Convert ${prefill.requestRef} → Order (deduct stock & mirror to Sheet)`)
+              :"Place Order — deduct stock & mirror to Google Sheet"}
           </button>
-          <p className="text-[10px] text-gray-400 text-center">Atomic: stock is reserved instantly, the order mirrors to the ORDER sheet, and you can generate the invoice from the Orders tab.</p>
+          <p className="text-[10px] text-gray-400 text-center">{prefill
+            ?"Conversion is duplicate-protected: this request can only ever become one order. Generate & send the invoice from the Orders tab after reviewing."
+            :"Atomic: stock is reserved instantly, the order mirrors to the ORDER sheet, and you can generate the invoice from the Orders tab."}</p>
         </div>
       </div>
     </div>
@@ -2038,6 +2085,7 @@ export default function AdminDashboard() {
 
   // ── Overview: date range, KPIs, chart, channels, activity ──
   const [createOrder,setCreateOrder]=useState(false);
+  const [prepareReq,setPrepareReq]=useState<any>(null); // order-form request being converted
   const [rangeDays,setRangeDays]=useState<number>(7);
   const DAY=864e5;
   const rangeOrders=useMemo(()=>sbOrders.filter(o=>o.status!=="cancelled"&&(!rangeDays||+new Date(o.created_at)>=Date.now()-rangeDays*DAY)),[sbOrders,rangeDays]);
@@ -2423,7 +2471,13 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-[#F7F4EF] flex" style={{fontFamily:'-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'}}>
       {qrModal?.open && <QRModal itemCode={qrModal.itemCode} name={qrModal.name} onClose={()=>setQrModal(null)}/>}
       {productModal.open&&<ProductModal product={productModal.product} onClose={()=>setProductModal({open:false})} onSave={()=>{setProductModal({open:false});loadProducts();}}/>}
-      {createOrder&&<CreateOrderModal inventory={inventory||[]} costMap={costMap} onClose={()=>setCreateOrder(false)} onPlaced={()=>{loadOrders();refetchInv();refreshInventory().catch(()=>{});}}/>}
+      {createOrder&&<CreateOrderModal inventory={inventory||[]} costMap={costMap}
+        prefill={prepareReq?{requestRef:prepareReq.request_ref,pm:prepareReq.payment_method,
+          cust:{name:prepareReq.receiver_name||"",fbName:prepareReq.fb_ig_name||"",contact:prepareReq.contact_number||"",
+            email:prepareReq.email||"",address:prepareReq.address||"",region:prepareReq.region||"",city:prepareReq.city||"",
+            notes:prepareReq.special_request||""}}:null}
+        onClose={()=>{setCreateOrder(false);setPrepareReq(null);}}
+        onPlaced={()=>{loadOrders();refetchInv();refreshInventory().catch(()=>{});}}/>}
       {editOrder&&<OrderEditModal order={editOrder} onClose={()=>setEditOrder(null)} onSave={saveOrderEdit}/>}
       {scanBox&&<ScanBoxModal existingCodes={existingCodes} allRows={intakeRows} nextCode={nextCode}
         onClose={()=>setScanBox(false)}
@@ -3067,7 +3121,7 @@ export default function AdminDashboard() {
                 </a>
               </div>
 
-              {channelFilter==="requests" ? <IncomingRequests/> : <>
+              {channelFilter==="requests" ? <IncomingRequests onPrepare={(r:any)=>{setPrepareReq(r);setCreateOrder(true);}}/> : <>
               {/* stat cards */}
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mb-5">
                 <div className="bg-white border border-gray-100 rounded-xl p-4">

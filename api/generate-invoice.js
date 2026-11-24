@@ -1,7 +1,7 @@
 // Admin-only: trigger NSB SYSTEM's invoice generation for one order, remotely.
 // Finds the order's row in the ORDER sheet (any payment tab) via the GAS webhook,
 // runs createInvoiceForRow, and saves the resulting invoice URL on sb_orders.
-import { verifyCredential, isOwnerOrManager, cors } from '../server/auth.js';
+import { verifyCredential, isOwnerOrManager, cors, logOrderEvent } from '../server/auth.js';
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://akualfrqzaierqsfcnkp.supabase.co';
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -38,6 +38,10 @@ export default async function handler(req, res) {
       headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ invoice_url: out.invoiceUrl, updated_at: new Date().toISOString() }),
     }).catch(() => {});
+
+    // Audit: who prepared the invoice.
+    const actor = cred.kind === 'owner' ? 'OWNER' : (cred.staff && cred.staff.id) || 'STAFF';
+    logOrderEvent({ order_number, actor, action: 'invoice_generated', new_value: { invoice_url: out.invoiceUrl } });
 
     return res.status(200).json({ ok: true, invoice_url: out.invoiceUrl, invoice_name: out.invoiceName });
   } catch (e) {

@@ -1,7 +1,7 @@
 // Admin-only: email an order's invoice to the customer via NSB SYSTEM's own
 // branded Gmail sender (sendInvoiceEmail). Marks invoice_sent_at on sb_orders
 // so the dashboard shows the green "Sent" state. Sheet column P also gets SENT.
-import { verifyCredential, isOwnerOrManager, cors } from '../server/auth.js';
+import { verifyCredential, isOwnerOrManager, cors, logOrderEvent } from '../server/auth.js';
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://akualfrqzaierqsfcnkp.supabase.co';
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -38,6 +38,18 @@ export default async function handler(req, res) {
       method: 'PATCH',
       headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ invoice_sent_at: sentAt, updated_at: sentAt }),
+    }).catch(() => {});
+
+    // Audit: who approved & sent the invoice.
+    const actor = cred.kind === 'owner' ? 'OWNER' : (cred.staff && cred.staff.id) || 'STAFF';
+    logOrderEvent({ order_number, actor, action: 'invoice_sent', new_value: { email: out.email || null } });
+
+    // If this order came from a native order-form request, move that request
+    // forward: converted → invoiced (linkage via converted_order_number).
+    fetch(`${SUPABASE_URL}/rest/v1/sb_order_requests?converted_order_number=eq.${encodeURIComponent(order_number)}&status=eq.converted`, {
+      method: 'PATCH',
+      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'invoiced' }),
     }).catch(() => {});
 
     return res.status(200).json({ ok: true, email: out.email, sent_at: sentAt });

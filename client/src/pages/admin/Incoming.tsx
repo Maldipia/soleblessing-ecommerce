@@ -51,7 +51,7 @@ export default function IncomingRequests({ onPrepare }: { onPrepare?: (r: any) =
       <div className="flex items-center gap-2 mb-3">
         <h3 className="text-[12px] font-black uppercase tracking-[.12em] text-[#0d2430]">📥 Incoming Orders (Order Form)</h3>
         <span className="text-[10px] font-black bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">{rows.filter(r => r.status === "new").length} new</span>
-        <button onClick={load} className="ml-auto text-[11px] font-bold text-gray-400 hover:text-gray-600">↻ Refresh</button>
+        <button onClick={() => load()} className="ml-auto text-[11px] font-bold text-gray-400 hover:text-gray-600">↻ Refresh</button>
       </div>
       {loading ? <div className="text-xs text-gray-400 py-3">Loading…</div> : !rows.length ? (
         <div className="bg-white border border-gray-100 rounded-xl px-4 py-5 text-[12px] text-gray-400">No form submissions yet. Share the link: <span className="font-bold text-gray-600">soleblessingofficial.com/order</span></div>
@@ -97,10 +97,17 @@ export default function IncomingRequests({ onPrepare }: { onPrepare?: (r: any) =
                 <div key={k as string} className="flex gap-3"><span className="text-gray-400 font-semibold w-24 shrink-0">{k}</span><span className="font-bold break-words min-w-0">{v}</span></div>
               ) : null)}
             </div>
+            {(sel.status === "converted" || sel.status === "invoiced") && sel.converted_order_number && (
+              <div className="mt-3 bg-green-50 border border-green-200 rounded-xl px-3.5 py-2.5 text-[11.5px] font-bold text-green-700">
+                ✓ Converted to order <span className="font-mono font-black">{sel.converted_order_number}</span>
+                {sel.reviewed_by ? ` · by ${sel.reviewed_by}` : ""} — manage it in the Website orders tab{sel.status === "invoiced" ? " (invoice sent)" : ""}.
+              </div>
+            )}
             <div className="mt-4 grid grid-cols-2 gap-2">
               {sel.status === "new" && <button onClick={() => setStatus(sel, "in_review")} className="py-2.5 rounded-xl text-[11px] font-black bg-blue-50 text-blue-700 border border-blue-200">Mark In Review</button>}
-              <button onClick={() => { onPrepare?.(sel); setSel(null); }} className="py-2.5 rounded-xl text-[11px] font-black text-white col-span-1" style={{ background: "#0d2430" }}>🧾 Prepare Order →</button>
-              {sel.status !== "rejected" && sel.status !== "converted" && <button onClick={() => setStatus(sel, "rejected")} className="py-2.5 rounded-xl text-[11px] font-black bg-gray-100 text-gray-500">Reject</button>}
+              {(sel.status === "new" || sel.status === "in_review") &&
+                <button onClick={() => { onPrepare?.(sel); setSel(null); }} className="py-2.5 rounded-xl text-[11px] font-black text-white col-span-1" style={{ background: "#0d2430" }}>🧾 Prepare Order →</button>}
+              {sel.status !== "rejected" && sel.status !== "converted" && sel.status !== "invoiced" && <button onClick={() => setStatus(sel, "rejected")} className="py-2.5 rounded-xl text-[11px] font-black bg-gray-100 text-gray-500">Reject</button>}
               <button onClick={() => setSel(null)} className="py-2.5 rounded-xl text-[11px] font-black bg-gray-50 text-gray-400">Close</button>
             </div>
           </div>

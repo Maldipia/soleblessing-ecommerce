@@ -59,11 +59,19 @@ export default async function handler(req, res) {
     // Mirror website orders into the Google ORDER sheet so the existing GAS
     // invoice system covers them too. Fire-and-forget; GAS webhook URL set in env.
     const GAS_HOOK = process.env.GAS_ORDER_WEBHOOK || '';
-    if (GAS_HOOK && order) {
+    // PRE-ORDER must NEVER reach the GAS webhook — its fallback would misroute
+    // the order onto the COD sheet. (Conversions send PRE-ORDER through
+    // /api/prepare-order's direct path; this guard is belt-and-braces.)
+    const isPreorderMop = String(order && order.payment_method || '').toUpperCase() === 'PRE-ORDER';
+    if (GAS_HOOK && order && !isPreorderMop) {
       // Speak processOrder's native format. One POST per line item (the sheet is
       // one item per row); orderId passthrough keeps the website SB-number.
+      // GAS-canonical MOPs (admin conversions) pass through verbatim; website
+      // checkout MOPs map as before; anything unknown stays COD.
+      const GAS_MOPS = ['STRAIGHT PAYMENT', 'COD', 'COP', 'LAY AWAY', 'WALK-IN'];
       const pmMap = { cod: 'COD', gcash: 'STRAIGHT PAYMENT', maya: 'STRAIGHT PAYMENT', bdo: 'STRAIGHT PAYMENT', bpi: 'STRAIGHT PAYMENT', bank: 'STRAIGHT PAYMENT' };
-      const pm = pmMap[(order.payment_method || '').toLowerCase()] || 'COD';
+      const pmRaw = String(order.payment_method || '');
+      const pm = GAS_MOPS.includes(pmRaw.toUpperCase()) ? pmRaw.toUpperCase() : (pmMap[pmRaw.toLowerCase()] || 'COD');
       const items = (order.items && order.items.length ? order.items : [{}]);
       for (const it of items) {
         try {
