@@ -108,7 +108,7 @@ export default function InventoryDetail() {
           <div className="space-y-3">
             <div className="relative bg-[#f6f6f5] overflow-hidden aspect-square rounded-2xl">
               {product.imageUrl
-                ? <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
+                ? <img src={product.imageUrl} alt={product.name} className="w-full h-full object-contain" />
                 : <div className="w-full h-full flex items-center justify-center text-8xl opacity-20">👟</div>}
               <div className="absolute bottom-3 right-3 bg-[#0a0a0a]/90 text-white px-3.5 py-2 flex items-center gap-2 rounded-full">
                 <QrCode className="h-3.5 w-3.5 text-[#FF5A1F]" />
