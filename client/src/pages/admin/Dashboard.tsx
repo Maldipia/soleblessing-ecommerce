@@ -1916,7 +1916,7 @@ export default function AdminDashboard() {
     }),
     [sbProducts, productCategory, search]);
 
-  const [channelFilter,setChannelFilter]=useState<"all"|"website"|"sheet_import"|"requests">("website");
+  const [channelFilter,setChannelFilter]=useState<"all"|"website"|"sheet_import">("website");
   const [orderSearch,setOrderSearch]=useState("");
   const [ordersShown,setOrdersShown]=useState(25);
   // Orders 2.0 dashboard layout (table + side panel)
@@ -3150,7 +3150,7 @@ export default function AdminDashboard() {
                   {orderSearch&&<button onClick={()=>setOrderSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm font-bold">✕</button>}
                 </div>
                 <div className="flex items-center rounded-lg border border-gray-200 bg-white overflow-hidden">
-                  {([["website",`🌐 Website ${srcCnt("website")}`],["sheet_import",`📋 FB Form ${srcCnt("sheet_import")}`],["requests","🧾 Order Form"]] as const).map(([v,l])=>(
+                  {([["website",`🌐 Website ${srcCnt("website")}`],["sheet_import",`📋 FB / Order Form ${srcCnt("sheet_import")}`]] as const).map(([v,l])=>(
                     <button key={v} onClick={()=>setChannelFilter(v)}
                       className={`px-3 py-2 text-[11px] font-bold ${channelFilter===v?"bg-[#0d2430] text-white":"text-gray-500 hover:bg-gray-50"}`}>{l}</button>
                   ))}
@@ -3165,7 +3165,9 @@ export default function AdminDashboard() {
                 </a>
               </div>
 
-              {channelFilter==="requests" ? <IncomingRequests onPrepare={(r:any)=>{setPrepareReq(r);setCreateOrder(true);}}/> : <>
+              {/* Order-form requests live INSIDE the FB / Order Form tab (combined per Pia, Nov 24) */}
+              {channelFilter==="sheet_import"&&<IncomingRequests onPrepare={(r:any)=>{setPrepareReq(r);setCreateOrder(true);}}/>}
+              <>
               {/* stat cards */}
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mb-5">
                 <div className="bg-white border border-gray-100 rounded-xl p-4">
@@ -3524,7 +3526,7 @@ export default function AdminDashboard() {
                   )}
                 </div>
               </div>
-              </>}
+              </>
             </div>);
           })()}
 
