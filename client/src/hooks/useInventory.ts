@@ -25,7 +25,7 @@ interface InventoryState {
 
 let _cache: InventoryProduct[] | null = null;
 let _cacheTime = 0;
-const CACHE_TTL = 5 * 60 * 1000;
+const CACHE_TTL = 45 * 1000; // short hold: price/photo edits show within a minute
 const _listeners: Set<() => void> = new Set();
 
 async function fetchInventory(): Promise<InventoryProduct[]> {
