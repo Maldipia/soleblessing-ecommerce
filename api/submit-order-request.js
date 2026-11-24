@@ -12,9 +12,9 @@ const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://akualfrqzaierqsfc
 const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const H = () => ({ apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' });
 
-export const MOPS = ['STRAIGHT PAYMENT', 'COD', 'COP', 'LAY AWAY', 'WALK IN', 'PRE-ORDER'];
+export const MOPS = ['STRAIGHT PAYMENT', 'COD', 'COP', 'LAY AWAY', 'WALK-IN', 'PRE-ORDER'];
 // Fixed loyalty map — used at CONVERSION, never trusted from the client.
-export const MOP_POINTS = { 'STRAIGHT PAYMENT': 100, COD: 50, COP: 50, 'LAY AWAY': 25, 'WALK IN': 75, 'PRE-ORDER': 0 };
+export const MOP_POINTS = { 'STRAIGHT PAYMENT': 100, COD: 50, COP: 50, 'LAY AWAY': 25, 'WALK-IN': 75, 'PRE-ORDER': 0 };
 export const PRIVACY_POLICY_VERSION = '2026-11-24.1';
 export const PREORDER_POLICY_VERSION = '2026-11-24.1';
 
@@ -53,8 +53,8 @@ export function validate(b) {
   if (!out.address || out.address.length < 10 || out.address.length > 500) errs.address = 'Complete delivery address is required';
   if (out.special_request && out.special_request.length > 500) errs.specialRequest = 'Notes too long';
   if (!MOPS.includes(out.payment_method)) errs.paymentMethod = 'Choose a payment method';
-  if (b.privacyAccepted !== true) errs.privacy = 'Privacy Policy & Terms acceptance is required';
-  if (out.payment_method === 'PRE-ORDER' && b.preorderAccepted !== true) errs.preorder = 'PRE-ORDER policy acceptance is required';
+  if (b.privacyAccepted !== true) errs.privacyAccepted = 'Privacy Policy & Terms acceptance is required';
+  if (out.payment_method === 'PRE-ORDER' && b.preorderAccepted !== true) errs.preorderAccepted = 'PRE-ORDER policy acceptance is required';
   return { out, errs };
 }
 

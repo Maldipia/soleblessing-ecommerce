@@ -191,11 +191,17 @@ export default async function handler(req, res) {
     // P1 audit trail: snapshot order rows BEFORE a mutation so the log carries
     // old→new values — and a full snapshot on delete (recoverable from the log).
     let before = null;
-    if (table === 'sb_orders' && (op === 'update' || op === 'delete')) {
+    if ((table === 'sb_orders' || table === 'sb_order_requests') && (op === 'update' || op === 'delete')) {
       try {
-        const pre = await fetch(`${SUPABASE_URL}/rest/v1/sb_orders${query ? ('?' + query + '&') : '?'}limit=5`, { headers: H_SVC() });
+        const pre = await fetch(`${SUPABASE_URL}/rest/v1/${table}${query ? ('?' + query + '&') : '?'}limit=5`, { headers: H_SVC() });
         before = pre.ok ? await pre.json() : null;
       } catch { before = null; }
+    }
+    // Order-form requests: server stamps the reviewer — client-sent values are overwritten,
+    // so reviewed_by always reflects the authenticated admin actor.
+    if (table === 'sb_order_requests' && op === 'update' && body.data && typeof body.data === 'object') {
+      body.data.reviewed_by = actor;
+      body.data.reviewed_at = new Date().toISOString();
     }
 
     const r = await fetch(url, {
@@ -206,13 +212,16 @@ export default async function handler(req, res) {
     if (!r.ok) return res.status(r.status).json({ error: text });
 
     if (Array.isArray(before) && before.length) {
+      const isReq = table === 'sb_order_requests';
+      const skip = new Set(['updated_at', 'reviewed_at']);
       const entries = before.map((row) => {
+        const ref = isReq ? row.request_ref : row.order_number;
         if (op === 'delete') {
-          return { order_number: row.order_number, actor, action: 'delete', old_value: row, new_value: null };
+          return { order_number: ref, actor, action: isReq ? 'request_delete' : 'delete', old_value: row, new_value: null };
         }
         const changed = {};
-        for (const k of Object.keys(body.data || {})) if (k !== 'updated_at') changed[k] = row[k];
-        return { order_number: row.order_number, actor, action: 'update', old_value: changed, new_value: Object.fromEntries(Object.entries(body.data || {}).filter(([k]) => k !== 'updated_at')) };
+        for (const k of Object.keys(body.data || {})) if (!skip.has(k)) changed[k] = row[k];
+        return { order_number: ref, actor, action: isReq ? 'request_update' : 'update', old_value: changed, new_value: Object.fromEntries(Object.entries(body.data || {}).filter(([k]) => !skip.has(k))) };
       });
       logOrderEvent(entries); // fire-and-forget
     }

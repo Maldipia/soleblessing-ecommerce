@@ -12,7 +12,7 @@ const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 const CLIENT_EVENTS = new Set([
   'page_view', 'search', 'category_view', 'size_filter', 'brand_filter',
-  'add_to_cart', 'remove_from_cart', 'begin_checkout', 'checkout_error', 'track_order_view',
+  'add_to_cart', 'remove_from_cart', 'begin_checkout', 'checkout_error', 'track_order_view', 'order_form_submit',
 ]);
 
 // per-IP rate limit: 240 events / 10 min (in-memory per instance — same pattern as track-order)

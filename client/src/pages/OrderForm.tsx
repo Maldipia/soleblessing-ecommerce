@@ -10,7 +10,7 @@ const MOPS = [
   { id: "COD", label: "Cash on Delivery (COD)", desc: "Pay when the item is delivered", pts: 50 },
   { id: "COP", label: "Cash on Pickup (COP)", desc: "Pay upon pick-up at our location", pts: 50 },
   { id: "LAY AWAY", label: "Lay Away", desc: "Reserve now, pay in installments", pts: 25 },
-  { id: "WALK IN", label: "Walk In", desc: "Order and pay in store", pts: 75 },
+  { id: "WALK-IN", label: "Walk-In", desc: "Order and pay in store", pts: 75 },
   { id: "PRE-ORDER", label: "Pre-Order", desc: "100% full payment required · ETA 7–14 days", pts: 0, isNew: true },
 ];
 const REGIONS = [
