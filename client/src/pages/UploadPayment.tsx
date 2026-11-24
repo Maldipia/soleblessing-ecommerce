@@ -448,8 +448,20 @@ export default function UploadPayment() {
         <div className="sb-overlay">
           <div className="sb-success-card">
             <div className="sb-success-check">✓</div>
-            <h2 className="sb-success-title">Proof Submitted</h2>
-            <p className="sb-success-msg">Your payment proof is now <strong>awaiting verification</strong> by our team. We'll confirm your payment and update your order shortly — no need to resend.</p>
+            <h2 className="sb-success-title">Proof Submitted!</h2>
+            <p className="sb-success-msg">Thank you! Your payment proof is now <strong>awaiting verification</strong> by our team. We'll confirm your payment and update your order shortly — no need to resend.</p>
+            <div style={{background:"rgba(255,255,255,.04)",border:"1px solid rgba(201,168,76,.25)",borderRadius:"12px",padding:"12px 16px",margin:"14px 0",textAlign:"left",fontSize:"13px"}}>
+              {[["Order Number", orderId], ["Total Amount", amount ? `₱${Number(amount).toLocaleString("en-PH")}` : ""], ["Payment Method", method],
+                ["Submitted On", new Date().toLocaleString("en-PH",{timeZone:"Asia/Manila",month:"short",day:"numeric",year:"numeric",hour:"numeric",minute:"2-digit"})]].map(([k,v]) => v ? (
+                <div key={k} style={{display:"flex",justifyContent:"space-between",gap:"12px",padding:"3px 0"}}>
+                  <span style={{color:"#8fa89b"}}>{k}</span><span style={{fontWeight:700}}>{v}</span>
+                </div>
+              ) : null)}
+            </div>
+            <div style={{display:"flex",gap:"8px",margin:"4px 0 10px"}}>
+              <a href={`/invoice/${encodeURIComponent(orderId)}`} style={{flex:1,textAlign:"center",padding:"11px 0",borderRadius:"10px",border:"1px solid rgba(201,168,76,.45)",color:"#C9A84C",fontWeight:700,fontSize:"12.5px",textDecoration:"none"}}>View Invoice</a>
+              <a href={`/order/${encodeURIComponent(orderId)}`} style={{flex:1,textAlign:"center",padding:"11px 0",borderRadius:"10px",background:"#C9A84C",color:"#0b1a1f",fontWeight:800,fontSize:"12.5px",textDecoration:"none"}}>Track My Order</a>
+            </div>
             <div className="sb-success-ref">Submission Reference<span>{refId}</span></div>
             <button className="sb-success-close" onClick={resetForm}>Submit Another</button>
           </div>
