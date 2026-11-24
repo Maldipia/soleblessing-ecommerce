@@ -2086,6 +2086,44 @@ export default function AdminDashboard() {
   // ── Overview: date range, KPIs, chart, channels, activity ──
   const [createOrder,setCreateOrder]=useState(false);
   const [prepareReq,setPrepareReq]=useState<any>(null); // order-form request being converted
+  // Payment-proof verification panel state
+  const [proofInfo,setProofInfo]=useState<Record<string,any>>({});
+  const [reupFor,setReupFor]=useState<string|null>(null);
+  const [reupReason,setReupReason]=useState("");
+  const openProof=async(o:any)=>{
+    let v=String(o.payment_proof_url||"");
+    if(!v) return;
+    // Legacy rows stored the full public URL — convert to a bucket path so the
+    // signed-URL route keeps working once the bucket is switched to private.
+    const legacy=v.match(/\/object\/public\/(payment-proofs\/.+)$/);
+    if(legacy) v=legacy[1];
+    else if(/^https?:\/\//.test(v)){window.open(v,"_blank","noopener");return;}
+    try{
+      const r=await fetch("/api/admin",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({...adminCred(),op:"proof_url",path:v})});
+      const out=await r.json().catch(()=>({} as any));
+      if(!r.ok||!out.url) throw new Error(out.error||"could not open proof");
+      window.open(out.url,"_blank","noopener"); // 10-minute signed URL — private bucket
+    }catch(e:any){toast.error(e.message||"Could not open proof");}
+  };
+  const loadProofInfo=async(o:any)=>{
+    try{
+      const rows=await sb.select("sb_order_log",`order_number=eq.${encodeURIComponent(o.order_number)}&action=eq.payment_proof_submitted&order=created_at.desc&limit=1&select=new_value,created_at`);
+      setProofInfo(p=>({...p,[o.id]:(Array.isArray(rows)&&rows[0])||null}));
+    }catch{setProofInfo(p=>({...p,[o.id]:null}));}
+  };
+  const requestReupload=async(o:any)=>{
+    const reason=reupReason.trim();
+    if(reason.length<3){toast.error("A reason is required — the customer will see it.");return;}
+    try{
+      const r=await fetch("/api/admin",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({...adminCred(),op:"request_reupload",order_number:o.order_number,reason})});
+      const out=await r.json().catch(()=>({} as any));
+      if(!r.ok) throw new Error(out.error||"request failed");
+      toast.success("New proof requested — the customer sees your reason on their invoice page");
+      setReupFor(null); setReupReason(""); loadOrders();
+    }catch(e:any){toast.error(e.message||"Request failed");}
+  };
   const [rangeDays,setRangeDays]=useState<number>(7);
   const DAY=864e5;
   const rangeOrders=useMemo(()=>sbOrders.filter(o=>o.status!=="cancelled"&&(!rangeDays||+new Date(o.created_at)>=Date.now()-rangeDays*DAY)),[sbOrders,rangeDays]);
@@ -2394,7 +2432,13 @@ export default function AdminDashboard() {
 
   const setPaymentStatus = async (o:any, ps:string) => {
     try{
-      await sb.update("sb_orders",`id=eq.${o.id}`,{payment_status:ps,updated_at:new Date().toISOString()});
+      // Duplicate-verification guard: VERIFY only lands on a payment that is
+      // actually awaiting review — a second click (or a second admin) no-ops.
+      const q = ps==="verified" ? `id=eq.${o.id}&payment_status=eq.submitted` : `id=eq.${o.id}`;
+      const rows = await sb.update("sb_orders",q,{payment_status:ps,updated_at:new Date().toISOString()});
+      if(ps==="verified"&&(!Array.isArray(rows)||!rows.length)){
+        toast.error("Nothing to confirm — no proof awaiting review (maybe already verified)."); loadOrders(); return;
+      }
       toast.success("Payment "+ps); loadOrders();
       // Order + payment confirmed → the confirmation email goes out by itself
       // (Nike/Adidas-style). Skips quietly if there's no email or already sent.
@@ -3210,8 +3254,8 @@ export default function AdminDashboard() {
                             <td className="px-1.5 py-2.5">{payBadge(o)}</td>
                             <td className="px-1.5 py-2.5">
                               {o.payment_proof_url
-                                ? <a href={o.payment_proof_url} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()}
-                                    className="text-[10px] font-bold text-[#8a6d25] border border-[#C9A84C] px-2 py-0.5 rounded-full hover:bg-[#C9A84C]/10 whitespace-nowrap">View</a>
+                                ? <button onClick={e=>{e.stopPropagation();openProof(o);}}
+                                    className="text-[10px] font-bold text-[#8a6d25] border border-[#C9A84C] px-2 py-0.5 rounded-full hover:bg-[#C9A84C]/10 whitespace-nowrap">View</button>
                                 : <span className="text-gray-300">—</span>}
                             </td>
                             <td className="px-1.5 py-2.5">
@@ -3313,11 +3357,49 @@ export default function AdminDashboard() {
                         <div className="flex gap-2 items-center flex-wrap"><span className="text-gray-400 w-16 flex-shrink-0 font-semibold">Payment</span>
                           {payBadge(sel)}
                           <span className="text-[#0d2430] capitalize font-semibold">{sel.payment_method?.replace(/_/g," ")}</span>
-                          {sel.payment_proof_url&&<a href={sel.payment_proof_url} target="_blank" rel="noopener noreferrer" className="text-[#8a6d25] font-semibold underline">proof</a>}
-                          {sel.payment_status==="submitted"&&(
-                            <button onClick={()=>setPaymentStatus(sel,"verified")}
-                              className="text-[10px] font-bold text-emerald-700 border border-emerald-300 px-2 py-0.5 rounded-lg hover:bg-emerald-50">Verify</button>)}
+                          {sel.payment_status==="reupload"&&<span className="text-[10px] font-black text-orange-600">↻ new proof requested</span>}
+                          {sel.payment_status==="awaiting_full_payment"&&<span className="text-[10px] font-black text-orange-600">PRE-ORDER — full payment first</span>}
                         </div>
+                        {(sel.payment_proof_url||sel.payment_status==="submitted"||sel.payment_status==="reupload")&&(
+                          <div className="mt-1.5 bg-[#fbfaf7] border border-gray-200 rounded-xl p-2.5 space-y-2">
+                            <div className="flex items-center gap-2 flex-wrap text-[11px]">
+                              <span className="font-black text-[#0d2430]">💳 Payment proof</span>
+                              {sel.payment_status==="submitted"&&<span className="text-gray-500 font-semibold">submitted {fmtDate(sel.updated_at||sel.created_at)}</span>}
+                              {sel.payment_reference&&<span className="font-mono font-bold text-[#0d2430]">ref {sel.payment_reference}</span>}
+                              <span className="font-black text-[#0d2430] tabular-nums ml-auto">{fmt(sel.total)}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {sel.payment_proof_url&&<button onClick={()=>openProof(sel)}
+                                className="text-[10.5px] font-bold bg-[#0d2430] text-white px-2.5 py-1 rounded-lg hover:bg-[#122d3a]">🔍 View / download proof</button>}
+                              {proofInfo[sel.id]===undefined
+                                ? <button onClick={()=>loadProofInfo(sel)} className="text-[10.5px] font-bold text-gray-500 border border-gray-200 px-2.5 py-1 rounded-lg hover:bg-gray-50">ℹ Submission details</button>
+                                : proofInfo[sel.id]
+                                  ? <span className="text-[10.5px] text-gray-600 font-semibold">
+                                      {proofInfo[sel.id].new_value?.method&&<>via <b>{proofInfo[sel.id].new_value.method}</b> · </>}
+                                      {proofInfo[sel.id].new_value?.amount_claimed&&<>claimed ₱{proofInfo[sel.id].new_value.amount_claimed} · </>}
+                                      {proofInfo[sel.id].new_value?.message?<>“{proofInfo[sel.id].new_value.message}”</>:<>no message</>}
+                                    </span>
+                                  : <span className="text-[10.5px] text-gray-400">no submission record</span>}
+                            </div>
+                            {sel.payment_status==="submitted"&&(
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <button onClick={()=>setPaymentStatus(sel,"verified")}
+                                  className="text-[11px] font-black bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-700">✓ Confirm Payment</button>
+                                <button onClick={()=>{setReupFor(reupFor===String(sel.id)?null:String(sel.id));setReupReason("");}}
+                                  className="text-[11px] font-bold text-orange-700 border border-orange-300 px-3 py-1.5 rounded-lg hover:bg-orange-50">↻ Request new proof</button>
+                              </div>
+                            )}
+                            {reupFor===String(sel.id)&&(
+                              <div className="flex items-center gap-1.5">
+                                <input value={reupReason} onChange={e=>setReupReason(e.target.value)} placeholder="Reason (required — customer will see this)"
+                                  className="flex-1 border border-orange-300 rounded-lg px-2.5 py-1.5 text-[11px] outline-none focus:border-orange-500"/>
+                                <button onClick={()=>requestReupload(sel)} disabled={reupReason.trim().length<3}
+                                  className="text-[11px] font-black bg-orange-600 text-white px-3 py-1.5 rounded-lg disabled:opacity-40">Send</button>
+                              </div>
+                            )}
+                            {sel.payment_status==="reupload"&&<p className="text-[10.5px] font-semibold text-orange-700">Waiting for the customer to upload a new proof — they see your reason on their invoice page.</p>}
+                          </div>
+                        )}
                       </div>
                       {/* invoice — WEBSITE orders: site's branded /invoice page (Google Sheet
                           as archive). FB orders: Google Drive invoice is THE invoice —

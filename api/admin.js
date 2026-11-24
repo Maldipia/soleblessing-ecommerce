@@ -147,6 +147,48 @@ export default async function handler(req, res) {
     }
   }
 
+  // Payment-proof viewing — owner/manager only. Proofs live in PRIVATE storage;
+  // the DB stores only the bucket path, and admins get a 10-minute signed URL.
+  if (op === 'proof_url') {
+    if (staff && staff.role !== 'manager') return res.status(403).json({ error: 'not allowed' });
+    const path = String(body.path || '');
+    if (!/^payment-proofs\/[A-Za-z0-9/_.-]{3,200}$/.test(path) || path.includes('..'))
+      return res.status(400).json({ error: 'bad proof path' });
+    try {
+      const r = await fetch(`${SUPABASE_URL}/storage/v1/object/sign/${path}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expiresIn: 600 }),
+      });
+      const out = await r.json().catch(() => null);
+      if (!r.ok || !out || !out.signedURL) return res.status(502).json({ error: 'could not sign proof URL' });
+      return res.status(200).json({ ok: true, url: `${SUPABASE_URL}/storage/v1${out.signedURL}` });
+    } catch { return res.status(500).json({ error: 'could not sign proof URL' }); }
+  }
+
+  // Request a NEW payment proof — owner/manager only, reason REQUIRED.
+  // Conditional update: a verified payment can never be flipped back here,
+  // and the reason reaches both the audit log and (via track-order) the customer.
+  if (op === 'request_reupload') {
+    if (staff && staff.role !== 'manager') return res.status(403).json({ error: 'not allowed' });
+    const orderNo = String(body.order_number || '').trim().toUpperCase();
+    const reason = String(body.reason || '').trim().slice(0, 300);
+    if (!/^SB-[A-Z0-9-]{4,24}$/.test(orderNo)) return res.status(400).json({ error: 'order_number required' });
+    if (reason.length < 3) return res.status(400).json({ error: 'a reason is required when requesting a new proof' });
+    const actorName = staff ? staff.id : 'OWNER';
+    try {
+      const r = await fetch(
+        `${SUPABASE_URL}/rest/v1/sb_orders?order_number=eq.${encodeURIComponent(orderNo)}&payment_status=in.(submitted,pending,awaiting_full_payment,reupload)`,
+        { method: 'PATCH', headers: { ...H_SVC(), Prefer: 'return=representation' },
+          body: JSON.stringify({ payment_status: 'reupload', updated_at: new Date().toISOString() }) },
+      );
+      const rows = r.ok ? await r.json() : [];
+      if (!rows.length) return res.status(409).json({ error: 'nothing to request — payment may already be verified' });
+      logOrderEvent({ order_number: orderNo, actor: actorName, action: 'proof_reupload_requested', new_value: { reason } });
+      return res.status(200).json({ ok: true });
+    } catch { return res.status(500).json({ error: 'request failed' }); }
+  }
+
   if (staff) {
     // Least privilege per role. Scanner = view + add inventory only.
     // Manager = run the floor: scan/edit inventory, view + process orders,

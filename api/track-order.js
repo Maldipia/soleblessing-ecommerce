@@ -70,6 +70,18 @@ export default async function handler(req, res) {
           return pub;
         });
       }
+      // Admin asked for a NEW payment proof → surface the reason to the
+      // customer (latest proof_reupload_requested audit entry; reason only).
+      if (o.payment_status === 'reupload') {
+        try {
+          const lr = await fetch(
+            `${SUPABASE_URL}/rest/v1/sb_order_log?order_number=eq.${encodeURIComponent(o.order_number)}&action=eq.proof_reupload_requested&order=created_at.desc&limit=1&select=new_value,created_at`,
+            { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } },
+          );
+          const [entry] = lr.ok ? await lr.json() : [];
+          if (entry) { o.reupload_reason = (entry.new_value && entry.new_value.reason) || null; o.reupload_requested_at = entry.created_at; }
+        } catch { /* best-effort */ }
+      }
     }
     return res.status(200).json(rows);
   } catch (e) {

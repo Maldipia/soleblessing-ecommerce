@@ -33,6 +33,7 @@ export default function UploadPayment() {
   const [customerName, setCustomerName] = useState("");
   const [amount, setAmount]         = useState("");
   const [refNo, setRefNo]           = useState("");
+  const [msg, setMsg]               = useState("");
   const [lightbox, setLightbox]     = useState<{src:string;label:string}|null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -71,6 +72,8 @@ export default function UploadPayment() {
     .map(label => ({ m: label, e: (payMethods.find(x => x.label === label)?.icon) || "💳" }));
 
   function handleFile(f: File) {
+    if (f.size > 5 * 1024 * 1024) { setUploadError("File is too large — maximum is 5 MB."); return; }
+    setUploadError("");
     setFile(f);
     if (f.type.startsWith("image/")) {
       const r = new FileReader();
@@ -103,7 +106,7 @@ export default function UploadPayment() {
         r.onerror = rej;
         r.readAsDataURL(file);
       });
-      const body = JSON.stringify({ orderId, customerName, amount, paymentMethod: method, referenceNumber: refNo, fileBase64: base64Data, mimeType: file.type, fileName: file.name });
+      const body = JSON.stringify({ orderId, customerName, amount, paymentMethod: method, referenceNumber: refNo, message: msg, fileBase64: base64Data, mimeType: file.type, fileName: file.name });
       const r = await fetch("/api/upload-proof", { method: "POST", body, headers: { "Content-Type": "application/json" } });
       if (!r.ok) {
         const out = await r.json().catch(() => ({} as any));
@@ -387,6 +390,13 @@ export default function UploadPayment() {
                   <input type="text" placeholder="e.g. 123456789012" value={refNo} onChange={e=>setRefNo(e.target.value)}/>
                 </div>
 
+                <div className="sb-field">
+                  <label>Message to our team (optional)</label>
+                  <textarea rows={2} maxLength={500} placeholder="e.g. Paid in two transfers / sender name is different"
+                    value={msg} onChange={e=>setMsg(e.target.value)}
+                    style={{width:"100%",background:"rgba(255,255,255,.04)",border:"1px solid rgba(201,168,76,.25)",borderRadius:"10px",padding:"10px 12px",color:"#e8ede9",fontSize:"13px",fontFamily:"inherit",resize:"vertical"}}/>
+                </div>
+
                 <span className="sb-method-label">Payment Proof</span>
                 {!file ? (
                   <div className="sb-upload-zone" onClick={()=>fileRef.current?.click()}
@@ -438,17 +448,9 @@ export default function UploadPayment() {
         <div className="sb-overlay">
           <div className="sb-success-card">
             <div className="sb-success-check">✓</div>
-            <h2 className="sb-success-title">Payment Received</h2>
-            <p className="sb-success-msg">Your proof has been submitted successfully. We'll verify and update your order shortly.</p>
+            <h2 className="sb-success-title">Proof Submitted</h2>
+            <p className="sb-success-msg">Your payment proof is now <strong>awaiting verification</strong> by our team. We'll confirm your payment and update your order shortly — no need to resend.</p>
             <div className="sb-success-ref">Submission Reference<span>{refId}</span></div>
-            <a
-              href="https://drive.google.com/drive/folders/1MMLgawQE5KKQQqufa2Leoka5zdXV6qIY"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="sb-folder-link"
-            >
-              📁 View Payment Screenshots Folder
-            </a>
             <button className="sb-success-close" onClick={resetForm}>Submit Another</button>
           </div>
         </div>

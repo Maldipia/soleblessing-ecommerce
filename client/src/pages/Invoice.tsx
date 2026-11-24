@@ -39,7 +39,11 @@ export default function Invoice() {
 
   const paid = order.payment_status === "verified";
   const cod = order.payment_method === "cod";
+  const submitted = order.payment_status === "submitted";
+  const reupload = order.payment_status === "reupload";
+  const preorder = String(order.payment_method || "").toUpperCase() === "PRE-ORDER";
   const items = order.items || [];
+  const payUrl = `/upload-payment?order=${encodeURIComponent(order.order_number)}&name=${encodeURIComponent(order.customer_name || "")}&amount=${encodeURIComponent(String(Math.round((order.total || 0) / 100)))}`;
 
   return (
     <div className="min-h-screen bg-[#f6f6f5] print:bg-white py-6 md:py-10 px-4">
@@ -57,7 +61,7 @@ export default function Invoice() {
           {/* head */}
           <div className="bg-[#0a0a0a] px-6 md:px-8 py-6 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <img src="/logo-soleblessing.png" alt="SoleBlessing" className="w-11 h-11 rounded-full bg-white/10 object-contain" />
+              <img src="/sb-logo.jpg" alt="SoleBlessing" className="w-11 h-11 rounded-full bg-white/10 object-contain" />
               <div>
                 <p className="text-white font-black tracking-[.14em] text-[15px]">SOLEBLESSING</p>
                 <p className="text-white/50 text-[10px] font-semibold">Legit. Fresh. Yours. · Amadeo, Cavite 🇵🇭</p>
@@ -82,8 +86,10 @@ export default function Invoice() {
                 </p>
               </div>
               <span className={`text-[10px] font-black tracking-[.1em] uppercase px-3.5 py-2 rounded-full ${
-                paid ? "bg-[#e8f5ee] text-[#1a7f4e]" : cod ? "border-[1.5px] border-[#0a0a0a] text-[#0a0a0a]" : "bg-[#fff7f3] text-[#FF5A1F]"}`}>
-                {paid ? "✓ Paid" : cod ? "Cash on Delivery" : "Awaiting Payment"}
+                paid ? "bg-[#e8f5ee] text-[#1a7f4e]" : cod ? "border-[1.5px] border-[#0a0a0a] text-[#0a0a0a]"
+                : submitted ? "bg-[#eef4ff] text-[#2456c4]" : reupload ? "bg-[#fff1e8] text-[#c2410c]" : "bg-[#fff7f3] text-[#FF5A1F]"}`}>
+                {paid ? "✓ Paid" : cod ? "Cash on Delivery" : submitted ? "Proof Under Review" : reupload ? "New Proof Needed"
+                  : preorder ? "Awaiting Full Payment" : "Awaiting Payment"}
               </span>
             </div>
 
@@ -136,6 +142,39 @@ export default function Invoice() {
               )}
             </div>
           </div>
+
+          {/* ── payment action panel (never printed) ── */}
+          {!cod && !paid && (
+            <div className="no-print px-6 md:px-8 pb-6">
+              {reupload ? (
+                <div className="rounded-2xl border-2 border-[#fdba74] bg-[#fff7ed] p-5">
+                  <p className="text-[12px] font-black uppercase tracking-[.1em] text-[#c2410c] mb-1">⚠ We need a new payment proof</p>
+                  {order.reupload_reason && (
+                    <p className="text-[12.5px] font-semibold text-[#7c2d12] mb-3">Reason from our team: <span className="font-black">“{order.reupload_reason}”</span></p>
+                  )}
+                  <a href={payUrl} className="block text-center bg-[#0a0a0a] text-white py-3 rounded-xl text-[12px] font-black tracking-[.08em] uppercase hover:bg-[#262626]">
+                    Upload New Payment Proof →
+                  </a>
+                </div>
+              ) : submitted ? (
+                <div className="rounded-2xl border border-[#bfdbfe] bg-[#eff6ff] p-5 text-center">
+                  <p className="text-[12.5px] font-black text-[#1d4ed8]">✓ Payment proof submitted — awaiting verification</p>
+                  <p className="text-[11px] font-semibold text-[#3b6bc9] mt-1">Our team is reviewing it. You'll be contacted once the payment is confirmed.</p>
+                  <a href={payUrl} className="inline-block mt-2 text-[11px] font-bold text-[#1d4ed8] underline">Submitted the wrong file? Upload a different proof</a>
+                </div>
+              ) : (
+                <div className="rounded-2xl border-2 border-[#0a0a0a] p-5 text-center">
+                  <p className="text-[12px] font-black uppercase tracking-[.12em] text-[#0a0a0a] mb-1">
+                    {preorder ? "Full payment is required to confirm this pre-order" : "Complete your payment"}
+                  </p>
+                  <p className="text-[11px] font-semibold text-[#8b8b88] mb-3">GCash, bank transfer details and QR codes are on our secure payment portal. Upload your proof there (JPG, PNG or PDF, max 5 MB).</p>
+                  <a href={payUrl} className="block bg-[#FF5A1F] text-white py-3.5 rounded-xl text-[12.5px] font-black tracking-[.08em] uppercase hover:opacity-90">
+                    Pay Now & Upload Proof →
+                  </a>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="bg-[#f6f6f5] print:bg-white px-6 md:px-8 py-4 text-center">
             <p className="text-[10.5px] text-[#9b9b98] font-semibold">
