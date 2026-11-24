@@ -18,16 +18,21 @@ export default function IncomingRequests({ onPrepare }: { onPrepare?: (r: any) =
   const [loading, setLoading] = useState(true);
   const [missing, setMissing] = useState(false);
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (quiet = false) => {
+    if (!quiet) setLoading(true);
     try {
       const r = await sbAdmin.select("sb_order_requests", "select=*&order=created_at.desc&limit=100");
       setRows(Array.isArray(r) ? r : []);
       setMissing(false);
-    } catch { setMissing(true); }
-    setLoading(false);
+    } catch { if (!quiet) setMissing(true); }
+    if (!quiet) setLoading(false);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    // Auto-refresh: new form submissions appear without a manual Refresh.
+    const t = setInterval(() => { if (!document.hidden) load(true); }, 45 * 1000);
+    return () => clearInterval(t);
+  }, []);
 
   const setStatus = async (req: any, status: string) => {
     await sbAdmin.update("sb_order_requests", `request_ref=eq.${encodeURIComponent(req.request_ref)}`, { status, reviewed_at: new Date().toISOString() });
