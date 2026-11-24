@@ -36,6 +36,7 @@ import ShippingPolicy from "./pages/ShippingPolicy";
 import ReturnsPolicy from "./pages/ReturnsPolicy";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
+import OrderForm from "./pages/OrderForm";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import CartDrawer from "./components/CartDrawer";
@@ -44,6 +45,7 @@ import ChatWidget from "./components/ChatWidget";
 function Router() {
   const [location] = useLocation();
   const isAdmin = location.startsWith("/admin");
+  const isBare = isAdmin || location === "/order"; // standalone pages: no site header/footer
 
   // Anonymous page-view analytics (skips admin pages). Product pages carry the
   // item code so "most viewed products" works; /order pages log track_order_view.
@@ -56,7 +58,7 @@ function Router() {
 
   return (
     <>
-      {!isAdmin && <Header />}
+      {!isBare && <Header />}
       <Switch>
         <Route path={"/"} component={Home} />
         <Route path={"/products"} component={Products} />
@@ -75,6 +77,7 @@ function Router() {
         <Route path={"/wishlist"} component={Wishlist} />
         <Route path={"/loyalty"} component={LoyaltyProgram} />
         <Route path={"/order/:id"} component={OrderDetail} />
+        <Route path={"/order"} component={OrderForm} />
         <Route path={"/invoice/:orderNumber"} component={Invoice} />
         <Route path={"/admin"} component={AdminDashboard} />
         <Route path={"/admin/products"} component={AdminProducts} />
@@ -89,8 +92,8 @@ function Router() {
         <Route path={"/404"} component={NotFound} />
         <Route component={NotFound} />
       </Switch>
-      {!isAdmin && <Footer />}
-      {!isAdmin && <CartDrawer />}
+      {!isBare && <Footer />}
+      {!isBare && <CartDrawer />}
       {/* ChatWidget hidden: auth is stubbed so chat can never sign in — re-enable after Next.js rebuild */}
     </>
   );

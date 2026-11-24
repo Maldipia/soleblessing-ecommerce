@@ -25,6 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import AdminSettings from "./Settings";
 import AdminVisitors from "./Visitors";
+import IncomingRequests from "./Incoming";
 import { useInventory, refreshInventory } from "@/hooks/useInventory";
 import AdminPromos from "./Promos";
 import ShoeCleanerCampaign from "./ShoeCleanerCampaign";
@@ -3008,6 +3009,7 @@ export default function AdminDashboard() {
           )}
 
           {/* ── ORDERS ── */}
+          {section==="orders"&&<IncomingRequests/>}
           {section==="orders"&&(()=>{
             // ── Orders 2.0 (per approved mockup): stat cards → tabs → table + side panel ──
             const sel = selOrderId ? sbOrders.find(o=>String(o.id)===selOrderId) || null : null;
