@@ -326,6 +326,13 @@ export default function OrderForm() {
               <p className="text-[12.5px] text-[#4a4a46] leading-relaxed mb-3">
                 Your order details have been received and are now awaiting review by our team. Our staff will prepare your order and send your official invoice and payment instructions through your registered email address.
               </p>
+              <div className="text-left flex gap-3 items-start rounded-xl px-4 py-3 mb-3 border" style={{ background: "#fffaf3", borderColor: "#ffd9ad" }}>
+                <span className="text-[18px] leading-none mt-0.5">📧</span>
+                <div>
+                  <div className="text-[12.5px] font-black text-[#0a0a0a]">Please wait for your invoice</div>
+                  <div className="text-[12px] text-[#6b6b68] leading-relaxed">We will send your official invoice to <span className="font-bold text-[#0a0a0a]">{f.email}</span>. No need to message us — kindly check your inbox (and spam folder) within 24 hours.</div>
+                </div>
+              </div>
               {isPreorder && (
                 <p className="text-[12px] font-bold leading-relaxed rounded-xl px-4 py-3" style={{ background: "#fff3e8", color: "#b45309" }}>
                   Your pre-order requires full payment. Your order will only be confirmed after payment has been received and verified. Estimated arrival is 7–14 days from payment confirmation.
