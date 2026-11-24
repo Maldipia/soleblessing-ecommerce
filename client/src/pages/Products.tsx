@@ -73,7 +73,15 @@ export default function Products() {
   const filtered = useMemo(() => {
     let f = products.filter(p => {
       if (brandFilter !== "All" && p.brand !== brandFilter) return false;
-      if (search && !p.name.toLowerCase().includes(search.toLowerCase()) && !p.sku.toLowerCase().includes(search.toLowerCase())) return false;
+      if (search) {
+        const q = search.trim().toLowerCase();
+        // If the query reads like a size ("9", "9.5", "us 9", "size 10"), also
+        // match products that carry that size — so typing a size lists them all.
+        const qSize = normalizeSize(q.replace(/^(us|size|sz)\s*/i, ""));
+        const matchesText = p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q);
+        const matchesSize = !!qSize && p.sizes.includes(qSize);
+        if (!matchesText && !matchesSize) return false;
+      }
       if (sizeFilter && !p.sizes.includes(sizeFilter)) return false;
       return true;
     });
@@ -97,7 +105,7 @@ export default function Products() {
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#b3b3b0]" />
             <input value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Search name or SKU…" inputMode="search"
+              placeholder="Search name, SKU, or size…" inputMode="search"
               className="w-full pl-11 pr-4 py-2.5 text-[13px] bg-[#fafaf9] border-[1.5px] border-[#e6e6e4] rounded-full outline-none focus:border-[#0a0a0a] transition-colors" />
           </div>
           <select value={sort} onChange={e => setSort(e.target.value)}
