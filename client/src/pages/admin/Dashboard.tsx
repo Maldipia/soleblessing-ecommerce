@@ -24,6 +24,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import AdminSettings from "./Settings";
+import AdminVisitors from "./Visitors";
 import { useInventory, refreshInventory } from "@/hooks/useInventory";
 import AdminPromos from "./Promos";
 import ShoeCleanerCampaign from "./ShoeCleanerCampaign";
@@ -3400,6 +3401,7 @@ export default function AdminDashboard() {
           {section==="settings"&&<AdminSettings/>}
 
           {/* ── ANALYTICS ── */}
+          {section==="analytics"&&<AdminVisitors/>}
           {section==="analytics"&&(
             <div className="grid md:grid-cols-2 gap-6">
               <div className="bg-white border border-gray-100 rounded-xl p-6">

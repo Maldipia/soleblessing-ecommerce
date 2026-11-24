@@ -126,6 +126,24 @@ export default async function handler(req, res) {
     logOrderEvent({ order_number: order.order_number, actor: 'customer', action: 'create',
       new_value: { total: order.total, items: (order.items || []).length, payment_method: order.payment_method, source: order.source || 'website' } });
 
+    // Analytics: trusted server-side purchase event (anonymous ids from the client;
+    // unique index on order_number prevents duplicates; failures never block the order)
+    try {
+      const a = body.analytics || {};
+      await fetch(`${SUPABASE_URL}/rest/v1/sb_visitor_events`, {
+        method: 'POST',
+        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+        body: JSON.stringify({
+          session_id: String(a.session_id || 'unknown').slice(0, 64),
+          visitor_id: String(a.visitor_id || 'unknown').slice(0, 64),
+          event_type: 'purchase',
+          order_number: order.order_number,
+          item_code: (order.items && order.items[0] && String(order.items[0].id || '').slice(0, 40)) || null,
+          event_data: { total: order.total || 0, items: (order.items || []).length, payment_method: order.payment_method || '' },
+        }),
+      });
+    } catch { /* analytics is never load-bearing */ }
+
     return res.status(200).json({ order });
   } catch (e) {
     return res.status(500).json({ error: String(e) });

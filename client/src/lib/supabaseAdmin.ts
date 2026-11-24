@@ -54,6 +54,15 @@ export const sbAdmin = {
       return true;
     } catch { return false; }
   },
+  // Visitor analytics summary (owner/manager). from/to are ISO strings.
+  async analytics(from: string, to: string, rollup = false) {
+    const res = await fetch('/api/admin', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...adminCred(), op: 'analytics', from, to, rollup }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
   select: (table: string, query = '') => call('select', table, query),
   insert: (table: string, data: object) => call('insert', table, '', data),
   upsert: (table: string, query: string, data: object) => call('upsert', table, query, data),

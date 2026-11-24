@@ -2,6 +2,7 @@ import { useCart } from "@/contexts/CartContext";
 import { useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import { sb } from "@/lib/supabase";
+import { track, trackIds } from "@/lib/track";
 import { CheckCircle, ChevronRight, Tag, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -36,6 +37,8 @@ export default function Checkout() {
     shippingAddress: "", notes: "", paymentMethod: "",
   });
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+
+  useEffect(() => { track("begin_checkout", { d: { items: String(items.length) } }); }, []);
 
   // Load payment methods + shipping from settings
   useEffect(() => {
@@ -131,6 +134,7 @@ export default function Checkout() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           orderData,
+          analytics: trackIds(), // anonymous ids only — links the purchase to the funnel
           promo: promoApplied ? {
             id: promoApplied.id, code: promoApplied.code,
             discount, customerName: form.customerName,
@@ -148,6 +152,7 @@ export default function Checkout() {
           setSubmitting(false);
           return;
         }
+        track("checkout_error", { d: { code: String(placeRes.status) } });
         throw new Error("place-order failed");
       }
 

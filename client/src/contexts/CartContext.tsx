@@ -1,3 +1,4 @@
+import { track } from "@/lib/track";
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
 export interface CartItem {
@@ -47,10 +48,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
       return [...prev, { ...item, qty: 1 }];
     });
     setDrawerOpen(true);
+    track("add_to_cart", { ic: item.id, sku: item.sku, d: { size: item.size, price: item.price } });
   };
 
-  const removeItem = (id: string, size: string) =>
+  const removeItem = (id: string, size: string) => {
     setItems(prev => prev.filter(i => !(i.id === id && i.size === size)));
+    track("remove_from_cart", { ic: id, d: { size } });
+  };
 
   const updateQty = (id: string, size: string, qty: number) => {
     if (qty < 1) { removeItem(id, size); return; }

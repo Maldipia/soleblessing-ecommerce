@@ -119,6 +119,34 @@ export default async function handler(req, res) {
     });
   }
 
+  // Visitor analytics summary — OWNER and manager only (scanner PINs blocked).
+  // Calls the security-definer SQL function; raw analytics tables stay RLS-locked.
+  if (op === 'analytics') {
+    if (staff && staff.role !== 'manager') return res.status(403).json({ error: 'not allowed' });
+    const H = { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' };
+    const iso = (x, fb) => { const d = new Date(x || fb); return isNaN(d) ? new Date(fb).toISOString() : d.toISOString(); };
+    const now = Date.now(), day = 86400000;
+    const p_from = iso(body.from, now - 7 * day), p_to = iso(body.to, now);
+    const span = new Date(p_to) - new Date(p_from);
+    const p_prev_to = p_from, p_prev_from = new Date(new Date(p_from) - span).toISOString();
+    try {
+      if (body.rollup) {
+        fetch(`${SUPABASE_URL}/rest/v1/rpc/sb_analytics_rollup`, {
+          method: 'POST', headers: H, body: '{}',
+        }).catch(() => {}); // fire-and-forget daily rollup + retention prune
+      }
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/sb_analytics_summary`, {
+        method: 'POST', headers: H,
+        body: JSON.stringify({ p_from, p_to, p_prev_from, p_prev_to }),
+      });
+      const out = await r.json().catch(() => null);
+      if (!r.ok) return res.status(502).json({ error: 'analytics failed' });
+      return res.status(200).json({ summary: out, range: { from: p_from, to: p_to } });
+    } catch (e) {
+      return res.status(500).json({ error: 'analytics failed' });
+    }
+  }
+
   if (staff) {
     // Least privilege per role. Scanner = view + add inventory only.
     // Manager = run the floor: scan/edit inventory, view + process orders,

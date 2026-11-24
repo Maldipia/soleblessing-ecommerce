@@ -2,6 +2,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch, useLocation } from "wouter";
+import { useEffect } from "react";
+import { track } from "./lib/track";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { CartProvider } from "./contexts/CartContext";
@@ -42,6 +44,15 @@ import ChatWidget from "./components/ChatWidget";
 function Router() {
   const [location] = useLocation();
   const isAdmin = location.startsWith("/admin");
+
+  // Anonymous page-view analytics (skips admin pages). Product pages carry the
+  // item code so "most viewed products" works; /order pages log track_order_view.
+  useEffect(() => {
+    if (isAdmin) return;
+    const ic = location.match(/^\/inventory\/([^/]+)/)?.[1];
+    track("page_view", { p: location, ic });
+    if (location.startsWith("/order/")) track("track_order_view");
+  }, [location, isAdmin]);
 
   return (
     <>

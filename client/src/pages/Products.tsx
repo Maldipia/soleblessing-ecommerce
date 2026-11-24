@@ -1,5 +1,6 @@
 // SB2.0 — products grid: white page, pill filters, modern cards. Logic unchanged.
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { track } from "@/lib/track";
 import { useInventory } from "@/hooks/useInventory";
 import { useLocation } from "wouter";
 import { Search, SlidersHorizontal, Heart, X } from "lucide-react";
@@ -20,6 +21,10 @@ export default function Products() {
   const [, setLocation] = useLocation();
   const { data: raw, isLoading } = useInventory();
   const { toggle, isWishlisted } = useWishlist();
+
+  // Analytics: debounced search terms (with result count, so zero-result
+  // searches surface as restock signals) + size/brand filter usage.
+  const searchTrack = useRef<ReturnType<typeof setTimeout>>();
 
   // Honor ?search= / ?q= in the URL so shared/typed search links land filtered
   const [search, setSearch] = useState(() => {
@@ -90,6 +95,17 @@ export default function Products() {
     else if (sort === "name") f.sort((a, b) => a.name.localeCompare(b.name));
     return f;
   }, [products, brandFilter, search, sizeFilter, sort]);
+
+  useEffect(() => {
+    if (!search.trim()) return;
+    if (searchTrack.current) clearTimeout(searchTrack.current);
+    searchTrack.current = setTimeout(() => {
+      track("search", { d: { q: search.trim().slice(0, 80), n: String(filtered.length) } });
+    }, 1500);
+    return () => { if (searchTrack.current) clearTimeout(searchTrack.current); };
+  }, [search, filtered.length]);
+  useEffect(() => { if (sizeFilter) track("size_filter", { d: { size: sizeFilter } }); }, [sizeFilter]);
+  useEffect(() => { if (brandFilter !== "All") track("brand_filter", { d: { brand: brandFilter } }); }, [brandFilter]);
 
   return (
     <div className="min-h-screen bg-white">
