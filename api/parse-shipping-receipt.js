@@ -9,6 +9,37 @@ const GAS_HOOK = process.env.GAS_ORDER_WEBHOOK || '';
 
 export const config = { api: { bodyParser: { sizeLimit: '7mb' } } };
 
+// Pick the REAL tracking number from the receipt's raw OCR text, server-side.
+// LBC receipts carry many long numbers (MIN, Serial, Invoice No., TIN, phones)
+// — the tracking number is the 12-digit one printed alone under the barcode.
+// Lines labeled as fiscal/contact fields are blacklisted; a number standing
+// alone on its own line (the barcode line) is boosted. Falls back to the
+// OCR service's own guess when nothing scores positive.
+export function pickTracking(raw, courier, fallback) {
+  const lines = String(raw || '').split(/\r?\n/);
+  const badLabel = /(MIN|SERIAL|INVOICE|TIN|VAT|TEL|PTU|ACCREDIT|SERIES|CONTACT|REG)/i;
+  const phoneLike = (d) => /^(0?9\d{9,10}|63\d{10,11})$/.test(d);
+  const cands = [];
+  for (const ln of lines) {
+    for (const m of ln.matchAll(/\d[\d\- ]{8,22}\d/g)) {
+      const digits = m[0].replace(/\D/g, '');
+      if (digits.length < 10 || digits.length > 18) continue;
+      if (phoneLike(digits)) continue;
+      cands.push({ digits, ln });
+    }
+  }
+  const isLbc = /lbc/i.test(String(courier || '')) || /LBC/i.test(String(raw || ''));
+  const score = (c) =>
+    (/TRACK/i.test(c.ln) ? 100 : 0) +
+    (badLabel.test(c.ln) ? -100 : 0) +
+    (isLbc && c.digits.length === 12 ? 50 : 0) +
+    (c.digits.length >= 11 && c.digits.length <= 14 ? 10 : 0) +
+    (/^[\s\d\- ]+$/.test(c.ln) ? 20 : 0); // number alone on its line = barcode line
+  cands.sort((a, b) => score(b) - score(a));
+  const best = cands.length && score(cands[0]) > 0 ? cands[0] : null;
+  return best ? best.digits : String(fallback || '');
+}
+
 export default async function handler(req, res) {
   cors(req, res);
   res.setHeader('Cache-Control', 'no-store');
@@ -52,7 +83,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       ok: true,
       courier: ocr.courier || '',
-      tracking: ocr.tracking || '',
+      tracking: pickTracking(ocr.rawText, ocr.courier, ocr.tracking),
       receipt_url: ocr.fileUrl || '',
       match: scored.length && scored[0].score >= 75 ? scored[0] : null,
       candidates: scored,
