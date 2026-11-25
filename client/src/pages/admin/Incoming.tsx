@@ -134,17 +134,17 @@ export function RequestDetailCard({ sel, onClose, onPrepare, onChanged }:
 
   return (
     <div className="bg-white border border-gray-100 rounded-xl p-4">
-        <div className="flex items-center justify-between mb-1 gap-2">
+        {/* header — IDENTICAL structure to Selected Order */}
+        <div className="flex items-center justify-between mb-3 gap-2">
           <h3 className="text-sm font-black text-[#0d2430]">Selected Request</h3>
           <div className="flex items-center gap-1.5">
-            <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase ${REQ_STATUS_COLORS[sel.status] || "bg-gray-100"}`}>{sel.status.replace("_", " ")}</span>
-            <span className="text-[11px] font-black bg-[#C9A84C] text-[#0d2430] px-2.5 py-1 rounded-full font-mono">{sel.request_ref}</span>
+            <span className="text-[10px] font-bold bg-[#C9A84C] text-[#0d2430] px-2.5 py-1 rounded-lg">{sel.request_ref}</span>
           </div>
         </div>
-        <div className="flex items-center gap-2 mb-2 flex-wrap">
-          <span className="text-[10px] font-bold bg-[#fff3df] text-[#8a6d25] px-2 py-0.5 rounded-full">🧾 Order Form</span>
-          {converted && <span className="text-[11px] font-black text-[#8a6d25] font-mono">→ {sel.converted_order_number}</span>}
-          <span className="text-[10.5px] text-gray-400 font-semibold">{when(sel.created_at)}</span>
+        <div className="mb-3 -mt-1">
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">🧾 Order Form</span>
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ml-1.5 uppercase ${REQ_STATUS_COLORS[sel.status] || "bg-gray-100 text-gray-500"}`}>{sel.status.replace("_", " ")}</span>
+          {converted && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700 ml-1.5">→ {sel.converted_order_number}</span>}
         </div>
 
         {converted && (
@@ -157,23 +157,27 @@ export function RequestDetailCard({ sel, onClose, onPrepare, onChanged }:
         )}
 
         {tab === "request" && (<>
-          {sel.payment_method === "PRE-ORDER" && (
-            <div className="bg-orange-50 border border-orange-200 rounded-xl px-3.5 py-2.5 mb-3 text-[11.5px] font-bold text-orange-700">
-              PRE-ORDER — awaiting full payment. Policy v{sel.preorder_policy_version} accepted {when(sel.preorder_accepted_at)}.
+          {/* customer / address — IDENTICAL row style to Selected Order */}
+          <div className="space-y-2.5 text-xs border-t border-gray-100 pt-3 mb-3">
+            <div className="flex gap-2"><span className="text-gray-400 w-16 flex-shrink-0 font-semibold">Customer</span>
+              <span className="text-[#0d2430]"><b>{sel.receiver_name}</b>{sel.fb_ig_name ? <span className="text-blue-500"> · FB: {sel.fb_ig_name}</span> : null}<br/>{sel.email || "no email"} · {sel.contact_number}</span></div>
+            {sel.vip_id && <div className="flex gap-2"><span className="text-gray-400 w-16 flex-shrink-0 font-semibold">VIP ID</span>
+              <span className="text-[#0d2430] font-semibold">{sel.vip_id}</span></div>}
+            <div className="flex gap-2"><span className="text-gray-400 w-16 flex-shrink-0 font-semibold">Address</span>
+              <span className="text-[#0d2430]">{sel.address}{sel.city ? `, ${sel.city}` : ""}{sel.region ? ` · ${sel.region}` : ""}</span></div>
+            {sel.special_request && <div className="flex gap-2"><span className="text-gray-400 w-16 flex-shrink-0 font-semibold">Notes</span>
+              <span className="text-[#0d2430]">{sel.special_request}</span></div>}
+            <div className="flex gap-2 items-center flex-wrap"><span className="text-gray-400 w-16 flex-shrink-0 font-semibold">Payment</span>
+              <span className="text-[#0d2430] font-semibold">{sel.payment_method}</span>
+              {sel.payment_method === "PRE-ORDER" && <span className="text-[10px] font-black text-orange-600">PRE-ORDER — full payment first</span>}
             </div>
-          )}
-          <div className="space-y-1.5 text-[12.5px]">
-            {[["Email", sel.email], ["FB / IG", sel.fb_ig_name], ["VIP ID", sel.vip_id], ["Receiver", sel.receiver_name], ["Contact", sel.contact_number],
-              ["Region", sel.region], ["City", sel.city], ["Address", sel.address], ["Notes", sel.special_request], ["MOP", sel.payment_method]].map(([k, v]) => v ? (
-              <div key={k as string} className="flex gap-3"><span className="text-gray-400 font-semibold w-24 shrink-0">{k}</span><span className="font-bold break-words min-w-0">{v}</span></div>
-            ) : null)}
+            {sel.payment_method === "PRE-ORDER" && sel.preorder_policy_version && (
+              <div className="flex gap-2"><span className="text-gray-400 w-16 flex-shrink-0 font-semibold">Policy</span>
+                <span className="text-[#0d2430]">v{sel.preorder_policy_version} accepted {when(sel.preorder_accepted_at)}</span></div>
+            )}
+            {converted && <div className="flex gap-2"><span className="text-gray-400 w-16 flex-shrink-0 font-semibold">Order</span>
+              <span className="text-[#0d2430] font-bold">{sel.converted_order_number}{sel.reviewed_by ? <span className="text-gray-400 font-semibold"> · by {sel.reviewed_by}</span> : null}</span></div>}
           </div>
-          {converted && (
-            <div className="mt-3 bg-green-50 border border-green-200 rounded-xl px-3.5 py-2.5 text-[11.5px] font-bold text-green-700">
-              ✓ Converted to order <span className="font-mono font-black">{sel.converted_order_number}</span>
-              {sel.reviewed_by ? ` · by ${sel.reviewed_by}` : ""} — see the Invoice &amp; Payment tab.
-            </div>
-          )}
         </>)}
 
         {tab === "payment" && (
@@ -255,12 +259,12 @@ export function RequestDetailCard({ sel, onClose, onPrepare, onChanged }:
           </div>
         ))}
 
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          {sel.status === "new" && <button onClick={() => setStatus("in_review")} className="py-2.5 rounded-xl text-[11px] font-black bg-blue-50 text-blue-700 border border-blue-200">Mark In Review</button>}
+        <div className="mt-3 flex items-center gap-1.5 flex-wrap border-t border-gray-100 pt-3">
           {(sel.status === "new" || sel.status === "in_review") &&
-            <button onClick={() => { onPrepare?.(sel); onClose(); }} className="py-2.5 rounded-xl text-[11px] font-black text-white col-span-1" style={{ background: "#0d2430" }}>🧾 Prepare Order →</button>}
-          {sel.status !== "rejected" && !converted && <button onClick={() => setStatus("rejected")} className="py-2.5 rounded-xl text-[11px] font-black bg-gray-100 text-gray-500">Reject</button>}
-          <button onClick={onClose} className="py-2.5 rounded-xl text-[11px] font-black bg-gray-50 text-gray-400">Close</button>
+            <button onClick={() => { onPrepare?.(sel); onClose(); }} className="text-[11px] font-black bg-[#0d2430] text-white px-3 py-1.5 rounded-lg hover:bg-[#122d3a]">🧾 Prepare Order →</button>}
+          {sel.status === "new" && <button onClick={() => setStatus("in_review")} className="text-[11px] font-bold text-blue-700 border border-blue-300 px-3 py-1.5 rounded-lg hover:bg-blue-50">Mark In Review</button>}
+          {sel.status !== "rejected" && !converted && <button onClick={() => setStatus("rejected")} className="text-[11px] font-bold text-gray-500 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-50">Reject</button>}
+          <button onClick={onClose} className="ml-auto text-[11px] font-bold text-gray-400 px-3 py-1.5 hover:text-gray-600">Close</button>
         </div>
     </div>
   );
