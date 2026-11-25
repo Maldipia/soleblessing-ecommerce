@@ -150,17 +150,32 @@ export default function IncomingRequests({ onPrepare }: { onPrepare?: (r: any) =
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <h3 className="text-[12px] font-black uppercase tracking-[.12em] text-[#0d2430]">📥 Order Requests</h3>
         <span className="text-[10px] font-black bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">{cnt("new")} new</span>
-        <div className="flex items-center gap-1 ml-2 flex-wrap">
-          {CHIPS.map(([v, l]) => (
-            <button key={v} onClick={() => setChip(v)}
-              className={`text-[10px] font-black px-2.5 py-1 rounded-full ${chip === v ? "bg-[#0d2430] text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
-              {l}{v !== "all" ? ` ${cnt(v)}` : ""}
-            </button>
-          ))}
-        </div>
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search ref, name, contact…"
           className="ml-auto border border-gray-200 rounded-lg px-2.5 py-1.5 text-[11px] outline-none focus:border-[#C9A84C] w-[180px]" />
         <button onClick={() => load()} className="text-[11px] font-bold text-gray-400 hover:text-gray-600">↻ Refresh</button>
+      </div>
+
+      {/* stat cards — same layout language as FB Form Orders below */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mb-4">
+        {([["all", "🧾", "Total Requests", "all submissions"], ["new", "📥", "Incoming", "awaiting review"], ["in_review", "🔎", "In Review", "being checked"],
+           ["converted", "🛒", "Converted", "order created"], ["invoiced", "✉️", "Invoiced", "invoice sent"]] as const).map(([v, ic, label, sub]) => (
+          <button key={v} onClick={() => setChip(v)}
+            className={`bg-white border rounded-xl p-4 text-left transition-colors ${chip === v ? "border-[#C9A84C]" : "border-gray-100 hover:border-[#C9A84C]"}`}>
+            <div className="flex items-center gap-2 text-[11px] font-semibold text-gray-500 mb-1"><span>{ic}</span> {label}</div>
+            <div className="text-2xl font-black text-[#0d2430]">{v === "all" ? rows.length : cnt(v)}</div>
+            <span className="text-[10px] text-gray-400">{sub}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* status tabs — same style as the orders status tabs */}
+      <div className="flex items-center gap-1.5 mb-4 flex-wrap">
+        {CHIPS.map(([v, l]) => (
+          <button key={v} onClick={() => setChip(v)}
+            className={`px-3.5 py-2 text-[11.5px] font-bold rounded-lg border ${chip === v ? "bg-[#0d2430] text-white border-[#0d2430]" : "bg-white text-gray-500 border-gray-200 hover:border-gray-300"}`}>
+            {l} ({v === "all" ? rows.length : cnt(v)})
+          </button>
+        ))}
       </div>
       {loading ? <div className="text-xs text-gray-400 py-3">Loading…</div> : !filtered.length ? (
         <div className="bg-white border border-gray-100 rounded-xl px-4 py-5 text-[12px] text-gray-400">
@@ -170,13 +185,14 @@ export default function IncomingRequests({ onPrepare }: { onPrepare?: (r: any) =
         <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
           <table className="w-full text-[12px]">
             <thead><tr className="text-left text-[9.5px] font-black uppercase tracking-wider text-gray-400 border-b border-gray-100">
-              <th className="px-3 py-2.5">Ref</th><th className="px-2 py-2.5">Customer</th><th className="px-2 py-2.5">MOP</th>
+              <th className="px-3 py-2.5">Ref</th><th className="px-2 py-2.5 hidden sm:table-cell">Date</th><th className="px-2 py-2.5">Customer</th><th className="px-2 py-2.5">MOP</th>
               <th className="px-2 py-2.5 hidden md:table-cell">Region</th><th className="px-2 py-2.5">Status</th><th className="px-2 py-2.5"></th>
             </tr></thead>
             <tbody>
               {filtered.map(r => (
                 <tr key={r.request_ref} className="border-b border-gray-50 hover:bg-gray-50/60 cursor-pointer" onClick={() => openDetail(r)}>
                   <td className="px-3 py-2.5 font-mono font-bold text-[11px]">{r.request_ref}</td>
+                  <td className="px-2 py-2.5 hidden sm:table-cell text-gray-500 whitespace-nowrap">{when(r.created_at)}</td>
                   <td className="px-2 py-2.5 font-bold truncate max-w-[140px]">{r.receiver_name}</td>
                   <td className="px-2 py-2.5">{r.payment_method}{r.payment_method === "PRE-ORDER" && <span className="ml-1 text-[8px] font-black text-orange-600">⚠ FULL PAYMENT</span>}</td>
                   <td className="px-2 py-2.5 hidden md:table-cell text-gray-500 truncate max-w-[120px]">{r.region}</td>
