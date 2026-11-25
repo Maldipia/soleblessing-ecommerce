@@ -310,7 +310,7 @@ export default function OrderForm() {
                 <input type="checkbox" checked={f.privacyAccepted} onChange={e => set("privacyAccepted", e.target.checked)}
                   className="w-4 h-4 mt-0.5 shrink-0" style={{ accentColor: ORANGE }} />
                 <span className="text-[12px] font-bold text-[#1a1a1a]">
-                  I have read and agree to the <a href="/privacy-policy" target="_blank" className="underline" style={{ color: ORANGE }}>Privacy Policy</a> and <a href="/terms" target="_blank" className="underline" style={{ color: ORANGE }}>Terms &amp; Conditions</a>{isPreorder ? <> and the <span style={{ color: ORANGE }}>Pre-Order Policy</span></> : null}.
+                  I have read and agree to the <a href="/privacy-policy" target="_blank" className="underline" style={{ color: ORANGE }}>Privacy Policy</a> and <a href="/terms-of-service" target="_blank" className="underline" style={{ color: ORANGE }}>Terms &amp; Conditions</a>{isPreorder ? <> and the <span style={{ color: ORANGE }}>Pre-Order Policy</span></> : null}.
                 </span>
               </label>
               {errs.privacyAccepted && <p className="text-[11px] font-bold text-red-500 mt-1.5" role="alert">{errs.privacyAccepted}</p>}
