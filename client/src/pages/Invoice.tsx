@@ -59,7 +59,7 @@ export default function Invoice() {
   );
 
   const paid = order.payment_status === "verified";
-  const cod = order.payment_method === "cod";
+  const cod = String(order.payment_method || "").toUpperCase() === "COD";
   const submitted = order.payment_status === "submitted";
   const reupload = order.payment_status === "reupload";
   const preorder = String(order.payment_method || "").toUpperCase() === "PRE-ORDER";
@@ -67,8 +67,14 @@ export default function Invoice() {
   // Upload link AUTO-FILLS order reference, name and amount — the customer
   // never retypes them. For layaway, the prefilled amount is the REMAINING
   // balance (verified payments deducted), not the full total.
+  // COD (Pia's policy): only the SHIPPING FEE is paid in advance — the courier
+  // collects the product balance on delivery — so the prefill is the shipping fee.
   const paidSoFar = order.payments_total || items.reduce((s: number, i: any) => s + (i.paid || 0), 0);
-  const payUrl = `/upload-payment?order=${encodeURIComponent(order.order_number)}&name=${encodeURIComponent(order.customer_name || "")}&amount=${encodeURIComponent(String(Math.round(Math.max(0, (order.total || 0) - paidSoFar) / 100)))}`;
+  const shipFee = order.shipping_fee || 0;
+  const codDue = cod ? Math.max(0, shipFee - paidSoFar) : 0;
+  const codShipPaid = cod && shipFee > 0 && codDue === 0;
+  const dueNow = cod ? codDue : Math.max(0, (order.total || 0) - paidSoFar);
+  const payUrl = `/upload-payment?order=${encodeURIComponent(order.order_number)}&name=${encodeURIComponent(order.customer_name || "")}&amount=${encodeURIComponent(String(Math.round(dueNow / 100)))}`;
   const expiresAt = order.invoice_access?.expires_at;
   const daysLeft = expiresAt ? Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 86400000)) : null;
 
@@ -109,9 +115,20 @@ export default function Invoice() {
                   <span className="text-[#1a7f4e] text-[18px]">✓</span>
                   <p className="text-[13px] font-black text-[#1a7f4e]">Payment Received — Thank You!</p>
                 </div>
+              ) : codShipPaid ? (
+                <div className="flex items-center gap-2.5 bg-[#e8f5ee] rounded-xl px-4 py-3">
+                  <span className="text-[#1a7f4e] text-[18px]">✓</span>
+                  <div className="leading-tight">
+                    <p className="text-[13px] font-black text-[#1a7f4e]">Shipping Fee Received</p>
+                    <p className="text-[11px] font-semibold text-[#1a7f4e]">Balance collected on delivery</p>
+                  </div>
+                </div>
               ) : cod ? (
-                <div className="flex items-center gap-2.5 bg-[#f4f4f3] rounded-xl px-4 py-3">
-                  <p className="text-[13px] font-black text-[#0a0a0a]">Cash on Delivery</p>
+                <div className="flex items-center gap-2.5 bg-[#FFF7ED] border border-[#FED7AA] rounded-xl px-4 py-2.5">
+                  <div className="leading-tight">
+                    <p className="text-[12.5px] font-black text-[#0a0a0a]">Cash on Delivery</p>
+                    <p className="text-[11px] font-semibold text-[#b45309]">Shipping fee paid in advance · balance on delivery</p>
+                  </div>
                 </div>
               ) : (
                 <div className="flex items-center gap-2.5 bg-[#FFF7ED] border border-[#FED7AA] rounded-xl px-4 py-2.5">
@@ -207,7 +224,7 @@ export default function Invoice() {
             </div>
 
             {/* ── payment instructions + upload proof (never printed) ── */}
-            {!cod && !paid && (
+            {!paid && !codShipPaid && (
               <div className="no-print rounded-xl border border-[#f0f0ef] p-5 md:p-6 mb-2">
                 {reupload ? (
                   <div className="rounded-xl border-2 border-[#fdba74] bg-[#fff7ed] p-5">
@@ -246,7 +263,9 @@ export default function Invoice() {
                         <h3 className="text-[15px] font-black text-[#0a0a0a]">Upload Payment Proof</h3>
                       </div>
                       <p className="text-[12px] font-semibold text-[#6b6b68] mb-3.5">
-                        {preorder ? "Full payment is required to confirm this pre-order. " : "After completing your payment, please "}
+                        {cod
+                          ? <>For COD, the <b>shipping fee{shipFee > 0 ? ` (₱${(codDue / 100).toLocaleString("en-PH")})` : ""} is paid in advance</b> before dispatch — the remaining balance is collected by the courier on delivery. After paying the shipping fee, please </>
+                          : preorder ? "Full payment is required to confirm this pre-order. " : "After completing your payment, please "}
                         upload a clear photo or screenshot of your proof of payment (JPG, PNG or PDF, max 5 MB).
                       </p>
                       <a href={payUrl} className="flex items-center justify-center gap-2 bg-[#EA580C] text-white py-3.5 rounded-xl text-[13px] font-black tracking-[.03em] hover:opacity-90">

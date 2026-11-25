@@ -7,7 +7,7 @@ import { track } from "@/lib/track";
 const ORANGE = "#F97316";
 const MOPS = [
   { id: "STRAIGHT PAYMENT", label: "Straight Payment", desc: "Full payment upon confirmation", pts: 100 },
-  { id: "COD", label: "Cash on Delivery (COD)", desc: "Pay when the item is delivered", pts: 50 },
+  { id: "COD", label: "Cash on Delivery (COD)", desc: "Shipping fee paid in advance · balance collected on delivery", pts: 50 },
   { id: "COP", label: "Cash on Pickup (COP)", desc: "Pay upon pick-up at our location", pts: 50 },
   { id: "LAY AWAY", label: "Lay Away", desc: "Reserve now, pay in installments", pts: 25 },
   { id: "WALK-IN", label: "Walk-In", desc: "Order and pay in store", pts: 75 },
@@ -240,7 +240,8 @@ export default function OrderForm() {
                 {MOPS.map(m => {
                   const on = f.paymentMethod === m.id;
                   return (
-                    <label key={m.id} className={`flex items-center gap-3 border-[1.5px] rounded-2xl px-4 py-3 cursor-pointer transition-all bg-white ${on ? "shadow-sm" : "border-[#e4e2df] hover:border-[#cfcdc9]"}`}
+                    <div key={m.id}>
+                    <label className={`flex items-center gap-3 border-[1.5px] rounded-2xl px-4 py-3 cursor-pointer transition-all bg-white ${on ? "shadow-sm" : "border-[#e4e2df] hover:border-[#cfcdc9]"}`}
                       style={on ? { borderColor: ORANGE, background: "#fff9f4" } : undefined}>
                       <input type="radio" name="mop" checked={on} onChange={() => { set("paymentMethod", m.id); if (m.id !== "PRE-ORDER") set("preorderAccepted", false); }}
                         className="w-4 h-4 shrink-0" style={{ accentColor: ORANGE }} />
@@ -252,6 +253,19 @@ export default function OrderForm() {
                       </div>
                       <span className="text-[10px] font-black px-2 py-1 rounded-lg shrink-0" style={{ background: "#fff3e8", color: "#b45309" }}>{m.pts} pts</span>
                     </label>
+                    {/* COD shipping notice (Pia-approved mock): short, informational, no checkbox */}
+                    {m.id === "COD" && on && (
+                      <div className="mt-3 border-[1.5px] rounded-2xl px-4 py-3" style={{ borderColor: "#F8C89B", background: "#FFF9F4" }}>
+                        <div className="text-[11.5px] font-black tracking-wide mb-1.5" style={{ color: "#b45309" }}>🚚 COD SHIPPING NOTICE</div>
+                        <p className="text-[11.5px] text-[#4a4a46] leading-relaxed">
+                          For COD orders, the <b>shipping fee is paid in advance</b> before dispatch — we pay the courier upfront to
+                          secure your shipment. The exact amount will be shown on your invoice. Once the shipping fee is confirmed,
+                          we dispatch your order, and the <b>remaining product balance is collected by the courier upon delivery</b>.
+                          Thank you for your understanding! 🙏
+                        </p>
+                      </div>
+                    )}
+                    </div>
                   );
                 })}
               </div>

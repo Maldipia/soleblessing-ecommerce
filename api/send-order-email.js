@@ -30,6 +30,18 @@ export function buildInvoiceReadyHtml(o, inviteUrl, expiresAt) {
     ? new Date(expiresAt).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Manila' })
     : '';
   const days = expiresAt ? Math.max(1, Math.round((new Date(expiresAt).getTime() - Date.now()) / 86400000)) : 7;
+  // COD orders carry Pia's COD Shipping Policy card (approved mock, Nov 25).
+  // Policy text only — the email stays confidential: no amounts, no items.
+  const isCOD = String(o.payment_method || '').toUpperCase() === 'COD';
+  const codCard = isCOD ? `
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1.5px solid #F8C89B;background:#FFF9F4;border-radius:10px;margin:14px 0 0"><tr>
+        <td style="padding:16px 18px">
+          <div style="font-size:12px;font-weight:900;color:#b45309;letter-spacing:.08em;margin-bottom:8px">&#128666; SOLEBLESSING &middot; COD SHIPPING POLICY</div>
+          <p style="font-size:12.5px;color:#4a4a46;line-height:1.7;margin:0 0 8px">Thank you for ordering with SoleBlessing!</p>
+          <p style="font-size:12.5px;color:#4a4a46;line-height:1.7;margin:0 0 8px">For COD orders, the <b>shipping fee must be paid in advance before dispatch</b>. We pay the courier upfront to secure your shipment and avoid losses from unclaimed or refused deliveries. The exact amount is shown on your invoice.</p>
+          <p style="font-size:12.5px;color:#4a4a46;line-height:1.7;margin:0">Once the shipping fee is confirmed, we'll dispatch your order. The <b>remaining product balance will still be collected by the courier upon delivery</b>. Thank you for your understanding and cooperation! &#128591;</p>
+        </td>
+      </tr></table>` : '';
   return `<!doctype html><html><body style="margin:0;background:#ece9e4;font-family:Arial,Helvetica,sans-serif">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px">
   <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden">
@@ -48,7 +60,7 @@ export function buildInvoiceReadyHtml(o, inviteUrl, expiresAt) {
         <td style="padding:14px 18px;font-size:12.5px;color:#6b5a1e;line-height:1.6">
           &#9201; This secure invoice link will expire in <b>${days} day${days === 1 ? '' : 's'}</b>${expDate ? ` (on ${expDate})` : ''}. After that, just message us for a new link.
         </td>
-      </tr></table>
+      </tr></table>${codCard}
       <p style="color:#8a8f94;font-size:13px;text-align:center;font-style:italic;margin:26px 0 0">Thank you for shopping with SoleBlessing!</p>
     </td></tr>
     <tr><td style="padding:22px 32px;text-align:center;color:#9aa0a6;font-size:11px;line-height:1.7;border-top:1px solid #f0f0f0">

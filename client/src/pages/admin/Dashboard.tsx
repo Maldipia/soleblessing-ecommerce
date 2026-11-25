@@ -3748,6 +3748,19 @@ export default function AdminDashboard() {
                       </div>
                       </>}
                       {panelTab==="ship"&&<>
+                      {/* COD dispatch gate (Pia: ship only after the shipping-fee advance is uploaded AND confirmed) */}
+                      {String(sel?.payment_method||"").toUpperCase()==="COD"&&(()=>{
+                        const req=(sel.shipping_fee||0)>0?sel.shipping_fee:25000; // invoice shipping fee; ₱250 default
+                        const ver=payEntries.filter((e:any)=>e.status==="verified").reduce((s:number,e:any)=>s+(e.amount||0),0);
+                        const ok=ver>=req||sel.payment_status==="verified";
+                        return ok
+                          ?<div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-3 py-2.5 mb-2.5">
+                            <span>✅</span><span className="text-[11px] font-bold text-green-700">COD shipping fee confirmed (₱{(req/100).toLocaleString("en-PH")}) — OK to dispatch</span>
+                          </div>
+                          :<div className="flex items-center gap-2 bg-amber-50 border border-amber-300 rounded-xl px-3 py-2.5 mb-2.5">
+                            <span>⏳</span><span className="text-[11px] font-bold text-amber-700">COD — shipping fee ₱{(req/100).toLocaleString("en-PH")} not yet paid · HOLD DISPATCH until the upload is verified</span>
+                          </div>;
+                      })()}
                       {/* per-order receipt scan — above tracking (per approved mockup) */}
                       <label className={`flex items-center gap-2.5 border-[1.5px] border-dashed border-[#C9A84C]/70 bg-[#fffdf7] rounded-xl px-3 py-2.5 mb-2.5 cursor-pointer hover:bg-[#C9A84C]/10 ${receiptBusy?"opacity-50 pointer-events-none":""}`}>
                         <span className="text-[15px]">📄</span>
