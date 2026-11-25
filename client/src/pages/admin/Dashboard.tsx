@@ -4017,7 +4017,7 @@ export default function AdminDashboard() {
               <div className="grid lg:grid-cols-[300px_1fr] gap-3">
                 <div className="bg-white border border-gray-100 rounded-xl p-4">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2.5">Platform Status</p>
-                  {[["📘","Facebook Page",true],["📸","Instagram",true],["🎵","TikTok",false]].map(([ic,lbl,on]:any)=>(
+                  {[["📘","Facebook Page",true],["📸","Instagram",true],["🎵","TikTok",true]].map(([ic,lbl,on]:any)=>(
                     <div key={lbl} className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
                       <span className="text-xs font-bold text-[#0d2430]">{ic} {lbl}</span>
                       {on?<span className="text-[10px] font-black text-green-600">✓ Connected</span>
