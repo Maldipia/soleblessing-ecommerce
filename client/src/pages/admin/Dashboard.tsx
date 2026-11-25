@@ -2085,6 +2085,24 @@ export default function AdminDashboard() {
   // ── Overview: date range, KPIs, chart, channels, activity ──
   const [createOrder,setCreateOrder]=useState(false);
   const [prepareReq,setPrepareReq]=useState<any>(null); // (dormant) manual conversion prefill
+  // Source attribution: orders born from the generated /order link are found
+  // via their linked request (request_ref ↔ converted_order_number).
+  const [orderFormRefs,setOrderFormRefs]=useState<Record<string,string>>({});
+  useEffect(()=>{
+    let dead=false;
+    const loadRefs=async()=>{
+      try{
+        const rows=await sbAdmin.select("sb_order_requests","select=request_ref,converted_order_number&converted_order_number=not.is.null&limit=300");
+        if(dead||!Array.isArray(rows))return;
+        const m:Record<string,string>={};
+        for(const r of rows) if(r.converted_order_number&&r.converted_order_number!=="CONVERTING") m[r.converted_order_number]=r.request_ref;
+        setOrderFormRefs(m);
+      }catch{/* table not migrated yet / transient — badges just fall back */}
+    };
+    loadRefs();
+    const t=setInterval(()=>{if(!document.hidden)loadRefs();},60*1000);
+    return()=>{dead=true;clearInterval(t);};
+  },[]);
   // Payment-proof verification panel state
   const [proofInfo,setProofInfo]=useState<Record<string,any>>({});
   const [reupFor,setReupFor]=useState<string|null>(null);
@@ -3323,9 +3341,11 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                       <div className="mb-3 -mt-1">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${(sel.source||"website")==="website"?"bg-blue-100 text-blue-700":"bg-amber-100 text-amber-700"}`}>
-                          {(sel.source||"website")==="website"?"🌐 Website":"📋 FB Form"}
+                        <span title={orderFormRefs[sel.order_number]||undefined}
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${(sel.source||"website")==="website"?"bg-blue-100 text-blue-700":"bg-amber-100 text-amber-700"}`}>
+                          {orderFormRefs[sel.order_number]?"🧾 Order Link":(sel.source||"website")==="website"?"🌐 Website":sel.source==="manual"?"✍️ Manual":"📋 FB Form"}
                         </span>
+                        {orderFormRefs[sel.order_number]&&<span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 ml-1.5 font-mono">{orderFormRefs[sel.order_number]}</span>}
                         {sel.promo_code&&<span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700 ml-1.5">🏷 {sel.promo_code}</span>}
                       </div>
                       {/* items */}
