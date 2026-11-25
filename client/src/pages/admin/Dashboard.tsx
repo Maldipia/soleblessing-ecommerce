@@ -1991,7 +1991,10 @@ export default function AdminDashboard() {
   const [intakeCond,setIntakeCond]=useState("All");
   const [intakeTab,setIntakeTab]=useState<"all"|"today"|"mine"|"unpriced">("all");
   const intakeAll=false; // Latest Inventory is the scan log ONLY — full stock lives in Products & Inventory
-  const [intakeShown,setIntakeShown]=useState(50);
+  // Redesign (Pia's mock): sortable columns + numbered pagination replace load-more
+  const [intakeSort,setIntakeSort]=useState<{k:string;d:1|-1}>({k:"created_at",d:-1});
+  const [intakePage,setIntakePage]=useState(0);
+  const [intakePer,setIntakePer]=useState(10);
   const loadIntake=async()=>{
     setIntakeLoading(true);
     try{
@@ -2027,6 +2030,38 @@ export default function AdminDashboard() {
     // notes included so corrected/merged identifiers (old SKUs, duplicate links) stay findable
     return [r.item_code,r.name,r.brand,r.sku,r.size,r.size_eur,r.size_cm,r.barcode,r.notes].some(v=>String(v||"").toLowerCase().includes(q));
   }),[intakeRows,intakeSearch,intakeCond,intakeAll,intakeTab]);
+  // Sort (mock: ⇅ arrows on headers), then page
+  const sortedIntake=useMemo(()=>{
+    const {k,d}=intakeSort;
+    const numeric=new Set(["srp","selling_price","unit_cost"]);
+    const rows=[...filteredIntake];
+    rows.sort((a:any,b:any)=>{
+      if(k==="created_at"){return (new Date(a.created_at||0).getTime()-new Date(b.created_at||0).getTime())*d;}
+      if(numeric.has(k)){return ((Number(a[k])||0)-(Number(b[k])||0))*d;}
+      if(k==="model"){ // model = name minus the brand prefix (what the column shows)
+        const mv=(r:any)=>{const nm=String(r.name||""),bb=String(r.brand||"").trim();
+          return bb&&nm.toLowerCase().startsWith(bb.toLowerCase()+" ")?nm.slice(bb.length+1).toLowerCase():nm.toLowerCase();};
+        const va=mv(a),vb=mv(b);return va<vb?-d:va>vb?d:0;
+      }
+      if(k==="size"){const va=parseFloat(a.size)||0,vb=parseFloat(b.size)||0;if(va!==vb)return (va-vb)*d;}
+      const va=String(a[k]||"").toLowerCase(),vb=String(b[k]||"").toLowerCase();
+      return va<vb?-d:va>vb?d:0;
+    });
+    return rows;
+  },[filteredIntake,intakeSort]);
+  const intakePageCount=Math.max(1,Math.ceil(sortedIntake.length/intakePer));
+  const intakePageRows=useMemo(()=>sortedIntake.slice(intakePage*intakePer,(intakePage+1)*intakePer),[sortedIntake,intakePage,intakePer]);
+  // numbered pages with ellipsis (mock: ‹ 1 2 3 4 5 … 153 ›)
+  const intakePageList=useMemo(()=>{
+    const total=intakePageCount,cur=intakePage;
+    if(total<=7)return Array.from({length:total},(_,i)=>i) as (number|string)[];
+    const keep=new Set([0,1,2,3,4,cur-1,cur,cur+1,total-1].filter(p=>p>=0&&p<total));
+    if(cur>=total-3)[total-5,total-4,total-3,total-2].forEach(p=>{if(p>=0)keep.add(p);});
+    const arr=[...keep].sort((a,b)=>a-b);
+    const out:(number|string)[]=[];let prev=-2;
+    for(const p of arr){if(p-prev>1&&prev>=0)out.push("…");out.push(p);prev=p;}
+    return out;
+  },[intakePage,intakePageCount]);
   const intakeTabCounts=useMemo(()=>{const s=intakeRows.filter((r:any)=>r.tab==="SCAN");return {
     all:s.length,
     today:s.filter(isTodayRow).length,
@@ -2075,7 +2110,18 @@ export default function AdminDashboard() {
       </td>
     );
   };
-  useEffect(()=>{setIntakeShown(50);},[intakeSearch,intakeCond,intakeAll,intakeTab]);
+  useEffect(()=>{setIntakePage(0);},[intakeSearch,intakeCond,intakeAll,intakeTab,intakeSort,intakePer]);
+  // sortable column header (mock: ⇅ arrows; active column shows ↑/↓ in orange)
+  const thSort=(k:string,label:string,extra:string="")=>{
+    const on=intakeSort.k===k;
+    return (
+      <th className={`px-2 font-semibold cursor-pointer select-none whitespace-nowrap hover:text-gray-600 ${extra}`}
+        title={`Sort by ${label}`}
+        onClick={()=>setIntakeSort(s=>s.k===k?{k,d:(s.d*-1) as 1|-1}:{k,d:1})}>
+        {label} <span className={on?"text-[#EA580C]":"text-gray-300"}>{on?(intakeSort.d===1?"↑":"↓"):"⇅"}</span>
+      </th>
+    );
+  };
   const intakeCSV=()=>{
     const cols=["item_code","brand","name","sku","size","size_eur","size_cm","barcode","srp","selling_price","unit_cost","status","condition","created_at"];
     const esc=(v:any)=>{const t=String(v??"");return /[",\n]/.test(t)?('"'+t.replace(/"/g,'""')+'"'):t;};
@@ -3877,14 +3923,27 @@ export default function AdminDashboard() {
           {/* ── LATEST INVENTORY (shoebox intake log) ── */}
           {section==="intake"&&(
             <div className="space-y-4">
-              {/* quick-nav tabs (Pia: "tab headers where i can choose recent add") */}
-              <div className="flex gap-1.5 overflow-x-auto pb-0.5 -mb-2">
-                {([["all","All"],["today","🆕 Today"],["mine","👤 Mine"],["unpriced","₱? Unpriced"]] as const).map(([k,lbl])=>(
-                  <button key={k} onClick={()=>setIntakeTab(k)}
-                    className={`px-3.5 py-2 rounded-full text-xs font-bold whitespace-nowrap border transition-colors ${intakeTab===k?"bg-[#0d2430] border-[#0d2430] text-white":"border-gray-200 text-gray-500 hover:border-gray-300 bg-white"}`}>
-                    {lbl} <span className={intakeTab===k?"text-[#C9A84C]":"text-gray-400"}>{intakeTabCounts[k]}</span>
-                  </button>
-                ))}
+              {/* Redesign per Pia's mock: subtitle + clickable stat cards (they ARE the filters) */}
+              <p className="text-xs text-gray-500 -mt-2">Manage your stock, pricing, and product details.</p>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                {([
+                  ["all","Total Items","pairs in the scan file","📦"],
+                  ["mine","Mine","added by you","👤"],
+                  ["unpriced","Unpriced","still need a price","🏷️"],
+                  ["today","Scanned Today","added today","✨"],
+                ] as const).map(([k,lbl,sub,ic])=>{
+                  const on=intakeTab===k;
+                  return (
+                    <button key={k} onClick={()=>setIntakeTab(k)}
+                      className={`text-left rounded-xl border p-3.5 transition-all ${on?"border-[#EA580C] bg-gradient-to-br from-[#FFF7F1] to-[#FFEFE2] shadow-[0_3px_14px_rgba(234,88,12,.14)]":"border-gray-100 bg-white hover:border-gray-200"}`}>
+                      <div className="flex items-center justify-between">
+                        <span className={`text-[10px] font-bold uppercase tracking-wider ${on?"text-[#EA580C]":"text-gray-400"}`}>{lbl}</span>
+                        <span className="text-sm">{ic}</span>
+                      </div>
+                      <div className={`text-2xl font-black mt-1 tabular-nums ${on?"text-[#EA580C]":"text-[#0d2430]"}`}>{intakeTabCounts[k].toLocaleString()}</div>
+                      <div className="text-[10px] text-gray-400 mt-0.5">{sub}</div>
+                    </button>
+                  );})}
               </div>
               {/* running total of the scan file (Pia: "put total above the SRP — only what you scanned") */}
               <div className="bg-[#050f12] rounded-xl px-4 py-3 flex items-center justify-between flex-wrap gap-2">
@@ -3895,12 +3954,12 @@ export default function AdminDashboard() {
                 </div>
                 <div className="flex items-baseline gap-2">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">Total SRP</span>
-                  <span className="text-lg font-black text-[#C9A84C]">₱{scanTotals.srp.toLocaleString()}</span>
+                  <span className="text-lg font-normal tabular-nums text-[#C9A84C]">₱{scanTotals.srp.toLocaleString()}</span>
                   <span className="text-[10px] text-white/40">{scanTotals.priced} of {scanTotals.pairs} priced</span>
                 </div>
                 <div className="flex items-baseline gap-2">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">Total Cost</span>
-                  <span className="text-lg font-black text-white">₱{scanTotals.cost.toLocaleString()}</span>
+                  <span className="text-lg font-normal tabular-nums text-white">₱{scanTotals.cost.toLocaleString()}</span>
                   <span className="text-[10px] text-white/40">{scanTotals.costed} of {scanTotals.pairs} costed</span>
                 </div>
               </div>
@@ -3909,18 +3968,18 @@ export default function AdminDashboard() {
                   <div className="relative flex-1 sm:flex-none min-w-[180px]">
                     <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-300"/>
                     <input value={intakeSearch} onChange={e=>setIntakeSearch(e.target.value)}
-                      placeholder="code / model / SKU / barcode / size"
-                      className="pl-8 pr-3 py-2.5 border border-gray-200 rounded-lg text-xs w-full sm:w-64 outline-none focus:border-[#C9A84C]"/>
+                      placeholder="Search by code, model, SKU, barcode, or size..."
+                      className="pl-8 pr-3 py-2.5 border border-gray-200 rounded-lg text-xs w-full sm:w-72 outline-none focus:border-[#EA580C]"/>
                   </div>
                   <select value={intakeCond} onChange={e=>setIntakeCond(e.target.value)}
-                    className="border border-gray-200 rounded-lg px-2 text-xs outline-none">
-                    {["All","Good","Stained","Missing pair","Unknown"].map(c=><option key={c}>{c}</option>)}
+                    className="border border-gray-200 rounded-lg px-2.5 py-2 text-xs font-semibold text-gray-600 outline-none focus:border-[#EA580C] bg-white">
+                    {["All","Good","Stained","Missing pair","Unknown"].map(c=><option key={c} value={c}>{c==="All"?"All Categories":c}</option>)}
                   </select>
                   <span className="text-[11px] font-bold text-gray-400 self-center">📷 {scannedCount} scanned pair{scannedCount===1?"":"s"}</span>
                 </div>
                 <div className="flex gap-2">
                   <button onClick={()=>setScanBox(true)}
-                    className="flex items-center gap-2 bg-[#0d2430] text-white px-4 py-2.5 text-xs font-black rounded-lg hover:bg-[#122d3a] flex-1 sm:flex-none justify-center">
+                    className="flex items-center gap-2 border-2 border-[#EA580C] text-[#EA580C] bg-white px-4 py-2.5 text-xs font-black rounded-lg hover:bg-[#FFF7F1] flex-1 sm:flex-none justify-center">
                     📷 SCAN SHOEBOX
                   </button>
                   <button onClick={intakeCSV} className="flex items-center gap-1.5 border border-gray-200 text-gray-500 px-3 py-2 text-xs font-bold rounded-lg hover:bg-gray-50">
@@ -3936,24 +3995,24 @@ export default function AdminDashboard() {
                 <table className="w-full text-sm min-w-[1120px]">
                   <thead className="sticky top-0 bg-white z-10 shadow-[0_1px_0_0_rgba(0,0,0,.06)]"><tr className="text-[10px] uppercase tracking-wider text-gray-400 text-left">
                     <th className="px-3 py-2.5 font-semibold">📸</th>
-                    <th className="px-2 font-semibold">Item Code</th>
-                    <th className="px-2 font-semibold">Brand</th>
-                    <th className="px-2 font-semibold">Model</th>
-                    <th className="px-2 font-semibold">SKU</th>
-                    <th className="px-2 font-semibold">Size US</th>
+                    {thSort("item_code","Item Code")}
+                    {thSort("brand","Brand")}
+                    {thSort("model","Model")}
+                    {thSort("sku","SKU")}
+                    {thSort("size","Size US")}
                     <th className="px-2 font-semibold">EUR</th>
                     <th className="px-2 font-semibold">CM</th>
                     <th className="px-2 font-semibold">Barcode</th>
-                    <th className="px-2 font-semibold bg-[#C9A84C]/10">SRP ₱</th>
-                    <th className="px-2 font-semibold bg-green-50">Sale ₱</th>
-                    <th className="px-2 font-semibold">Cost ₱</th>
-                    <th className="px-2 font-semibold">Status</th>
+                    {thSort("srp","SRP ₱","bg-[#C9A84C]/10")}
+                    {thSort("selling_price","Sale ₱","bg-green-50")}
+                    {thSort("unit_cost","Cost ₱")}
+                    {thSort("condition","Status")}
                     <th className="px-2 font-semibold">By</th>
-                    <th className="px-2 font-semibold">Added</th>
+                    {thSort("created_at","Added")}
                     <th className="px-2"></th>
                   </tr></thead>
                   <tbody className="divide-y divide-gray-50">
-                    {filteredIntake.slice(0,intakeShown).map((r:any)=>{
+                    {intakePageRows.map((r:any)=>{
                       const cond=(r.condition==="New"?"Good":r.condition)||"Good";
                       const condCls=cond==="Good"?"bg-green-100 text-green-700":cond==="Stained"?"bg-amber-100 text-amber-700":cond==="Missing pair"?"bg-red-100 text-red-600":"bg-gray-100 text-gray-500";
                       const img=imgByCode.get(r.item_code);
@@ -3979,13 +4038,14 @@ export default function AdminDashboard() {
                           <td className="px-2 text-xs text-gray-500">{r.size_cm||"—"}</td>
                           <td className="px-2 font-mono text-[10px] text-gray-400">{r.barcode?("…"+String(r.barcode).slice(-6)):"—"}</td>
                           {/* SRP / Sale / Cost — click any to edit in place. yellow ✦ = SRP didn't come from the box label */}
-                          {priceCell(r,"srp",`px-2 text-xs font-bold ${/srp updated/i.test(r.notes||"")?"bg-yellow-200 text-yellow-900":"bg-[#C9A84C]/[.06]"}`,
+                          {/* money typography = the Cost column's (Pia: regular weight, tabular numerals, no bold) */}
+                          {priceCell(r,"srp",`px-2 text-xs tabular-nums ${/srp updated/i.test(r.notes||"")?"bg-yellow-200 text-yellow-900":"bg-[#C9A84C]/[.06]"}`,
                             <>{r.srp?((r.srp/100).toLocaleString("en-PH")):"—"}{/srp updated/i.test(r.notes||"")?" ✦":""}</>)}
                           {/* Sale ₱ = selling_price — the website price, NOT the SRP */}
-                          {priceCell(r,"selling_price","px-2 text-xs font-bold bg-green-50/60 text-green-700",
+                          {priceCell(r,"selling_price","px-2 text-xs tabular-nums bg-green-50/60 text-green-700",
                             <>{r.selling_price?((r.selling_price/100).toLocaleString("en-PH")):"—"}</>)}
                           {/* Cost ₱ = unit_cost — internal only, never sent to the website */}
-                          {priceCell(r,"unit_cost","px-2 text-xs text-gray-500",
+                          {priceCell(r,"unit_cost","px-2 text-xs tabular-nums text-gray-500",
                             <>{r.unit_cost>0?((r.unit_cost/100).toLocaleString("en-PH")):"0"}</>)}
                           <td className="px-2"><span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${condCls}`}>{cond}</span>
                             {r.status==="Sold"&&<span className="ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-gray-800 text-white">Sold</span>}</td>
@@ -3999,7 +4059,7 @@ export default function AdminDashboard() {
                           </td>
                         </tr>
                       );})}
-                    {!intakeLoading&&filteredIntake.length===0&&<tr><td colSpan={16} className="px-4 py-10 text-center text-sm text-gray-400">
+                    {!intakeLoading&&sortedIntake.length===0&&<tr><td colSpan={16} className="px-4 py-10 text-center text-sm text-gray-400">
                       {!intakeSearch&&intakeCond==="All"
                         ?<>Nothing scanned yet — hit <b>📷 SCAN SHOEBOX</b> to log your first pair.<br/><span className="text-[11px]">Everything else stays in Products &amp; Inventory.</span></>
                         :"No matches"}</td></tr>}
@@ -4007,8 +4067,33 @@ export default function AdminDashboard() {
                   </tbody>
                 </table>
               </div>
-              {filteredIntake.length>intakeShown&&(
-                <AutoLoader onMore={()=>setIntakeShown(n=>n+50)} remaining={filteredIntake.length-intakeShown}/>
+              {/* pagination footer (mock: "Showing 1–10 of 1,522 items · Rows per page · ‹ 1 2 3 … ›") */}
+              {sortedIntake.length>0&&(
+                <div className="flex items-center justify-between flex-wrap gap-3 px-1">
+                  <span className="text-xs text-gray-500 tabular-nums">
+                    Showing {(intakePage*intakePer+1).toLocaleString()}–{Math.min((intakePage+1)*intakePer,sortedIntake.length).toLocaleString()} of {sortedIntake.length.toLocaleString()} items
+                  </span>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <label className="text-xs text-gray-500 flex items-center gap-1.5">Rows per page:
+                      <select value={intakePer} onChange={e=>setIntakePer(Number(e.target.value))}
+                        className="border border-gray-200 rounded-lg px-1.5 py-1 text-xs outline-none focus:border-[#EA580C] bg-white">
+                        {[10,25,50,100].map(n=><option key={n} value={n}>{n}</option>)}
+                      </select>
+                    </label>
+                    <div className="flex items-center gap-1">
+                      <button disabled={intakePage===0} onClick={()=>setIntakePage(p=>Math.max(0,p-1))}
+                        className="w-7 h-7 rounded-lg border border-gray-200 text-xs text-gray-500 disabled:opacity-30 hover:border-gray-300">‹</button>
+                      {intakePageList.map((p,i)=>typeof p==="string"
+                        ?<span key={"e"+i} className="px-1 text-xs text-gray-400">…</span>
+                        :<button key={p} onClick={()=>setIntakePage(p)}
+                            className={`min-w-7 h-7 px-1.5 rounded-lg text-xs font-bold tabular-nums ${p===intakePage?"bg-[#EA580C] text-white":"border border-gray-200 text-gray-500 hover:border-gray-300"}`}>
+                            {p+1}
+                          </button>)}
+                      <button disabled={intakePage>=intakePageCount-1} onClick={()=>setIntakePage(p=>Math.min(intakePageCount-1,p+1))}
+                        className="w-7 h-7 rounded-lg border border-gray-200 text-xs text-gray-500 disabled:opacity-30 hover:border-gray-300">›</button>
+                    </div>
+                  </div>
+                </div>
               )}
               <p className="text-[10px] text-gray-400">Newest first. <b>Good/Stained</b> are sellable once priced · <b>Missing pair/Unknown</b> never reach the website · <b>Sale ₱</b> is the website price (SRP is the compare-at price) · <b>Cost ₱</b> is internal — it never reaches the website · ✏️ edits the pair right here (scans never join the sheet inventory) · QR reprints the box sticker.</p>
             </div>
