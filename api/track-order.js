@@ -53,9 +53,27 @@ export default async function handler(req, res) {
     res.setHeader('Retry-After', String(retry));
     return res.status(429).json({ error: 'too many lookups — please try again in a few minutes' });
   }
-  const orderNumber = (req.query && req.query.order_number) || '';
-  if (!orderNumber) return res.status(400).json({ error: 'order_number required' });
+  let orderNumber = (req.query && req.query.order_number) || '';
+  const token = (req.query && req.query.token) || '';
+  if (!orderNumber && !token) return res.status(400).json({ error: 'order_number required' });
   if (!SERVICE_KEY) return res.status(500).json({ error: 'service key missing' });
+
+  // ── secure invoice link: resolve token → order (7-day customer access).
+  // Expired / revoked / unknown → 410: customer access is gone, the records
+  // are NOT (admin keeps the permanent copy in the dashboard).
+  let tokenMeta = null;
+  if (token) {
+    if (!/^[A-Za-z0-9_-]{20,80}$/.test(String(token))) return res.status(410).json({ error: 'link_expired' });
+    const tr = await fetch(
+      `${SUPABASE_URL}/rest/v1/sb_invoice_tokens?token=eq.${encodeURIComponent(token)}&select=order_number,expires_at,revoked_at&limit=1`,
+      { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } },
+    );
+    const [t] = tr.ok ? await tr.json().catch(() => []) : [];
+    if (!t || t.revoked_at || new Date(t.expires_at).getTime() < Date.now())
+      return res.status(410).json({ error: 'link_expired' });
+    orderNumber = t.order_number;
+    tokenMeta = { expires_at: t.expires_at };
+  }
   const url = `${SUPABASE_URL}/rest/v1/sb_orders?order_number=eq.${encodeURIComponent(orderNumber)}` +
     `&select=${PUBLIC_FIELDS.join(',')}&limit=1`;
   try {
@@ -72,6 +90,7 @@ export default async function handler(req, res) {
       }
       // Admin asked for a NEW payment proof → surface the reason to the
       // customer (latest proof_reupload_requested audit entry; reason only).
+      if (tokenMeta) o.invoice_access = tokenMeta; // show the customer their link validity
       if (o.payment_status === 'reupload') {
         try {
           const lr = await fetch(

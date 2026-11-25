@@ -2092,7 +2092,7 @@ export default function AdminDashboard() {
     let dead=false;
     const loadRefs=async()=>{
       try{
-        const rows=await sbAdmin.select("sb_order_requests","select=request_ref,converted_order_number&converted_order_number=not.is.null&limit=300");
+        const rows=await sb.select("sb_order_requests","select=request_ref,converted_order_number&converted_order_number=not.is.null&limit=300");
         if(dead||!Array.isArray(rows))return;
         const m:Record<string,string>={};
         for(const r of rows) if(r.converted_order_number&&r.converted_order_number!=="CONVERTING") m[r.converted_order_number]=r.request_ref;
@@ -2128,6 +2128,39 @@ export default function AdminDashboard() {
       const rows=await sb.select("sb_order_log",`order_number=eq.${encodeURIComponent(o.order_number)}&action=eq.payment_proof_submitted&order=created_at.desc&limit=1&select=new_value,created_at`);
       setProofInfo(p=>({...p,[o.id]:(Array.isArray(rows)&&rows[0])||null}));
     }catch{setProofInfo(p=>({...p,[o.id]:null}));}
+  };
+  // Secure customer invoice links (7-day access; admin copy is permanent)
+  const [invLink,setInvLink]=useState<any>(null);
+  const [linkBusy,setLinkBusy]=useState(false);
+  useEffect(()=>{
+    setInvLink(null);
+    if(!selOrderId) return;
+    const o=(sbOrders||[]).find((x:any)=>String(x.id)===selOrderId);
+    if(!o) return;
+    let dead=false;
+    (async()=>{try{
+      const r=await fetch("/api/admin",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({...adminCred(),op:"invoice_link",action:"status",order_number:o.order_number})});
+      const out=await r.json().catch(()=>({} as any));
+      if(!dead&&r.ok) setInvLink(out.link?{...out.link,url:out.link.token?`${location.origin}/invoice/t/${out.link.token}`:null}:{active:false});
+    }catch{}})();
+    return()=>{dead=true;};
+  },[selOrderId,sbOrders]);
+  const invoiceLinkOp=async(o:any,action:string,days=7)=>{
+    setLinkBusy(true);
+    try{
+      const r=await fetch("/api/admin",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({...adminCred(),op:"invoice_link",action,order_number:o.order_number,days})});
+      const out=await r.json().catch(()=>({} as any));
+      if(!r.ok) throw new Error(out.error||"failed");
+      if(action==="issue"){
+        setInvLink({active:true,expires_at:out.expires_at,token:out.token,url:out.url});
+        try{await navigator.clipboard.writeText(out.url);toast.success(`Customer link COPIED — valid until ${fmtDate(out.expires_at)}${out.reissued?" (old link revoked)":""}`);}
+        catch{toast.success(`Customer link ready — valid until ${fmtDate(out.expires_at)}`);}
+      }else if(action==="extend"){setInvLink((p:any)=>({...p,expires_at:out.expires_at}));toast.success(`Access extended until ${fmtDate(out.expires_at)}`);}
+      else if(action==="revoke"){setInvLink({active:false});toast.success("Customer link revoked — dashboard copy stays");}
+    }catch(e:any){toast.error(e.message||"Link operation failed");}
+    setLinkBusy(false);
   };
   const requestReupload=async(o:any)=>{
     const reason=reupReason.trim();
@@ -3452,6 +3485,21 @@ export default function AdminDashboard() {
                                 ?"text-gray-500 border border-gray-200 hover:border-[#C9A84C] hover:text-[#8a6d25]"
                                 :"bg-[#C9A84C] text-[#0d2430] hover:opacity-90"}`}>
                               {invBusy===sel.id?"Generating…":(sel.source||"website")==="website"?"+ Sheet copy":"Generate invoice"}</button>}
+                      </div>
+                      {/* secure customer link — 7-day access to the site invoice; admin copy is permanent */}
+                      <div className="flex items-center gap-1.5 flex-wrap mb-3 -mt-1.5">
+                        <button onClick={()=>invoiceLinkOp(sel,"issue")} disabled={linkBusy}
+                          className="text-[11px] font-bold text-[#8a6d25] border border-[#C9A84C] px-2.5 py-1 rounded-lg hover:bg-[#C9A84C]/10 disabled:opacity-50">
+                          🔗 {invLink?.active?"Reissue customer link":"Customer link (7 days)"}</button>
+                        {invLink?.active&&<>
+                          <span className="text-[10px] font-semibold text-gray-500 whitespace-nowrap">valid until {fmtDate(invLink.expires_at)}</span>
+                          {invLink.url&&<button onClick={()=>{navigator.clipboard.writeText(invLink.url).then(()=>toast.success("Link copied")).catch(()=>toast.error("Copy failed"));}}
+                            className="text-[10.5px] font-bold text-gray-500 border border-gray-200 px-2 py-1 rounded-lg hover:border-[#C9A84C] hover:text-[#8a6d25]">Copy</button>}
+                          <button onClick={()=>invoiceLinkOp(sel,"extend")} disabled={linkBusy}
+                            className="text-[10.5px] font-bold text-gray-500 border border-gray-200 px-2 py-1 rounded-lg hover:border-[#C9A84C] hover:text-[#8a6d25]">+7 days</button>
+                          <button onClick={()=>invoiceLinkOp(sel,"revoke")} disabled={linkBusy}
+                            className="text-[10.5px] font-bold text-red-500 border border-red-200 px-2 py-1 rounded-lg hover:bg-red-50">Revoke</button>
+                        </>}
                       </div>
                       {/* per-order receipt scan — above tracking (per approved mockup) */}
                       <label className={`flex items-center gap-2.5 border-[1.5px] border-dashed border-[#C9A84C]/70 bg-[#fffdf7] rounded-xl px-3 py-2.5 mb-2.5 cursor-pointer hover:bg-[#C9A84C]/10 ${receiptBusy?"opacity-50 pointer-events-none":""}`}>

@@ -10,22 +10,40 @@ const fmtDate = (d: string) => new Date(d).toLocaleDateString("en-PH", { month: 
 
 export default function Invoice() {
   const [, params] = useRoute("/invoice/:orderNumber");
-  const orderNumber = params?.orderNumber || "";
+  const [, tparams] = useRoute("/invoice/t/:token");
+  const accessToken = tparams?.token || "";
+  const orderNumber = accessToken ? "" : (params?.orderNumber || "");
   const [order, setOrder] = useState<any>(null);
   const [err, setErr] = useState("");
+  const [expired, setExpired] = useState(false);
 
   useEffect(() => {
     (async () => {
       try {
-        const r = await fetch(`/api/track-order?order_number=${encodeURIComponent(orderNumber)}`);
+        const q = accessToken ? `token=${encodeURIComponent(accessToken)}` : `order_number=${encodeURIComponent(orderNumber)}`;
+        const r = await fetch(`/api/track-order?${q}`);
+        if (r.status === 410) { setExpired(true); return; }
         const d = await r.json();
         const o = Array.isArray(d) ? d[0] : d;
         if (!r.ok || !o || !o.order_number) throw new Error("not found");
         setOrder(o);
       } catch { setErr("Invoice not found — check the order number."); }
     })();
-  }, [orderNumber]);
+  }, [orderNumber, accessToken]);
 
+  if (expired) return (
+    <div className="min-h-screen bg-[#f6f6f5] flex items-center justify-center px-6">
+      <div className="max-w-[420px] w-full bg-white rounded-3xl border border-[#ececea] p-8 text-center shadow-sm">
+        <img src="/sb-logo.jpg" alt="SoleBlessing" className="w-14 h-14 rounded-full mx-auto mb-4 object-contain" />
+        <p className="text-[13px] font-black uppercase tracking-[.12em] text-[#0a0a0a] mb-2">This invoice link has expired</p>
+        <p className="text-[12px] text-[#6b6b68] font-semibold leading-relaxed mb-4">
+          For your security, invoice links are valid for a limited time. Your order is safe —
+          just message us on Facebook/Messenger and we'll send you a fresh link right away.
+        </p>
+        <a href="https://www.facebook.com/soleblessingofficial" className="block bg-[#0a0a0a] text-white py-3 rounded-xl text-[12px] font-black tracking-[.08em] uppercase">Message Us for a New Link</a>
+      </div>
+    </div>
+  );
   if (err) return (
     <div className="min-h-screen bg-white flex items-center justify-center px-6">
       <p className="text-sm font-semibold text-[#8b8b88]">{err}</p>
@@ -143,6 +161,11 @@ export default function Invoice() {
             </div>
           </div>
 
+          {order.invoice_access?.expires_at && (
+            <p className="no-print px-6 md:px-8 pb-2 text-[10.5px] font-semibold text-[#9b9b98]">
+              🔒 Secure invoice link — valid until {new Date(order.invoice_access.expires_at).toLocaleString("en-PH", { timeZone: "Asia/Manila", month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}. Need more time? Just message us.
+            </p>
+          )}
           {/* ── payment action panel (never printed) ── */}
           {!cod && !paid && (
             <div className="no-print px-6 md:px-8 pb-6">

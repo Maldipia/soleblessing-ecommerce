@@ -166,6 +166,70 @@ export default async function handler(req, res) {
     } catch { return res.status(500).json({ error: 'could not sign proof URL' }); }
   }
 
+  // Secure customer invoice links — owner/manager only. The customer gets
+  // /invoice/t/<token> with 7-day access by default. Issue = reissue (old
+  // links die), extend pushes the expiry, revoke kills access NOW. Expiry and
+  // revocation touch CUSTOMER ACCESS ONLY — order, invoice and payment records
+  // stay permanently in the dashboard. Every action is audited.
+  if (op === 'invoice_link') {
+    if (staff && staff.role !== 'manager') return res.status(403).json({ error: 'not allowed' });
+    const actorName = staff ? staff.id : 'OWNER';
+    const orderNo = String(body.order_number || '').trim().toUpperCase();
+    const action = String(body.action || 'issue');
+    const days = Math.min(Math.max(parseInt(body.days) || 7, 1), 60);
+    if (!/^SB-[A-Z0-9-]{4,24}$/.test(orderNo)) return res.status(400).json({ error: 'order_number required' });
+    const nowIso = () => new Date().toISOString();
+    try {
+      if (action === 'status') {
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/sb_invoice_tokens?order_number=eq.${encodeURIComponent(orderNo)}&order=issued_at.desc&limit=1&select=token,issued_at,issued_by,expires_at,extended_at,revoked_at`, { headers: H_SVC() });
+        const [t] = r.ok ? await r.json() : [];
+        if (!t) return res.status(200).json({ ok: true, link: null });
+        const active = !t.revoked_at && new Date(t.expires_at).getTime() > Date.now();
+        return res.status(200).json({ ok: true, link: { ...t, token: active ? t.token : null, active } });
+      }
+      if (action === 'issue') {
+        // reissue semantics: any previous active link dies the moment a new one exists
+        const rv = await fetch(`${SUPABASE_URL}/rest/v1/sb_invoice_tokens?order_number=eq.${encodeURIComponent(orderNo)}&revoked_at=is.null`, {
+          method: 'PATCH', headers: { ...H_SVC(), Prefer: 'return=representation' },
+          body: JSON.stringify({ revoked_at: nowIso(), revoked_by: actorName }),
+        });
+        const prev = rv.ok ? await rv.json() : [];
+        const { randomBytes } = await import('node:crypto');
+        const token = randomBytes(24).toString('base64url');
+        const expires_at = new Date(Date.now() + days * 86400000).toISOString();
+        const ins = await fetch(`${SUPABASE_URL}/rest/v1/sb_invoice_tokens`, {
+          method: 'POST', headers: { ...H_SVC(), Prefer: 'return=representation' },
+          body: JSON.stringify({ order_number: orderNo, token, issued_by: actorName, expires_at }),
+        });
+        if (!ins.ok) return res.status(502).json({ error: 'could not issue link — is the invoice-tokens migration applied?' });
+        await logOrderEvent({ order_number: orderNo, actor: actorName, action: 'invoice_link_issued',
+          new_value: { expires_at, days, reissued: prev.length > 0 } });
+        const host = req.headers['x-forwarded-host'] || req.headers.host;
+        return res.status(200).json({ ok: true, url: `https://${host}/invoice/t/${token}`, token, expires_at, reissued: prev.length > 0 });
+      }
+      if (action === 'extend') {
+        const up = await fetch(`${SUPABASE_URL}/rest/v1/sb_invoice_tokens?order_number=eq.${encodeURIComponent(orderNo)}&revoked_at=is.null`, {
+          method: 'PATCH', headers: { ...H_SVC(), Prefer: 'return=representation' },
+          body: JSON.stringify({ expires_at: new Date(Date.now() + days * 86400000).toISOString(), extended_at: nowIso(), extended_by: actorName }),
+        });
+        const rows = up.ok ? await up.json() : [];
+        if (!rows.length) return res.status(404).json({ error: 'no active link to extend — issue one first' });
+        await logOrderEvent({ order_number: orderNo, actor: actorName, action: 'invoice_link_extended', new_value: { expires_at: rows[0].expires_at, days } });
+        return res.status(200).json({ ok: true, expires_at: rows[0].expires_at });
+      }
+      if (action === 'revoke') {
+        const rv = await fetch(`${SUPABASE_URL}/rest/v1/sb_invoice_tokens?order_number=eq.${encodeURIComponent(orderNo)}&revoked_at=is.null`, {
+          method: 'PATCH', headers: { ...H_SVC(), Prefer: 'return=representation' },
+          body: JSON.stringify({ revoked_at: nowIso(), revoked_by: actorName }),
+        });
+        const rows = rv.ok ? await rv.json() : [];
+        await logOrderEvent({ order_number: orderNo, actor: actorName, action: 'invoice_link_revoked', new_value: { revoked: rows.length } });
+        return res.status(200).json({ ok: true, revoked: rows.length });
+      }
+      return res.status(400).json({ error: 'unknown action' });
+    } catch { return res.status(500).json({ error: 'invoice link operation failed' }); }
+  }
+
   // Request a NEW payment proof — owner/manager only, reason REQUIRED.
   // Conditional update: a verified payment can never be flipped back here,
   // and the reason reaches both the audit log and (via track-order) the customer.

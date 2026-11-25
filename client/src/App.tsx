@@ -78,6 +78,7 @@ function Router() {
         <Route path={"/loyalty"} component={LoyaltyProgram} />
         <Route path={"/order/:id"} component={OrderDetail} />
         <Route path={"/order"} component={OrderForm} />
+        <Route path={"/invoice/t/:token"} component={Invoice} />
         <Route path={"/invoice/:orderNumber"} component={Invoice} />
         <Route path={"/admin"} component={AdminDashboard} />
         <Route path={"/admin/products"} component={AdminProducts} />
