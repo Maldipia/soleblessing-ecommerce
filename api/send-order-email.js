@@ -1,15 +1,17 @@
 // Branded order emails (Nike/Adidas-style, with product photos), driven by the
-// DB order row — NOT the sheet. Two types:
+// DB order row — NOT the sheet. Types:
 //   order_received   → sent automatically right after a website checkout
 //   payment_verified → sent when admin verifies the payment
-// Sending goes through the GAS webhook's send_html_email action (her Gmail);
-// every attempt is logged to sb_email_log and stamps sb_orders.
+//   shipped          → tracking email
+//   invoice_ready    → confidential secure-link notification (NO order details)
+// Sending is NATIVE (server/mailer.js — Resend or Gmail SMTP). No Google Apps
+// Script involved. Every attempt is logged to sb_email_log and stamps sb_orders.
 import { verifyCredential, isOwnerOrManager, cors } from '../server/auth.js';
+import { sendBrandedEmail } from '../server/mailer.js';
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://akualfrqzaierqsfcnkp.supabase.co';
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
-const GAS_HOOK = process.env.GAS_ORDER_WEBHOOK || '';
 const SITE = 'https://www.soleblessingofficial.com';
 const H = { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' };
 
@@ -150,7 +152,6 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
   if (!SERVICE_KEY || !ADMIN_PASSWORD) return res.status(500).json({ error: 'server not configured' });
-  if (!GAS_HOOK) return res.status(500).json({ error: 'GAS_ORDER_WEBHOOK not set' });
 
   let body = req.body;
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }
@@ -162,13 +163,6 @@ export default async function handler(req, res) {
   if (!order_number) return res.status(400).json({ error: 'order_number required' });
 
   try {
-    // GAS must carry the send_html_email action first — gated so we never post
-    // an unknown action (the sheet router would log it as a junk order row).
-    const gres = await fetch(`${SUPABASE_URL}/rest/v1/sb_settings?key=eq.gas_email_patched&select=value`, { headers: H });
-    const [grow] = gres.ok ? await gres.json() : [];
-    if (!grow || String(grow.value) !== '1')
-      return res.status(422).json({ error: 'GAS email patch not applied yet — apply gas/PATCH-branded-email.md first' });
-
     const ores = await fetch(`${SUPABASE_URL}/rest/v1/sb_orders?order_number=eq.${encodeURIComponent(order_number)}&select=*`, { headers: H });
     const [o] = ores.ok ? await ores.json() : [];
     if (!o) return res.status(404).json({ error: 'order not found' });
@@ -195,20 +189,15 @@ export default async function handler(req, res) {
       html = buildHtml(o, type);
     }
 
-    const g = await fetch(GAS_HOOK, {
-      method: 'POST', redirect: 'follow',
-      signal: AbortSignal.timeout(30000),
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'send_html_email', to: o.customer_email, subject, html }),
-    });
-    let out; try { out = JSON.parse(await g.text()); } catch { out = { success: false, message: 'GAS returned non-JSON — redeploy the webhook with a New version' }; }
+    // NATIVE send — no GAS. Status stamps happen ONLY on a confirmed send.
+    const out = await sendBrandedEmail({ to: o.customer_email, subject, html });
 
     await fetch(`${SUPABASE_URL}/rest/v1/sb_email_log`, {
       method: 'POST', headers: H,
       body: JSON.stringify({ order_number: o.order_number, email_type: type, sent_to: o.customer_email, ok: !!out.success, error: out.success ? null : (out.message || 'send failed') }),
     }).catch(() => {});
 
-    if (!out.success) return res.status(422).json({ error: out.message || 'send failed' });
+    if (!out.success) return res.status(out.notConfigured ? 503 : 422).json({ error: out.message || 'send failed' });
 
     const stamp = type === 'shipped' ? { tracking_sent_at: new Date().toISOString() }
       : (type === 'payment_verified' || type === 'invoice_ready') ? { invoice_sent_at: new Date().toISOString() }
