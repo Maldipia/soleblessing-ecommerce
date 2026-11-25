@@ -12,6 +12,7 @@ import { usePaymentMethods, digitsOnly } from "@/hooks/usePaymentMethods";
 // Add an entry here only when the matching QR file actually exists.
 const QR_IMAGES: Record<string, string> = {
   gcash_pia: "/qr-gcash.png",
+  unionbank: "/qr-unionbank.png", // InstaPay — Pia's cropped official QR
 };
 
 const tileEmoji = (m: { type?: string; label: string }) =>
