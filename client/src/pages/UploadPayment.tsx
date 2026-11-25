@@ -1,75 +1,69 @@
 import { useState, useRef, useEffect } from "react";
-import { usePaymentMethods, digitsOnly, maskAccount, maskName } from "@/hooks/usePaymentMethods";
+import { usePaymentMethods, digitsOnly } from "@/hooks/usePaymentMethods";
 
+// SoleBlessing Payment Portal — all-white redesign (approved mockup, Nov 25).
+// Same engine as before, new skin: methods still come from
+// sb_settings.payment_methods (NEVER hardcoded), copy-to-clipboard with
+// "Copied!" state, auto QR display per method with lightbox + download,
+// uploads still go through /api/upload-proof (private storage, 5MB).
+// Submitting NEVER marks an order paid — verification stays with the admin.
 
 // Maps a payment-method id from sb_settings → its static QR image in /public.
 // Add an entry here only when the matching QR file actually exists.
-const QR_IMAGES: Record<string,string> = {
+const QR_IMAGES: Record<string, string> = {
   gcash_pia: "/qr-gcash.png",
 };
 
-const badgeClass = (m:{type?:string;label:string}) =>
-  m.type === "ewallet" ? "sb-badge-gcash"
-  : /union/i.test(m.label) ? "sb-badge-ub"
-  : "sb-badge-generic";
-
-const badgeLabel = (m:{label:string}) => {
-  const w = m.label.trim().split(/\s+/);
-  return w.length > 1 ? <>{w[0]}<br/>{w.slice(1).join(" ")}</> : m.label;
-};
+const tileEmoji = (m: { type?: string; label: string }) =>
+  m.type === "ewallet" ? "📱" : "🏦";
 
 export default function UploadPayment() {
-  const { banks, ewallets, methods: payMethods, loading: payLoading, error: payError } = usePaymentMethods();
-  const [activeTab, setActiveTab] = useState<"bank"|"ewallet"|"qr">("bank");
-  const [method, setMethod] = useState("");
-  const [file, setFile]     = useState<File|null>(null);
-  const [preview, setPreview] = useState<string|null>(null);
+  const { methods: payMethods, loading: payLoading } = usePaymentMethods();
+  const [selId, setSelId] = useState("");          // selected method entry id ("other" = message us)
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [progress, setProgress]     = useState(0);
-  const [success, setSuccess]       = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [success, setSuccess] = useState(false);
   const [uploadError, setUploadError] = useState("");
-  const [refId, setRefId]           = useState("");
-  const [orderId, setOrderId]       = useState("");
+  const [refId, setRefId] = useState("");
+  const [orderId, setOrderId] = useState("");
   const [customerName, setCustomerName] = useState("");
-  const [amount, setAmount]         = useState("");
-  const [refNo, setRefNo]           = useState("");
-  const [msg, setMsg]               = useState("");
-  const [lightbox, setLightbox]     = useState<{src:string;label:string}|null>(null);
+  const [amount, setAmount] = useState("");        // amount due (prefilled from link)
+  const [paidAmount, setPaidAmount] = useState(""); // amount paid this submission
+  const [payDate, setPayDate] = useState(() => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" }));
+  const [refNo, setRefNo] = useState("");
+  const [msg, setMsg] = useState("");
+  const [lightbox, setLightbox] = useState<{ src: string; label: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   function copyText(text: string, btn: HTMLButtonElement) {
     navigator.clipboard.writeText(text).then(() => {
       const orig = btn.textContent ?? "Copy";
-      btn.textContent = "Copied!";
+      btn.textContent = "✓ Copied!";
       btn.classList.add("copied");
       setTimeout(() => { btn.textContent = orig; btn.classList.remove("copied"); }, 1800);
     });
   }
 
-  // Prefill from the email link: /upload-payment?order=SB-xxx&name=...&amount=...
+  // Prefill from the invoice/email link: ?order=SB-xxx&name=...&amount=...
   useEffect(() => {
     try {
       const sp = new URLSearchParams(window.location.search);
       const o = sp.get("order") || sp.get("orderId") || "";
       if (o) setOrderId(o.toUpperCase());
       if (sp.get("name")) setCustomerName(sp.get("name") as string);
-      if (sp.get("amount")) setAmount(sp.get("amount") as string);
+      if (sp.get("amount")) { setAmount(sp.get("amount") as string); setPaidAmount(sp.get("amount") as string); }
     } catch {}
   }, []);
 
-  // Default the selected method + visible tab to whatever the Dashboard actually has enabled.
+  // Default selection = first configured method from the Dashboard settings.
   useEffect(() => {
-    if (!payLoading && !method && payMethods.length > 0) setMethod(payMethods[0].label);
-  }, [payLoading, payMethods, method]);
+    if (!payLoading && !selId && payMethods.length > 0) setSelId(payMethods[0].id);
+  }, [payLoading, payMethods, selId]);
 
-  useEffect(() => {
-    if (payLoading) return;
-    if (banks.length === 0 && ewallets.length > 0) setActiveTab("ewallet");
-  }, [payLoading, banks.length, ewallets.length]);
-
-  const qrMethods = payMethods.filter(m => QR_IMAGES[m.id]);
-  const methodChoices = Array.from(new Set(payMethods.map(m => m.label)))
-    .map(label => ({ m: label, e: (payMethods.find(x => x.label === label)?.icon) || "💳" }));
+  const sel = payMethods.find(m => m.id === selId) || null;
+  const selQr = sel && QR_IMAGES[sel.id] ? QR_IMAGES[sel.id] : null;
 
   function handleFile(f: File) {
     if (f.size > 5 * 1024 * 1024) { setUploadError("File is too large — maximum is 5 MB."); return; }
@@ -79,25 +73,21 @@ export default function UploadPayment() {
       const r = new FileReader();
       r.onload = e => setPreview(e.target?.result as string);
       r.readAsDataURL(f);
-    } else {
-      setPreview(null);
-    }
+    } else setPreview(null);
   }
 
   async function handleSubmit() {
-    if (!orderId || !customerName || !amount || !refNo || !file) {
-      // Name what's missing — a silent shake reads as "the upload is broken" on phones.
+    if (!orderId || !customerName || !paidAmount || !refNo || !file) {
       const missing = [
-        !orderId && "Order ID", !customerName && "Customer Name", !amount && "Amount",
+        !orderId && "Order Number", !customerName && "Customer Name", !paidAmount && "Amount Paid",
         !refNo && "Reference No.", !file && "payment screenshot",
       ].filter(Boolean).join(", ");
       setUploadError(`Please fill in: ${missing}`);
-      const panel = document.getElementById("sb-upload-panel");
+      const panel = document.getElementById("sb-pay-card");
       if (panel) { panel.style.animation = "none"; void panel.offsetHeight; panel.style.animation = "sbShake 0.4s ease"; }
       return;
     }
-    setSubmitting(true); setUploadError("");
-    setProgress(0);
+    setSubmitting(true); setUploadError(""); setProgress(0);
     const tick = setInterval(() => setProgress(p => { if (p >= 90) { clearInterval(tick); return 90; } return p + Math.random() * 15; }), 200);
     try {
       const base64Data = await new Promise<string>((res, rej) => {
@@ -106,7 +96,9 @@ export default function UploadPayment() {
         r.onerror = rej;
         r.readAsDataURL(file);
       });
-      const body = JSON.stringify({ orderId, customerName, amount, paymentMethod: method, referenceNumber: refNo, message: msg, fileBase64: base64Data, mimeType: file.type, fileName: file.name });
+      // Payment date rides the message so the existing API stays untouched.
+      const message = [`Paid on ${payDate}`, msg.trim()].filter(Boolean).join(" · ");
+      const body = JSON.stringify({ orderId, customerName, amount: paidAmount, paymentMethod: sel ? `${sel.label} (${sel.account_name})` : "Other", referenceNumber: refNo, message, fileBase64: base64Data, mimeType: file.type, fileName: file.name });
       const r = await fetch("/api/upload-proof", { method: "POST", body, headers: { "Content-Type": "application/json" } });
       if (!r.ok) {
         const out = await r.json().catch(() => ({} as any));
@@ -114,7 +106,7 @@ export default function UploadPayment() {
         setUploadError(out.error || "Upload failed — try again");
         return;
       }
-    } catch (_) {
+    } catch {
       clearInterval(tick); setSubmitting(false); setProgress(0);
       setUploadError("Network error — try again");
       return;
@@ -126,358 +118,262 @@ export default function UploadPayment() {
 
   function resetForm() {
     setSuccess(false); setSubmitting(false); setProgress(0);
-    setOrderId(""); setCustomerName(""); setAmount(""); setRefNo("");
+    setOrderId(""); setCustomerName(""); setPaidAmount(""); setRefNo(""); setMsg("");
     setFile(null); setPreview(null);
   }
 
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=DM+Sans:wght@300;400;500;600&display=swap');
-        .sb-wrap{font-family:'DM Sans',sans-serif;background:#0b1a1f;color:#e8ede9;min-height:100vh;padding:48px 24px 80px;position:relative;}
-        .sb-wrap::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 70% 40% at 85% 5%,rgba(201,168,76,.05) 0%,transparent 55%),radial-gradient(ellipse 50% 60% at 5% 90%,rgba(201,168,76,.03) 0%,transparent 50%);pointer-events:none;z-index:0;}
-        .sb-inner{position:relative;z-index:1;max-width:860px;margin:0 auto;}
-        .sb-header{text-align:center;margin-bottom:44px;animation:sbFadeUp .7s ease both;}
-        .sb-brand-logos{display:flex;justify-content:center;gap:14px;flex-wrap:wrap;margin-bottom:28px;}
-        .sb-brand-logo{width:68px;height:68px;border-radius:50%;background:#0e2228;border:1.5px solid #1e3840;display:flex;align-items:center;justify-content:center;overflow:hidden;transition:border-color .25s,transform .2s,box-shadow .2s;cursor:default;}
-        .sb-brand-logo:hover{border-color:rgba(201,168,76,.4);transform:translateY(-2px);box-shadow:0 6px 20px rgba(201,168,76,.15);}
-        .sb-brand-logo img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
-        .sb-eyebrow{font-family:'Cormorant Garamond',serif;font-size:12px;letter-spacing:.4em;text-transform:uppercase;color:#c9a84c;margin-bottom:6px;}
-        .sb-title{font-family:'Cormorant Garamond',serif;font-size:42px;font-weight:600;line-height:1;margin-bottom:10px;}
-        .sb-sub{font-size:13px;color:#7a9e85;}
-        .sb-divider{width:52px;height:1px;background:linear-gradient(90deg,transparent,#c9a84c,transparent);margin:18px auto;}
-        .sb-layout{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start;}
-        @media(max-width:680px){.sb-layout{grid-template-columns:1fr;}.sb-field-row{grid-template-columns:1fr!important;}.sb-method-grid{grid-template-columns:repeat(2,1fr)!important;}.sb-title{font-size:32px;}}
-        .sb-panel{background:#0e2228;border:1px solid #1e3840;border-radius:14px;overflow:hidden;animation:sbFadeUp .7s .1s ease both;}
-        .sb-panel-header{padding:18px 24px 14px;border-bottom:1px solid #1e3840;display:flex;align-items:center;gap:10px;}
-        .sb-panel-icon{width:32px;height:32px;background:rgba(201,168,76,.12);border:1px solid rgba(201,168,76,.25);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;}
-        .sb-panel-title{font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:600;}
-        .sb-panel-sub{font-size:11px;color:#4a7055;letter-spacing:.06em;margin-top:1px;}
-        .sb-panel-body{padding:20px 24px 24px;}
-        .sb-tab-nav{display:flex;background:#0b1a1f;border:1px solid #1e3840;border-radius:50px;padding:4px;margin-bottom:20px;}
-        .sb-tab-btn{flex:1;padding:9px 0;border:none;background:transparent;color:#4a7055;font-size:11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;border-radius:50px;cursor:pointer;transition:all .22s;}
-        .sb-tab-btn.active{background:#c9a84c;color:#0b1a1f;font-weight:600;}
-        .sb-tab-section{display:none;}
-        .sb-tab-section.active{display:block;}
-        .sb-pay-card{display:flex;align-items:center;gap:12px;background:#112830;border:1px solid #1e3840;border-radius:10px;padding:13px 15px;margin-bottom:8px;position:relative;overflow:hidden;transition:border-color .2s;}
-        .sb-pay-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:#c9a84c;opacity:0;transition:opacity .2s;}
-        .sb-pay-card:hover{border-color:#2d5a60;}
-        .sb-pay-card:hover::before{opacity:1;}
-        .sb-bank-badge{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;flex-shrink:0;font-family:'DM Sans',sans-serif;}
-        .sb-badge-ub{background:#e87722;color:#fff;font-size:10px;line-height:1.2;text-align:center;}
-        .sb-badge-gcash{background:#007dff;color:#fff;font-size:10px;line-height:1.3;text-align:center;}
-        .sb-badge-generic{background:#1e3840;color:#c9a84c;font-size:10px;line-height:1.2;text-align:center;}
-        .sb-pay-empty{background:#112830;border:1px dashed #1e3840;border-radius:10px;padding:16px;font-size:12px;color:#4a7055;line-height:1.6;text-align:center;}
-        .sb-pay-info{flex:1;min-width:0;}
-        .sb-pay-bank{font-size:10px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:#4a7055;margin-bottom:1px;}
-        .sb-pay-holder{font-size:13px;font-weight:500;margin-bottom:1px;}
-        .sb-pay-number{font-family:'Courier New',monospace;font-size:12px;color:#c9a84c;letter-spacing:.08em;}
-        .sb-copy-btn{background:#152e35;border:1px solid #1e3840;color:#7a9e85;font-size:10px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;padding:7px 12px;border-radius:7px;cursor:pointer;flex-shrink:0;transition:all .2s;}
-        .sb-copy-btn:hover{color:#c9a84c;border-color:rgba(201,168,76,.25);}
-        .sb-copy-btn.copied{background:rgba(93,184,122,.1);color:#5db87a;border-color:rgba(93,184,122,.3);}
-        .sb-qr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;}
-        .sb-qr-card{background:#112830;border:1px solid #1e3840;border-radius:10px;padding:16px 12px;text-align:center;}
-        .sb-qr-label{font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px;}
-        .sb-qr-ph{width:100%;aspect-ratio:1;border:1.5px dashed #1e3840;border-radius:8px;display:flex;align-items:center;justify-content:center;background:#0b1a1f;color:#1e3840;font-size:10px;text-align:center;line-height:1.5;margin-bottom:8px;padding:8px;}
-        .sb-qr-ph img{width:100%;height:100%;object-fit:contain;border-radius:6px;}
-        .sb-qr-name{font-size:11px;font-weight:500;}
-        .sb-qr-acct{font-size:10px;color:#4a7055;margin-top:1px;}
-        .sb-instapay{display:inline-block;margin-top:6px;font-size:9px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;background:rgba(77,144,214,.1);color:#4d90d6;border:1px solid rgba(77,144,214,.2);padding:3px 8px;border-radius:50px;}
-        .sb-upload-panel{animation:sbFadeUp .7s .2s ease both;}
-        .sb-field{margin-bottom:14px;}
-        .sb-field label{display:block;font-size:10px;font-weight:500;letter-spacing:.15em;text-transform:uppercase;color:#4a7055;margin-bottom:7px;}
-        .sb-field input{width:100%;background:#112830;border:1px solid #1e3840;border-radius:10px;padding:12px 14px;color:#e8ede9;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;transition:border-color .2s,box-shadow .2s;}
-        .sb-field input:focus{border-color:#c9a84c;box-shadow:0 0 0 3px rgba(201,168,76,.12);}
-        .sb-field input::placeholder{color:rgba(122,158,133,.4);}
-        .sb-field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-        .sb-method-label{font-size:10px;font-weight:500;letter-spacing:.15em;text-transform:uppercase;color:#4a7055;margin-bottom:8px;display:block;}
-        .sb-method-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px;}
-        .sb-method-btn{background:#112830;border:1px solid #1e3840;border-radius:10px;padding:10px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;color:#4a7055;font-family:'DM Sans',sans-serif;font-size:9.5px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;transition:all .2s;}
-        .sb-method-btn:hover{border-color:rgba(201,168,76,.25);color:#7a9e85;}
-        .sb-method-btn.active{background:rgba(201,168,76,.12);border-color:#c9a84c;color:#c9a84c;}
-        .sb-method-emoji{font-size:18px;line-height:1;}
-        .sb-upload-zone{border:1.5px dashed #1e3840;border-radius:10px;padding:28px 16px;text-align:center;cursor:pointer;position:relative;overflow:hidden;background:#112830;margin-bottom:12px;transition:border-color .25s;}
-        .sb-upload-zone:hover{border-color:#c9a84c;border-style:solid;}
-        .sb-upload-icon{font-size:28px;margin-bottom:8px;display:block;transition:transform .2s;}
-        .sb-upload-zone:hover .sb-upload-icon{transform:translateY(-2px);}
-        .sb-upload-main{font-size:13px;font-weight:500;}
-        .sb-upload-sub{font-size:11px;color:#7a9e85;margin-top:3px;}
-        .sb-format-tags{display:flex;gap:5px;justify-content:center;margin-top:10px;}
-        .sb-format-tag{font-size:9px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#c9a84c;background:rgba(201,168,76,.12);border:1px solid rgba(201,168,76,.2);padding:3px 7px;border-radius:4px;}
-        .sb-preview{border-radius:10px;overflow:hidden;background:#152e35;border:1px solid #1e3840;margin-bottom:12px;}
-        .sb-preview img{width:100%;max-height:160px;object-fit:cover;display:block;}
-        .sb-preview-info{padding:9px 13px;display:flex;align-items:center;justify-content:space-between;}
-        .sb-preview-name{font-size:12px;font-weight:500;}
-        .sb-remove-btn{background:none;border:none;color:#7a9e85;cursor:pointer;font-size:14px;padding:2px 6px;border-radius:4px;transition:color .2s;}
-        .sb-remove-btn:hover{color:#e05;}
-        .sb-progress{height:2px;background:#152e35;border-radius:1px;margin-bottom:12px;overflow:hidden;}
-        .sb-progress-fill{height:100%;background:linear-gradient(90deg,#c9a84c,#e8c87a);transition:width .3s ease;}
-        .sb-submit{width:100%;background:#c9a84c;color:#0b1a1f;border:none;border-radius:10px;padding:15px;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:700;letter-spacing:.25em;text-transform:uppercase;cursor:pointer;transition:transform .15s,box-shadow .2s;}
-        .sb-submit:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 8px 28px rgba(201,168,76,.28);}
-        .sb-submit:disabled{opacity:.5;cursor:not-allowed;}
-        .sb-notice{background:#0e2228;border:1px solid #1e3840;border-left:3px solid #c9a84c;border-radius:0 12px 12px 0;padding:18px 22px;margin-top:24px;animation:sbFadeUp .7s .3s ease both;}
-        .sb-notice-label{font-size:10px;font-weight:600;letter-spacing:.2em;text-transform:uppercase;color:#c9a84c;margin-bottom:8px;}
-        .sb-notice-text{font-size:13px;color:#a8c5b0;line-height:1.8;}
-        .sb-notice-text strong{color:#e8ede9;font-weight:500;}
-        .sb-footer{text-align:center;margin-top:44px;font-size:11px;color:#4a7055;letter-spacing:.06em;animation:sbFadeUp .7s .4s ease both;}
-        .sb-footer span{color:#c9a84c;}
-        .sb-overlay{position:fixed;inset:0;background:rgba(11,26,31,.92);z-index:9999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(10px);animation:sbFadeIn .35s ease;}
-        .sb-success-card{background:#0e2228;border:1px solid rgba(201,168,76,.25);border-radius:14px;padding:44px 36px;text-align:center;max-width:340px;animation:sbScaleIn .4s .05s cubic-bezier(.175,.885,.32,1.275) both;}
-        .sb-success-check{width:60px;height:60px;background:rgba(93,184,122,.12);border:1px solid rgba(93,184,122,.3);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;font-size:26px;animation:sbPopIn .45s .35s cubic-bezier(.175,.885,.32,1.275) both;}
-        .sb-success-title{font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:600;margin-bottom:8px;}
-        .sb-success-msg{font-size:13px;color:#7a9e85;line-height:1.65;}
-        .sb-success-ref{background:#112830;border:1px solid #1e3840;border-radius:10px;padding:12px 16px;margin:18px 0;font-size:11px;color:#4a7055;}
-        .sb-success-ref span{display:block;font-size:15px;font-weight:600;color:#c9a84c;letter-spacing:.1em;margin-top:4px;}
-        .sb-success-close{background:#c9a84c;color:#0b1a1f;border:none;border-radius:10px;padding:12px 28px;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;cursor:pointer;}
-        .sb-success-close:hover{opacity:.85;}
-        @keyframes sbFadeUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
-        @keyframes sbFadeIn{from{opacity:0}to{opacity:1}}
-        @keyframes sbScaleIn{from{opacity:0;transform:scale(.87)}to{opacity:1;transform:scale(1)}}
-        @keyframes sbPopIn{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;900&display=swap');
+        .pp{font-family:'DM Sans',sans-serif;background:#f4f3f0;min-height:100vh;color:#111;padding-bottom:60px}
+        .pp-hero{background:#ffffff;border-bottom:1px solid #eceae6;padding:30px 20px 24px;text-align:center}
+        .pp-logo{display:inline-block;width:76px;height:76px;border-radius:50%;object-fit:contain;background:#000;border:3px solid #f0ede8;margin:0 auto 10px}
+        .pp-hero h1{font-size:30px;font-weight:900;color:#111}
+        .pp-hero h1 em{color:#EA580C;font-style:normal}
+        .pp-hero p{color:#8b867f;font-size:13.5px;margin-top:5px}
+        .pp-steps{display:flex;justify-content:center;gap:8px;margin-top:18px;flex-wrap:wrap}
+        .pp-step{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:#6b665f;background:#faf9f7;border:1px solid #eceae6;border-radius:999px;padding:7px 14px}
+        .pp-sn{width:22px;height:22px;border-radius:50%;background:#EA580C;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:11px}
+        .pp-card{max-width:880px;margin:22px auto 0;background:#fff;border:1px solid #eceae6;border-radius:22px;padding:24px 26px;box-shadow:0 6px 24px rgba(0,0,0,.05)}
+        @media(max-width:700px){.pp-card{margin:14px 12px 0;padding:18px 16px;border-radius:16px}}
+        .pp-strip{display:flex;gap:12px;background:#faf9f7;border:1px solid #efedea;border-radius:14px;padding:12px 16px;align-items:center;flex-wrap:wrap}
+        .pp-si{flex:1;min-width:150px}
+        .pp-si label{font-size:10.5px;color:#9b968f;font-weight:800;letter-spacing:.05em}
+        .pp-si input{display:block;width:100%;border:none;background:transparent;font-size:16px;font-weight:900;color:#111;outline:none;padding:2px 0}
+        .pp-si input::placeholder{color:#c9c4bd;font-weight:600}
+        .pp-due{background:#FFF3E8;border:1px solid #F8C89B;border-radius:12px;padding:8px 16px;text-align:right;min-width:150px}
+        .pp-due label{font-size:10.5px;color:#b45309;font-weight:800}
+        .pp-due b{display:block;color:#EA580C;font-size:21px;font-weight:900}
+        .pp-h2{font-size:16.5px;font-weight:900;color:#111;margin:24px 0 12px;display:flex;align-items:center;gap:10px}
+        .pp-n{width:25px;height:25px;border-radius:50%;background:#EA580C;color:#fff;font-size:12.5px;display:flex;align-items:center;justify-content:center;font-weight:900;flex-shrink:0}
+        .pp-req{color:#EA580C}
+        .pp-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+        .pp-tile{border:2px solid #eceae6;border-radius:14px;padding:13px 8px;text-align:center;font-weight:800;font-size:13px;color:#333;background:#fff;cursor:pointer;transition:all .15s}
+        .pp-tile:hover{border-color:#f3b183}
+        .pp-tile.on{border-color:#EA580C;background:#FFF7F1}
+        .pp-tile small{display:block;font-weight:600;color:#9b968f;font-size:10.5px;margin-top:3px}
+        .pp-pay{display:flex;gap:22px;border:1px solid #efedea;border-radius:16px;padding:18px 20px;margin-top:14px;flex-wrap:wrap}
+        .pp-pl{flex:1.4;min-width:250px}
+        .pp-pl h3{font-size:18px;font-weight:900;color:#111}
+        .pp-pl .d{color:#8b867f;font-size:12.5px;margin:3px 0 12px}
+        .pp-acct{background:#faf9f7;border-radius:12px;padding:13px 16px}
+        .pp-acct p{font-size:10px;font-weight:800;color:#9b968f;letter-spacing:.07em;margin-top:9px}
+        .pp-acct p:first-child{margin-top:0}
+        .pp-acct b{font-size:14.5px;color:#111}
+        .pp-num{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+        .pp-num b{font-size:18px;letter-spacing:.05em;font-family:ui-monospace,SFMono-Regular,monospace}
+        .pp-cp{border:1.5px solid #EA580C;color:#EA580C;background:#fff;font-size:11px;font-weight:900;border-radius:9px;padding:6px 12px;cursor:pointer;transition:all .15s}
+        .pp-cp:hover{background:#FFF3E8}
+        .pp-cp.copied{background:#E8F5EE;border-color:#5db87a;color:#1a7f4e}
+        .pp-qr{flex:1;min-width:190px;border-left:1px dashed #e4e1dc;padding-left:22px;text-align:center}
+        @media(max-width:700px){.pp-qr{border-left:none;padding-left:0;border-top:1px dashed #e4e1dc;padding-top:16px}}
+        .pp-qr p{font-size:12px;font-weight:800;color:#555;margin-bottom:10px}
+        .pp-qrbox{width:164px;height:164px;border:2px solid #EA580C;border-radius:12px;margin:0 auto;background:#fff;display:flex;align-items:center;justify-content:center;cursor:zoom-in;padding:6px}
+        .pp-qrbox img{width:100%;height:100%;object-fit:contain}
+        .pp-dl{display:inline-block;margin-top:10px;border:1.5px solid #EA580C;color:#EA580C;border-radius:999px;font-size:11.5px;font-weight:900;padding:7px 16px;text-decoration:none;cursor:pointer}
+        .pp-dl:hover{background:#FFF3E8}
+        .pp-grid{display:flex;gap:12px;flex-wrap:wrap}
+        .pp-f{flex:1;min-width:170px}
+        .pp-f label{font-size:11.5px;font-weight:800;color:#555}
+        .pp-f input,.pp-f textarea{width:100%;border:1.5px solid #e7e4e0;border-radius:11px;padding:11px 13px;font-size:14px;color:#111;margin-top:5px;background:#fff;outline:none;font-family:inherit;transition:border-color .15s,box-shadow .15s}
+        .pp-f input:focus,.pp-f textarea:focus{border-color:#EA580C;box-shadow:0 0 0 3px rgba(234,88,12,.1)}
+        .pp-up{display:flex;gap:14px;flex-wrap:wrap}
+        .pp-drop{flex:1.6;min-width:250px;border:2px dashed rgba(234,88,12,.55);border-radius:16px;padding:26px 16px;text-align:center;background:#FFFCF9;cursor:pointer;transition:border-color .2s}
+        .pp-drop:hover{border-color:#EA580C}
+        .pp-drop b{color:#111;font-size:14.5px;display:block;margin-top:6px}
+        .pp-browse{display:inline-block;margin-top:10px;border:1.5px solid #EA580C;color:#EA580C;border-radius:11px;font-weight:900;font-size:13px;padding:9px 18px}
+        .pp-drop small{display:block;color:#9b968f;margin-top:10px;font-weight:600}
+        .pp-preview{flex:1.6;min-width:250px;border:1px solid #eceae6;border-radius:16px;overflow:hidden;background:#faf9f7}
+        .pp-preview img{width:100%;max-height:170px;object-fit:cover;display:block}
+        .pp-preview-info{padding:10px 14px;display:flex;align-items:center;justify-content:space-between;font-size:12.5px;font-weight:700}
+        .pp-x{background:none;border:none;color:#c04;cursor:pointer;font-size:15px}
+        .pp-priv{display:flex;gap:10px;background:#faf9f7;border:1px solid #efedea;border-radius:12px;padding:12px 16px;font-size:12px;color:#6b665f;margin-top:16px;line-height:1.55}
+        .pp-progress{height:4px;background:#f0ede8;border-radius:2px;margin-top:14px;overflow:hidden}
+        .pp-progress i{display:block;height:100%;background:linear-gradient(90deg,#EA580C,#fb923c);transition:width .3s ease}
+        .pp-err{color:#c2410c;font-size:12.5px;font-weight:700;margin-top:10px}
+        .pp-sbm{display:block;width:100%;background:#EA580C;color:#fff;text-align:center;border:none;border-radius:14px;font-size:16.5px;font-weight:900;padding:16px;margin-top:14px;cursor:pointer;font-family:inherit;transition:opacity .15s}
+        .pp-sbm:hover:not(:disabled){opacity:.92}
+        .pp-sbm:disabled{opacity:.55;cursor:not-allowed}
+        .pp-foot{text-align:center;font-size:12px;color:#9b968f;margin-top:10px;font-weight:600}
+        .pp-brandfoot{text-align:center;font-size:11.5px;color:#9b968f;margin-top:26px;font-weight:600}
+        .pp-brandfoot b{color:#EA580C}
         @keyframes sbShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-5px)}80%{transform:translateX(4px)}}
-        .sb-qr-clickable{cursor:pointer;transition:transform .2s,border-color .2s;}
-        .sb-qr-clickable:hover{transform:translateY(-3px);border-color:rgba(201,168,76,.4);}
-        .sb-qr-ph-img{position:relative;overflow:hidden;border-radius:8px;}
-        .sb-qr-zoom-hint{position:absolute;bottom:0;left:0;right:0;background:rgba(11,26,31,.75);color:#c9a84c;font-size:10px;font-weight:600;letter-spacing:.08em;text-align:center;padding:5px;opacity:0;transition:opacity .2s;}
-        .sb-qr-clickable:hover .sb-qr-zoom-hint{opacity:1;}
-        .sb-qr-lightbox{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;display:flex;align-items:center;justify-content:center;animation:sbFadeIn .2s ease;backdrop-filter:blur(12px);}
-        .sb-qr-lightbox-inner{background:#0e2228;border:1px solid rgba(201,168,76,.3);border-radius:16px;padding:20px;max-width:90vw;max-height:90vh;display:flex;flex-direction:column;align-items:center;gap:12px;animation:sbScaleIn .25s cubic-bezier(.175,.885,.32,1.275) both;}
-        .sb-qr-lightbox-header{width:100%;display:flex;justify-content:space-between;align-items:center;}
-        .sb-qr-lightbox-label{font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:600;color:#c9a84c;letter-spacing:.06em;}
-        .sb-qr-lightbox-close{background:rgba(201,168,76,.12);border:1px solid rgba(201,168,76,.25);color:#c9a84c;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .2s;}
-        .sb-qr-lightbox-close:hover{background:rgba(201,168,76,.25);}
-        .sb-qr-lightbox-img{width:min(70vw,380px);height:min(70vw,380px);object-fit:contain;border-radius:12px;background:#fff;padding:12px;}
-        .sb-qr-lightbox-hint{font-size:11px;color:#4a7055;letter-spacing:.08em;}
-        .sb-folder-link{display:block;margin:0 0 14px 0;padding:10px 16px;background:rgba(201,168,76,.1);border:1px solid rgba(201,168,76,.3);border-radius:8px;color:#c9a84c;text-decoration:none;font-size:12px;font-weight:600;letter-spacing:.06em;text-align:center;transition:background .2s,transform .15s;}
-        .sb-folder-link:hover{background:rgba(201,168,76,.2);transform:translateY(-1px);}
+        .pp-overlay{position:fixed;inset:0;background:rgba(17,17,17,.55);z-index:9999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px);padding:16px}
+        .pp-success{background:#fff;border-radius:20px;padding:34px 28px;text-align:center;max-width:380px;width:100%}
+        .pp-check{width:62px;height:62px;background:#E8F5EE;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:28px;color:#1a7f4e}
+        .pp-success h2{font-size:21px;font-weight:900;color:#111;margin-bottom:6px}
+        .pp-success .m{font-size:13px;color:#6b665f;line-height:1.6}
+        .pp-kv{background:#faf9f7;border:1px solid #efedea;border-radius:12px;padding:12px 16px;margin:14px 0;text-align:left;font-size:13px}
+        .pp-kv div{display:flex;justify-content:space-between;gap:12px;padding:3px 0}
+        .pp-kv span{color:#9b968f}.pp-kv b{font-weight:800;color:#111}
+        .pp-acts{display:flex;gap:8px;margin:4px 0 12px}
+        .pp-acts a{flex:1;text-align:center;padding:11px 0;border-radius:11px;font-weight:800;font-size:12.5px;text-decoration:none}
+        .pp-ref{font-size:11px;color:#9b968f}
+        .pp-ref b{display:block;font-size:14px;color:#EA580C;letter-spacing:.08em;margin-top:2px}
+        .pp-again{margin-top:12px;background:#111;color:#fff;border:none;border-radius:11px;padding:11px 26px;font-weight:800;font-size:12.5px;cursor:pointer;font-family:inherit}
+        .pp-lightbox{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:9999;display:flex;align-items:center;justify-content:center;padding:18px}
+        .pp-lb{background:#fff;border-radius:18px;padding:18px;display:flex;flex-direction:column;align-items:center;gap:10px;max-width:92vw}
+        .pp-lb-head{width:100%;display:flex;justify-content:space-between;align-items:center;font-weight:900;color:#111}
+        .pp-lb img{width:min(72vw,380px);height:min(72vw,380px);object-fit:contain}
+        .pp-lb-x{background:#f0ede8;border:none;width:30px;height:30px;border-radius:50%;cursor:pointer;font-weight:900}
       `}</style>
 
-      <div className="sb-wrap">
-        <div className="sb-inner">
-
-          <div className="sb-header">
-            <div className="sb-brand-logos">
-              {[
-                {src:"/logo-goldblessing.png",  alt:"Gold Blessing"},
-                {src:"/logo-soleblessing.png",  alt:"Sole Blessing"},
-                {src:"/logo-luntian.png",        alt:"Luntian Log Cabin"},
-                {src:"/logo-mhc.png",            alt:"Must Have Corner"},
-                {src:"/logo-aster.png",          alt:"Aster"},
-                {src:"/logo-tyg.png",            alt:"TYG Services"},
-              ].map((b,i)=>(
-                <div key={i} className="sb-brand-logo" title={b.alt}>
-                  <img src={b.src} alt={b.alt}/>
-                </div>
-              ))}
-            </div>
-            <div className="sb-eyebrow">TYG Services</div>
-            <h1 className="sb-title">Payment Portal</h1>
-            <div className="sb-divider"/>
-            <p className="sb-sub">Choose your payment method, then submit your proof below</p>
+      <div className="pp">
+        {/* hero */}
+        <div className="pp-hero">
+          <img className="pp-logo" src="/sb-logo.jpg" alt="SoleBlessing" />
+          <h1>Upload <em>Payment Proof</em></h1>
+          <p>Submit your payment confirmation for verification.</p>
+          <div className="pp-steps">
+            <span className="pp-step"><span className="pp-sn">1</span>Choose Payment Method</span>
+            <span className="pp-step"><span className="pp-sn">2</span>Payment Details</span>
+            <span className="pp-step"><span className="pp-sn">3</span>Upload &amp; Submit</span>
           </div>
-
-          <div className="sb-layout">
-
-            {/* LEFT: Modes of Payment */}
-            <div className="sb-panel">
-              <div className="sb-panel-header">
-                <div className="sb-panel-icon">🏦</div>
-                <div><div className="sb-panel-title">Modes of Payment</div><div className="sb-panel-sub">Bank transfer fees may apply</div></div>
-              </div>
-              <div className="sb-panel-body">
-                <div className="sb-tab-nav">
-                  {(["bank","ewallet","qr"] as const).map(t=>(
-                    <button key={t} className={`sb-tab-btn${activeTab===t?" active":""}`} onClick={()=>setActiveTab(t)}>
-                      {t==="bank"?"Bank":t==="ewallet"?"E-Wallet":"QR"}
-                    </button>
-                  ))}
-                </div>
-
-                <div className={`sb-tab-section${activeTab==="bank"?" active":""}`}>
-                  {payLoading && <div className="sb-pay-empty">Loading payment accounts…</div>}
-                  {!payLoading && banks.length===0 && (
-                    <div className="sb-pay-empty">No bank transfer accounts are currently available. Please use E-Wallet, or message us.</div>
-                  )}
-                  {banks.map(a=>(
-                    <div key={a.id} className="sb-pay-card">
-                      <div className={`sb-bank-badge ${badgeClass(a)}`}>{badgeLabel(a)}</div>
-                      <div className="sb-pay-info">
-                        <div className="sb-pay-bank">{a.label}</div>
-                        <div className="sb-pay-holder">{a.account_name}</div>
-                        <div className="sb-pay-number">{a.account_number}</div>
-                      </div>
-                      <button className="sb-copy-btn" onClick={e=>copyText(digitsOnly(a.account_number),e.currentTarget)}>Copy</button>
-                    </div>
-                  ))}
-                </div>
-
-                <div className={`sb-tab-section${activeTab==="ewallet"?" active":""}`}>
-                  {payLoading && <div className="sb-pay-empty">Loading payment accounts…</div>}
-                  {!payLoading && ewallets.length===0 && (
-                    <div className="sb-pay-empty">No e-wallet accounts are currently available. Please use Bank transfer, or message us.</div>
-                  )}
-                  {ewallets.map(g=>(
-                    <div key={g.id} className="sb-pay-card">
-                      <div className={`sb-bank-badge ${badgeClass(g)}`}>{badgeLabel(g)}</div>
-                      <div className="sb-pay-info">
-                        <div className="sb-pay-bank">{g.label}</div>
-                        <div className="sb-pay-holder">{g.account_name}</div>
-                        <div className="sb-pay-number">{g.account_number}</div>
-                      </div>
-                      <button className="sb-copy-btn" onClick={e=>copyText(digitsOnly(g.account_number),e.currentTarget)}>Copy</button>
-                    </div>
-                  ))}
-                </div>
-
-                <div className={`sb-tab-section${activeTab==="qr"?" active":""}`}>
-                  <div className="sb-qr-grid">
-                    {qrMethods.length===0 && (
-                      <div className="sb-pay-empty">No QR codes available yet — use the Bank or E-Wallet tab.</div>
-                    )}
-                    {qrMethods.map(q=>(
-                      <div key={q.id} className="sb-qr-card sb-qr-clickable" onClick={()=>setLightbox({src:QR_IMAGES[q.id],label:q.label})} title="Tap to enlarge">
-                        <div className="sb-qr-label" style={{color:"#4d90d6"}}>{q.label}</div>
-                        <div className="sb-qr-ph sb-qr-ph-img">
-                          <img src={QR_IMAGES[q.id]} alt={`${q.label} QR Code`}/>
-                          <div className="sb-qr-zoom-hint">🔍 Tap to enlarge</div>
-                        </div>
-                        <div className="sb-qr-name">{maskName(q.account_name)}</div>
-                        <div className="sb-qr-acct">{maskAccount(q.account_number)}</div>
-                        <div className="sb-instapay">InstaPay</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* RIGHT: Upload Proof */}
-            <div className="sb-panel sb-upload-panel" id="sb-upload-panel">
-              <div className="sb-panel-header">
-                <div className="sb-panel-icon">📎</div>
-                <div><div className="sb-panel-title">Submit Proof</div><div className="sb-panel-sub">Upload your payment screenshot</div></div>
-              </div>
-              <div className="sb-panel-body">
-
-                <div className="sb-field">
-                  <label>Order ID</label>
-                  <input type="text" placeholder="e.g. SB-4913582688" value={orderId} onChange={e=>setOrderId(e.target.value)}/>
-                  <span style={{fontSize:"11px",color:"#8fa89b",marginTop:"4px",display:"block"}}>Starts with SB- — it's in your order confirmation</span>
-                </div>
-
-                <div className="sb-field-row">
-                  <div className="sb-field">
-                    <label>Customer Name</label>
-                    <input type="text" placeholder="Full name" value={customerName} onChange={e=>setCustomerName(e.target.value)}/>
-                  </div>
-                  <div className="sb-field">
-                    <label>Amount (₱)</label>
-                    <input type="number" placeholder="0.00" value={amount} onChange={e=>setAmount(e.target.value)}/>
-                  </div>
-                </div>
-
-                <span className="sb-method-label">Payment Method</span>
-                <div className="sb-method-grid">
-                  {methodChoices.map(({m,e})=>(
-                    <button key={m} className={`sb-method-btn${method===m?" active":""}`} onClick={()=>setMethod(m)}>
-                      <span className="sb-method-emoji">{e}</span>{m}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="sb-field">
-                  <label>Reference / Transaction No.</label>
-                  <input type="text" placeholder="e.g. 123456789012" value={refNo} onChange={e=>setRefNo(e.target.value)}/>
-                </div>
-
-                <div className="sb-field">
-                  <label>Message to our team (optional)</label>
-                  <textarea rows={2} maxLength={500} placeholder="e.g. Paid in two transfers / sender name is different"
-                    value={msg} onChange={e=>setMsg(e.target.value)}
-                    style={{width:"100%",background:"rgba(255,255,255,.04)",border:"1px solid rgba(201,168,76,.25)",borderRadius:"10px",padding:"10px 12px",color:"#e8ede9",fontSize:"13px",fontFamily:"inherit",resize:"vertical"}}/>
-                </div>
-
-                <span className="sb-method-label">Payment Proof</span>
-                {!file ? (
-                  <div className="sb-upload-zone" onClick={()=>fileRef.current?.click()}
-                    onDragOver={e=>{e.preventDefault();(e.currentTarget as HTMLElement).style.borderColor="#c9a84c";}}
-                    onDragLeave={e=>{(e.currentTarget as HTMLElement).style.borderColor="";}}
-                    onDrop={e=>{e.preventDefault();(e.currentTarget as HTMLElement).style.borderColor="";const f=e.dataTransfer.files[0];if(f)handleFile(f);}}>
-                    <input ref={fileRef} type="file" accept="image/*,.pdf" style={{display:"none"}} onChange={e=>{const f=e.target.files?.[0];if(f)handleFile(f);}}/>
-                    <span className="sb-upload-icon">📎</span>
-                    <p className="sb-upload-main">Drop screenshot or tap to upload</p>
-                    <p className="sb-upload-sub">GCash / bank transfer confirmation</p>
-                    <div className="sb-format-tags">
-                      {["JPG","PNG","PDF"].map(f=><span key={f} className="sb-format-tag">{f}</span>)}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="sb-preview">
-                    {preview && <img src={preview} alt="Preview"/>}
-                    <div className="sb-preview-info">
-                      <span className="sb-preview-name">{file.name}</span>
-                      <button className="sb-remove-btn" onClick={()=>{setFile(null);setPreview(null);}}>✕</button>
-                    </div>
-                  </div>
-                )}
-
-                {submitting && <div className="sb-progress"><div className="sb-progress-fill" style={{width:`${progress}%`}}/></div>}
-
-                {uploadError && <div style={{color:"#f09595",fontSize:12,marginBottom:8,fontWeight:600}}>{uploadError}</div>}
-                <button className="sb-submit" disabled={submitting} onClick={handleSubmit}>
-                  {submitting?"Submitting…":"Submit Payment Proof"}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="sb-notice">
-            <div className="sb-notice-label">📋 After Payment</div>
-            <p className="sb-notice-text">
-              Once payment is made, please <strong>send your proof of payment</strong> via this portal.
-              A <strong>Google Form will be sent</strong> to collect your shipping information.<br/><br/>
-              Replies may be slightly delayed as our admins are attending to multiple inquiries. We appreciate your patience and understanding. 🤍
-            </p>
-          </div>
-
-          <div className="sb-footer">© 2025 <span>TYG Services</span> — All Businesses by Legeryn Pia</div>
         </div>
+
+        <div className="pp-card" id="sb-pay-card">
+          {/* order summary strip */}
+          <div className="pp-strip">
+            <div className="pp-si"><label>🛒 ORDER NUMBER</label>
+              <input value={orderId} onChange={e => setOrderId(e.target.value.toUpperCase())} placeholder="SB-…" /></div>
+            <div className="pp-si"><label>👤 CUSTOMER NAME</label>
+              <input value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Full name" /></div>
+            {amount && <div className="pp-due"><label>AMOUNT DUE</label><b>₱{Number(amount).toLocaleString("en-PH")}</b></div>}
+          </div>
+
+          {/* 1 — payment method */}
+          <h2 className="pp-h2"><span className="pp-n">1</span>Select Payment Method <span className="pp-req">*</span></h2>
+          {payLoading && <p style={{ color: "#9b968f", fontSize: 13, fontWeight: 600 }}>Loading payment methods…</p>}
+          <div className="pp-tiles">
+            {payMethods.map(m => (
+              <div key={m.id} className={`pp-tile${selId === m.id ? " on" : ""}`} onClick={() => setSelId(m.id)}>
+                {tileEmoji(m)} {m.label}<small>{m.account_name}</small>
+              </div>
+            ))}
+            {!payLoading && <div className={`pp-tile${selId === "other" ? " on" : ""}`} onClick={() => setSelId("other")}>•••<small>Other — message us</small></div>}
+          </div>
+
+          {sel && (
+            <div className="pp-pay">
+              <div className="pp-pl">
+                <h3>{tileEmoji(sel)} {sel.label}</h3>
+                <p className="d">Send your payment to our {sel.label} account:</p>
+                <div className="pp-acct">
+                  <p>ACCOUNT NAME</p><b>{sel.account_name}</b>
+                  <p>ACCOUNT NUMBER</p>
+                  <div className="pp-num">
+                    <b>{sel.account_number}</b>
+                    <button className="pp-cp" onClick={e => copyText(digitsOnly(sel.account_number), e.currentTarget)}>⧉ Copy</button>
+                  </div>
+                </div>
+              </div>
+              {selQr && (
+                <div className="pp-qr">
+                  <p>Or Scan the QR Code</p>
+                  <div className="pp-qrbox" onClick={() => setLightbox({ src: selQr, label: sel.label })} title="Tap to enlarge">
+                    <img src={selQr} alt={`${sel.label} QR code`} />
+                  </div>
+                  <div>
+                    <a className="pp-dl" href={selQr} download={`soleblessing-${sel.id}-qr.png`}>⤓ Download QR</a>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {selId === "other" && (
+            <div className="pp-pay"><div className="pp-pl">
+              <h3>••• Other payment method</h3>
+              <p className="d">Message us on Facebook and we'll arrange it with you directly:</p>
+              <a className="pp-dl" href="https://m.me/SoleBlessingOfficial" target="_blank" rel="noopener noreferrer">💬 m.me/SoleBlessingOfficial</a>
+            </div></div>
+          )}
+
+          {/* 2 — payment details */}
+          <h2 className="pp-h2"><span className="pp-n">2</span>Payment Details <span className="pp-req">*</span></h2>
+          <div className="pp-grid">
+            <div className="pp-f"><label>Payment Date *</label>
+              <input type="date" value={payDate} onChange={e => setPayDate(e.target.value)} /></div>
+            <div className="pp-f"><label>Amount Paid (₱) *</label>
+              <input type="number" inputMode="decimal" placeholder="0.00" value={paidAmount} onChange={e => setPaidAmount(e.target.value)} /></div>
+            <div className="pp-f" style={{ flex: 2 }}><label>Transaction / Reference Number *</label>
+              <input placeholder="e.g. GCash Ref No., bank reference" value={refNo} onChange={e => setRefNo(e.target.value)} /></div>
+          </div>
+
+          {/* 3 — upload */}
+          <h2 className="pp-h2"><span className="pp-n">3</span>Upload Payment Proof <span className="pp-req">*</span></h2>
+          <div className="pp-up">
+            {!file ? (
+              <div className="pp-drop" onClick={() => fileRef.current?.click()}
+                onDragOver={e => { e.preventDefault(); (e.currentTarget as HTMLElement).style.borderColor = "#EA580C"; }}
+                onDragLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = ""; }}
+                onDrop={e => { e.preventDefault(); (e.currentTarget as HTMLElement).style.borderColor = ""; const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}>
+                <input ref={fileRef} type="file" accept="image/*,.pdf" style={{ display: "none" }}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+                <span style={{ fontSize: 30 }}>☁️</span>
+                <b>Drag and drop your file here</b>
+                <span style={{ color: "#9b968f", fontSize: 12, fontWeight: 600 }}>or</span><br />
+                <span className="pp-browse">🖼 Browse Files</span>
+                <small>Accepted: JPG, PNG, WEBP, PDF &nbsp;|&nbsp; Max size: 5 MB</small>
+              </div>
+            ) : (
+              <div className="pp-preview">
+                {preview && <img src={preview} alt="Payment proof preview" />}
+                <div className="pp-preview-info">
+                  <span>{file.name}</span>
+                  <button className="pp-x" onClick={() => { setFile(null); setPreview(null); }}>✕</button>
+                </div>
+              </div>
+            )}
+            <div className="pp-f"><label>Notes (Optional)</label>
+              <textarea rows={5} maxLength={500} placeholder="Add a note for our team (e.g. layaway installment 2 of 4, sender name is different)"
+                value={msg} onChange={e => setMsg(e.target.value)} /></div>
+          </div>
+
+          <div className="pp-priv">🔒<span><b>Privacy &amp; Security</b> — your uploaded payment proof is private and visible only to authorized SoleBlessing staff.</span></div>
+
+          {submitting && <div className="pp-progress"><i style={{ width: `${progress}%` }} /></div>}
+          {uploadError && <p className="pp-err">{uploadError}</p>}
+          <button className="pp-sbm" disabled={submitting} onClick={handleSubmit}>
+            {submitting ? "Submitting…" : "✈ Submit Payment Proof"}
+          </button>
+          <p className="pp-foot">Your submission will be reviewed by our team. Your order is not marked paid until payment is verified.</p>
+        </div>
+
+        <p className="pp-brandfoot"><b>SOLEBLESSING</b> · soleblessingofficial.com · Amadeo, Cavite 🇵🇭</p>
       </div>
 
+      {/* success — awaiting verification, never "paid" */}
       {success && (
-        <div className="sb-overlay">
-          <div className="sb-success-card">
-            <div className="sb-success-check">✓</div>
-            <h2 className="sb-success-title">Proof Submitted!</h2>
-            <p className="sb-success-msg">Thank you! Your payment proof is now <strong>awaiting verification</strong> by our team. We'll confirm your payment and update your order shortly — no need to resend.</p>
-            <div style={{background:"rgba(255,255,255,.04)",border:"1px solid rgba(201,168,76,.25)",borderRadius:"12px",padding:"12px 16px",margin:"14px 0",textAlign:"left",fontSize:"13px"}}>
-              {[["Order Number", orderId], ["Total Amount", amount ? `₱${Number(amount).toLocaleString("en-PH")}` : ""], ["Payment Method", method],
-                ["Submitted On", new Date().toLocaleString("en-PH",{timeZone:"Asia/Manila",month:"short",day:"numeric",year:"numeric",hour:"numeric",minute:"2-digit"})]].map(([k,v]) => v ? (
-                <div key={k} style={{display:"flex",justifyContent:"space-between",gap:"12px",padding:"3px 0"}}>
-                  <span style={{color:"#8fa89b"}}>{k}</span><span style={{fontWeight:700}}>{v}</span>
-                </div>
+        <div className="pp-overlay">
+          <div className="pp-success">
+            <div className="pp-check">✓</div>
+            <h2>Payment proof submitted!</h2>
+            <p className="m">Your payment is <b>awaiting verification</b> by SoleBlessing. We'll confirm it and update your order shortly — no need to resend.</p>
+            <div className="pp-kv">
+              {[["Order Number", orderId], ["Amount Paid", paidAmount ? `₱${Number(paidAmount).toLocaleString("en-PH")}` : ""],
+                ["Payment Method", sel ? sel.label : "Other"], ["Date Paid", payDate]].map(([k, v]) => v ? (
+                <div key={k as string}><span>{k}</span><b>{v}</b></div>
               ) : null)}
             </div>
-            <div style={{display:"flex",gap:"8px",margin:"4px 0 10px"}}>
-              <a href={`/invoice/${encodeURIComponent(orderId)}`} style={{flex:1,textAlign:"center",padding:"11px 0",borderRadius:"10px",border:"1px solid rgba(201,168,76,.45)",color:"#C9A84C",fontWeight:700,fontSize:"12.5px",textDecoration:"none"}}>View Invoice</a>
-              <a href={`/order/${encodeURIComponent(orderId)}`} style={{flex:1,textAlign:"center",padding:"11px 0",borderRadius:"10px",background:"#C9A84C",color:"#0b1a1f",fontWeight:800,fontSize:"12.5px",textDecoration:"none"}}>Track My Order</a>
+            <div className="pp-acts">
+              <a href={`/invoice/${encodeURIComponent(orderId)}`} style={{ border: "1.5px solid #EA580C", color: "#EA580C" }}>View Invoice</a>
+              <a href={`/order/${encodeURIComponent(orderId)}`} style={{ background: "#EA580C", color: "#fff" }}>Track My Order</a>
             </div>
-            <div className="sb-success-ref">Submission Reference<span>{refId}</span></div>
-            <button className="sb-success-close" onClick={resetForm}>Submit Another</button>
+            <p className="pp-ref">Submission Reference<b>{refId}</b></p>
+            <button className="pp-again" onClick={resetForm}>Submit Another</button>
           </div>
         </div>
       )}
 
-      {/* QR Lightbox */}
+      {/* QR lightbox */}
       {lightbox && (
-        <div className="sb-qr-lightbox" onClick={()=>setLightbox(null)}>
-          <div className="sb-qr-lightbox-inner" onClick={e=>e.stopPropagation()}>
-            <div className="sb-qr-lightbox-header">
-              <span className="sb-qr-lightbox-label">{lightbox.label} — Scan to Pay</span>
-              <button className="sb-qr-lightbox-close" onClick={()=>setLightbox(null)}>✕</button>
-            </div>
-            <img src={lightbox.src} alt={`${lightbox.label} QR`} className="sb-qr-lightbox-img"/>
-            <p className="sb-qr-lightbox-hint">Tap outside to close</p>
+        <div className="pp-lightbox" onClick={() => setLightbox(null)}>
+          <div className="pp-lb" onClick={e => e.stopPropagation()}>
+            <div className="pp-lb-head"><span>{lightbox.label} — Scan to Pay</span>
+              <button className="pp-lb-x" onClick={() => setLightbox(null)}>✕</button></div>
+            <img src={lightbox.src} alt={`${lightbox.label} QR`} />
+            <a className="pp-dl" href={lightbox.src} download>⤓ Download QR</a>
           </div>
         </div>
       )}

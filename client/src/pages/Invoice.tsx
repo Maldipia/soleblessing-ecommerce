@@ -65,8 +65,10 @@ export default function Invoice() {
   const preorder = String(order.payment_method || "").toUpperCase() === "PRE-ORDER";
   const items = order.items || [];
   // Upload link AUTO-FILLS order reference, name and amount — the customer
-  // never retypes them on the payment portal.
-  const payUrl = `/upload-payment?order=${encodeURIComponent(order.order_number)}&name=${encodeURIComponent(order.customer_name || "")}&amount=${encodeURIComponent(String(Math.round((order.total || 0) / 100)))}`;
+  // never retypes them. For layaway, the prefilled amount is the REMAINING
+  // balance (verified payments deducted), not the full total.
+  const paidSoFar = order.payments_total || items.reduce((s: number, i: any) => s + (i.paid || 0), 0);
+  const payUrl = `/upload-payment?order=${encodeURIComponent(order.order_number)}&name=${encodeURIComponent(order.customer_name || "")}&amount=${encodeURIComponent(String(Math.round(Math.max(0, (order.total || 0) - paidSoFar) / 100)))}`;
   const expiresAt = order.invoice_access?.expires_at;
   const daysLeft = expiresAt ? Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 86400000)) : null;
 

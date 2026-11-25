@@ -45,7 +45,7 @@ import ChatWidget from "./components/ChatWidget";
 function Router() {
   const [location] = useLocation();
   const isAdmin = location.startsWith("/admin");
-  const isBare = isAdmin || location === "/order"; // standalone pages: no site header/footer
+  const isBare = isAdmin || location === "/order" || location === "/upload-payment" || location === "/payment"; // standalone pages: no site header/footer
 
   // Anonymous page-view analytics (skips admin pages). Product pages carry the
   // item code so "most viewed products" works; /order pages log track_order_view.
@@ -66,6 +66,7 @@ function Router() {
         <Route path={"/shoe-cleaner/play-and-win"} component={PlayAndWin} />
         <Route path={"/shoe-cleaner"} component={ShoeCleaner} />
         <Route path={"/upload-payment"} component={UploadPayment} />
+        <Route path={"/payment"} component={UploadPayment} />
         <Route path={"/product/:id"} component={ProductDetail} />
         <Route path={"/inventory/:itemCode"} component={InventoryDetail} />
         <Route path={"/cart"} component={Cart} />
