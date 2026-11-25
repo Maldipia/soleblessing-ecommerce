@@ -3342,15 +3342,21 @@ export default function AdminDashboard() {
                 ))}
               </div>
 
-              {/* MOP (mode of payment) tabs */}
-              <div className="flex items-center gap-1.5 mb-4 flex-wrap">
-                <span className="text-[10px] font-black uppercase tracking-[.12em] text-gray-400 mr-1">MOP</span>
-                {([["all","All"],["straight","💳 Straight Payment"],["cod","💵 COD"],["other","📦 Others"]] as const).map(([v,l])=>(
-                  <button key={v} onClick={()=>setMopFilter(v)}
-                    className={`px-3.5 py-2 text-[11.5px] font-bold rounded-lg border ${mopFilter===v?"bg-[#C9A84C] text-[#0d2430] border-[#C9A84C]":"bg-white text-gray-500 border-gray-200 hover:border-gray-300"}`}>
-                    {l} ({v==="all"?base.length:base.filter(o=>mopOf(o)===v).length})
-                  </button>
-                ))}
+              {/* MOP (mode of payment) — compact dropdown */}
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-[10px] font-black uppercase tracking-[.12em] text-gray-400">MOP</span>
+                <Select value={mopFilter} onValueChange={(v:any)=>setMopFilter(v)}>
+                  <SelectTrigger className={`w-56 h-9 text-[12px] font-bold rounded-lg ${mopFilter!=="all"?"bg-[#C9A84C] text-[#0d2430] border-[#C9A84C]":"bg-white text-gray-600 border-gray-200"}`}>
+                    <SelectValue/>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {([["all","All"],["straight","💳 Straight Payment"],["cod","💵 COD"],["other","📦 Others"]] as const).map(([v,l])=>(
+                      <SelectItem key={v} value={v} className="text-[12px] font-semibold">
+                        {l} ({v==="all"?base.length:base.filter(o=>mopOf(o)===v).length})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 items-start">
