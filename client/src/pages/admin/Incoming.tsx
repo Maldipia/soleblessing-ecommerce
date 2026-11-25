@@ -39,7 +39,8 @@ export function useOrderRequests() {
   return { rows, missing, reload: load };
 }
 
-export function RequestDetailModal({ sel, onClose, onPrepare, onChanged }:
+/** Request details, rendered in the SAME side panel as a selected order. */
+export function RequestDetailCard({ sel, onClose, onPrepare, onChanged }:
   { sel: any; onClose: () => void; onPrepare?: (r: any) => void; onChanged?: () => void }) {
   const converted = (sel.status === "converted" || sel.status === "invoiced") && sel.converted_order_number && sel.converted_order_number !== "CONVERTING";
   const [tab, setTab] = useState<"request" | "payment">(converted ? "payment" : "request");
@@ -124,7 +125,7 @@ export function RequestDetailModal({ sel, onClose, onPrepare, onChanged }:
     try {
       await sbAdmin.update("sb_order_requests", `request_ref=eq.${encodeURIComponent(sel.request_ref)}`, { status, reviewed_at: new Date().toISOString() });
       toast.success(`${sel.request_ref} → ${status.replace("_", " ")}`);
-      onChanged?.(); onClose();
+      onChanged?.();
     } catch (e: any) { toast.error(e.message || "Update failed"); }
   };
 
@@ -132,13 +133,18 @@ export function RequestDetailModal({ sel, onClose, onPrepare, onChanged }:
   const payState = order?.payment_status;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40" onClick={onClose}>
-      <div className="bg-white w-full sm:max-w-[620px] sm:rounded-2xl rounded-t-2xl max-h-[90vh] overflow-y-auto p-5" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
-          <div><div className="font-mono font-black text-[14px]">{sel.request_ref}
-            {converted && <span className="ml-2 text-[11px] font-black text-[#8a6d25]">→ {sel.converted_order_number}</span>}</div>
-            <div className="text-[10.5px] text-gray-400 font-semibold">{when(sel.created_at)}</div></div>
-          <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase ${REQ_STATUS_COLORS[sel.status] || "bg-gray-100"}`}>{sel.status.replace("_", " ")}</span>
+    <div className="bg-white border border-gray-100 rounded-xl p-4">
+        <div className="flex items-center justify-between mb-1 gap-2">
+          <h3 className="text-sm font-black text-[#0d2430]">Selected Request</h3>
+          <div className="flex items-center gap-1.5">
+            <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase ${REQ_STATUS_COLORS[sel.status] || "bg-gray-100"}`}>{sel.status.replace("_", " ")}</span>
+            <span className="text-[11px] font-black bg-[#C9A84C] text-[#0d2430] px-2.5 py-1 rounded-full font-mono">{sel.request_ref}</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 mb-2 flex-wrap">
+          <span className="text-[10px] font-bold bg-[#fff3df] text-[#8a6d25] px-2 py-0.5 rounded-full">🧾 Order Form</span>
+          {converted && <span className="text-[11px] font-black text-[#8a6d25] font-mono">→ {sel.converted_order_number}</span>}
+          <span className="text-[10.5px] text-gray-400 font-semibold">{when(sel.created_at)}</span>
         </div>
 
         {converted && (
@@ -256,7 +262,6 @@ export function RequestDetailModal({ sel, onClose, onPrepare, onChanged }:
           {sel.status !== "rejected" && !converted && <button onClick={() => setStatus("rejected")} className="py-2.5 rounded-xl text-[11px] font-black bg-gray-100 text-gray-500">Reject</button>}
           <button onClick={onClose} className="py-2.5 rounded-xl text-[11px] font-black bg-gray-50 text-gray-400">Close</button>
         </div>
-      </div>
     </div>
   );
 }

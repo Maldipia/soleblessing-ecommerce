@@ -25,7 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import AdminSettings from "./Settings";
 import AdminVisitors from "./Visitors";
-import { useOrderRequests, RequestDetailModal, REQ_STATUS_COLORS } from "./Incoming";
+import { useOrderRequests, RequestDetailCard, REQ_STATUS_COLORS } from "./Incoming";
 import { useInventory, refreshInventory } from "@/hooks/useInventory";
 import AdminPromos from "./Promos";
 import ShoeCleanerCampaign from "./ShoeCleanerCampaign";
@@ -2088,6 +2088,7 @@ export default function AdminDashboard() {
   const [prepareReq,setPrepareReq]=useState<any>(null); // order-form request being converted
   const {rows:reqRows,reload:reloadReqs}=useOrderRequests(); // merged into FB/Order Form table
   const [selReq,setSelReq]=useState<any>(null);
+  useEffect(()=>{ if(selReq){ const f=reqRows.find((x:any)=>x.request_ref===selReq.request_ref); if(f&&f!==selReq) setSelReq(f); } },[reqRows]);
   // Payment-proof verification panel state
   const [proofInfo,setProofInfo]=useState<Record<string,any>>({});
   const [reupFor,setReupFor]=useState<string|null>(null);
@@ -2524,9 +2525,6 @@ export default function AdminDashboard() {
             notes:prepareReq.special_request||""}}:null}
         onClose={()=>{setCreateOrder(false);setPrepareReq(null);}}
         onPlaced={()=>{loadOrders();reloadReqs();refetchInv();refreshInventory().catch(()=>{});}}/>}
-      {selReq&&<RequestDetailModal sel={selReq} onClose={()=>setSelReq(null)}
-        onPrepare={(r:any)=>{setPrepareReq(r);setCreateOrder(true);}}
-        onChanged={()=>{reloadReqs();loadOrders();}}/>}
       {editOrder&&<OrderEditModal order={editOrder} onClose={()=>setEditOrder(null)} onSave={saveOrderEdit}/>}
       {scanBox&&<ScanBoxModal existingCodes={existingCodes} allRows={intakeRows} nextCode={nextCode}
         onClose={()=>setScanBox(false)}
@@ -3247,7 +3245,7 @@ export default function AdminDashboard() {
                       </thead>
                       <tbody>
                         {reqVisible.map((r:any)=>(
-                          <tr key={r.request_ref} onClick={()=>setSelReq(r)}
+                          <tr key={r.request_ref} onClick={()=>{setSelReq(r);setSelOrderId(null);}}
                             className="border-b border-gray-50 cursor-pointer text-[11px] bg-[#fffdf6] hover:bg-[#fcf4e3]">
                             <td className="pl-3 pr-1.5 py-2.5">
                               <div className="flex items-center gap-2">
@@ -3282,7 +3280,7 @@ export default function AdminDashboard() {
                         {rows.map(o=>{
                           const t=thumbOf(o);
                           return (
-                          <tr key={o.id} onClick={()=>setSelOrderId(String(o.id))}
+                          <tr key={o.id} onClick={()=>{setSelOrderId(String(o.id));setSelReq(null);}}
                             className={`border-b border-gray-50 cursor-pointer text-[11px] ${String(o.id)===selOrderId?"bg-[#C9A84C]/10":"hover:bg-gray-50/70"}`}>
                             <td className="pl-3 pr-1.5 py-2.5">
                               <div className="flex items-center gap-2">
@@ -3344,8 +3342,12 @@ export default function AdminDashboard() {
 
                 {/* ── side panel ── */}
                 <div className="space-y-4">
-                  {/* selected order */}
-                  {sel ? (
+                  {/* selected request — same panel, same place as a selected order */}
+                  {selReq ? (
+                    <RequestDetailCard sel={selReq} onClose={()=>setSelReq(null)}
+                      onPrepare={(r:any)=>{setPrepareReq(r);setCreateOrder(true);}}
+                      onChanged={()=>{reloadReqs();loadOrders();}}/>
+                  ) : sel ? (
                     <div className="bg-white border border-gray-100 rounded-xl p-4">
                       <div className="flex items-center justify-between mb-3 gap-2">
                         <h3 className="text-sm font-black text-[#0d2430]">Selected Order</h3>
