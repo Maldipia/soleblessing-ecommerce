@@ -172,23 +172,24 @@ export default async function handler(req, res) {
   // purpose: posting stays in Metricool, so no double-posting risk. The token
   // lives ONLY in server env (like RESEND_API_KEY) — never reaches the browser.
   if (op === 'social') {
-    const MT = process.env.METRICOOL_TOKEN;
-    const MU = process.env.METRICOOL_USER_ID || '6169065';
-    const MB = process.env.METRICOOL_BLOG_ID || '7897059'; // SoleBlessing brand
-    if (!MT) return res.status(200).json({ ok: false, notConfigured: true, message: 'Metricool API token not set yet — paste it to Claude to activate this section.' });
+    // Reads the sb_social_posts mirror that Claude syncs from Metricool via the
+    // connector (her $25 plan has no Metricool API; this path costs nothing).
     const from = String(body.from || '').slice(0, 19);
     const to = String(body.to || '').slice(0, 19);
     if (!/^\d{4}-\d{2}-\d{2}T/.test(from) || !/^\d{4}-\d{2}-\d{2}T/.test(to)) return res.status(400).json({ error: 'from/to required (YYYY-MM-DDTHH:MM:SS)' });
-    const qs = `start=${encodeURIComponent(from)}&end=${encodeURIComponent(to)}&timezone=${encodeURIComponent('Asia/Manila')}&userId=${encodeURIComponent(MU)}&blogId=${encodeURIComponent(MB)}`;
+    const q = `publication_at=gte.${encodeURIComponent(from + '+08:00')}&publication_at=lte.${encodeURIComponent(to + '+08:00')}&select=raw,synced_at&order=publication_at.asc&limit=500`;
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/sb_social_posts?${q}`, { headers: H_SVC() });
+    if (!r.ok) return res.status(502).json({ error: 'social posts table unavailable — is the social_posts_v1 migration applied?' });
+    const rows = await r.json();
+    // lastSync = newest sync overall (not just this week) so an empty week
+    // doesn't look like "never synced"
+    let lastSync = null;
     try {
-      const r = await fetch(`https://app.metricool.com/api/v2/scheduler/posts?${qs}`, { headers: { 'X-Mc-Auth': MT, Accept: 'application/json' } });
-      const j = await r.json().catch(() => null);
-      if (!r.ok) return res.status(502).json({ error: 'Metricool fetch failed', status: r.status, detail: j && (j.message || j.error) });
-      const posts = Array.isArray(j) ? j : (j && Array.isArray(j.data) ? j.data : []);
-      return res.status(200).json({ ok: true, posts });
-    } catch (e) {
-      return res.status(502).json({ error: 'Metricool unreachable: ' + (e.message || e) });
-    }
+      const m = await fetch(`${SUPABASE_URL}/rest/v1/sb_social_posts?select=synced_at&order=synced_at.desc&limit=1`, { headers: H_SVC() });
+      const [mr] = m.ok ? await m.json() : [];
+      lastSync = (mr && mr.synced_at) || null;
+    } catch {}
+    return res.status(200).json({ ok: true, posts: rows.map((x) => x.raw), syncedAt: lastSync });
   }
 
   // Entries are REAL database records — balances everywhere compute from them.

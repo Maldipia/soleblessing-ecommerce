@@ -2194,7 +2194,8 @@ export default function AdminDashboard() {
   const [soLoading,setSoLoading]=useState(false);
   const [soCfg,setSoCfg]=useState<string|null>(null); // not-configured message from the server
   const [soErr,setSoErr]=useState("");
-  const [soTab,setSoTab]=useState<"cal"|"up"|"pub">("cal");
+  const [soTab,setSoTab]=useState<"cal"|"up"|"pub"|"plan">("cal");
+  const [soSynced,setSoSynced]=useState<string|null>(null);
   const [soWeek,setSoWeek]=useState<Date>(()=>{const d=new Date();const day=(d.getDay()+6)%7;d.setHours(0,0,0,0);d.setDate(d.getDate()-day);return d;}); // Monday of this week
   const soFmtLocal=(d:Date)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}T${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}:00`;
   const loadSocial=async(ws:Date)=>{
@@ -2204,13 +2205,35 @@ export default function AdminDashboard() {
       const r=await fetch("/api/admin",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({...adminCred(),op:"social",from:soFmtLocal(ws),to:soFmtLocal(we)})});
       const out=await r.json().catch(()=>({} as any));
-      if(out&&out.notConfigured){setSoCfg(out.message||"Metricool not connected yet");setSoPosts([]);}
-      else if(r.ok&&Array.isArray(out.posts)){setSoCfg(null);setSoPosts(out.posts);}
+      if(r.ok&&Array.isArray(out.posts)){
+        setSoPosts(out.posts);setSoSynced(out.syncedAt||null);
+        setSoCfg(out.syncedAt?null:'No posts synced yet — tell Claude "sync social now" and this section fills up.');
+      }
       else setSoErr(out.error||"Could not load the schedule");
     }catch(e:any){setSoErr(String(e.message||e));}
     finally{setSoLoading(false);}
   };
   useEffect(()=>{ if(section==="social") loadSocial(soWeek); },[section,soWeek]); // eslint-disable-line
+  useEffect(()=>{ if(section==="social"&&!intakeRows.length) loadIntake(); },[section]); // eslint-disable-line — plan tab price-checks against inventory
+  // Content Plan helpers (approved mock): code + printed price parsed from the caption,
+  // matched to sb_inventory → automatic price check vs the live website
+  const planCode=(p:any)=>{const t=String(p?.text||"");const m=t.match(/\/go\/([a-z0-9\-]+)/i)||t.match(/[?&]search=([a-z0-9\-]+)/i);return m?m[1]:null;};
+  const planPrinted=(p:any)=>{const m=String(p?.text||"").match(/₱\s?([\d,]+)/);return m?Number(m[1].replace(/,/g,"")):null;};
+  const planRow=(code:string|null)=>{
+    if(!code)return null;
+    const n=code.replace(/[^a-z0-9]/gi,"").toLowerCase();
+    return (intakeRows as any[]).find((r:any)=>String(r.sku||"").replace(/[^a-z0-9]/gi,"").toLowerCase()===n||String(r.item_code||"").toLowerCase()===code.toLowerCase())||null;
+  };
+  const planCheck=(p:any)=>{
+    const code=planCode(p);const printed=planPrinted(p);const row=planRow(code);
+    if(!code)return {code,printed,row,kind:"nocode" as const};
+    if(!row)return {code,printed,row,kind:"notfound" as const};
+    const site=Number(row.selling_price||0)/100, srp=Number(row.srp||0)/100;
+    if(!site)return {code,printed,row,kind:"zero" as const,site,srp};
+    if(printed&&printed!==site)return {code,printed,row,kind:"mismatch" as const,site,srp};
+    if(srp>0&&site>srp)return {code,printed,row,kind:"abovesrp" as const,site,srp};
+    return {code,printed,row,kind:"match" as const,site,srp};
+  };
   const soDate=(p:any)=>new Date(String(p?.publicationDate?.dateTime||"").replace(" ","T"));
   const soType=(p:any)=>(p?.facebookData?.type==="STORY"||p?.instagramData?.type==="STORY")?"Story":"Post";
   const soNets=(p:any)=>(Array.isArray(p?.providers)?p.providers.map((x:any)=>String(x.network||"")):[]);
@@ -3985,9 +4008,8 @@ export default function AdminDashboard() {
 
               {soCfg?(
                 <div className="bg-[#FFF7F1] border-2 border-[#EA580C] rounded-xl p-5">
-                  <p className="text-sm font-black text-[#b45309]">🔌 One step to activate</p>
+                  <p className="text-sm font-black text-[#b45309]">🔌 First sync pending</p>
                   <p className="text-xs text-gray-600 mt-1.5 leading-relaxed">{soCfg}</p>
-                  <p className="text-xs text-gray-600 mt-2 leading-relaxed">In Metricool (tygfsb account): <b>Settings → API → copy the token</b>, then paste it to Claude — the schedule appears here right after. The token is stored server-side only, like the email key.</p>
                 </div>
               ):(
               <>
@@ -4016,12 +4038,13 @@ export default function AdminDashboard() {
               </div>
 
               {/* tabs */}
-              <div className="flex gap-1.5">
-                {([["cal","📅 Calendar"],["up","⏭ Upcoming"],["pub","✅ Published"]] as const).map(([k,lbl])=>(
+              <div className="flex gap-1.5 items-center flex-wrap">
+                {([["cal","📅 Calendar"],["up","⏭ Upcoming"],["pub","✅ Published"],["plan","📋 Content Plan"]] as const).map(([k,lbl])=>(
                   <button key={k} onClick={()=>setSoTab(k)}
                     className={`px-3.5 py-2 rounded-lg text-xs font-bold border ${soTab===k?"border-[#EA580C] bg-[#FFF7F1] text-[#b45309]":"border-gray-200 text-gray-500 bg-white hover:border-gray-300"}`}>{lbl}</button>
                 ))}
-                <button onClick={()=>loadSocial(soWeek)} className="ml-auto border border-gray-200 text-gray-500 px-3 py-2 text-xs font-bold rounded-lg hover:bg-gray-50">
+                <span className="ml-auto text-[10px] text-gray-400 font-semibold">{soSynced?`Last synced ${fmtDT(soSynced)}`:""}</span>
+                <button onClick={()=>loadSocial(soWeek)} className="border border-gray-200 text-gray-500 px-3 py-2 text-xs font-bold rounded-lg hover:bg-gray-50">
                   <RefreshCw className={`h-3.5 w-3.5 ${soLoading?"animate-spin":""}`}/></button>
               </div>
               {soErr&&<div className="bg-red-50 border border-red-200 text-red-600 text-xs font-bold rounded-xl px-4 py-3">{soErr}</div>}
@@ -4085,6 +4108,64 @@ export default function AdminDashboard() {
                 </div>
               </div>
               )}
+
+              {soTab==="plan"&&(()=>{
+                const slots=[...soPosts].sort((a,b)=>+soDate(a)-+soDate(b));
+                const checks=slots.map(p=>({p,c:planCheck(p)}));
+                const nMis=checks.filter(x=>x.c.kind==="mismatch").length;
+                const nZero=checks.filter(x=>x.c.kind==="zero").length;
+                const nLinked=checks.filter(x=>x.c.kind!=="nocode").length;
+                const pill=(c:any)=>c.kind==="match"?<span className="text-[10px] font-black text-green-700 bg-green-50 px-2.5 py-1 rounded-full whitespace-nowrap">✓ MATCH</span>
+                  :c.kind==="mismatch"?<span className="text-[10px] font-black text-red-600 bg-red-50 px-2.5 py-1 rounded-full whitespace-nowrap">⚠ MISMATCH</span>
+                  :c.kind==="zero"?<span className="text-[10px] font-black text-red-600 bg-red-50 px-2.5 py-1 rounded-full whitespace-nowrap">⚠ ₱0 ON SITE</span>
+                  :c.kind==="abovesrp"?<span className="text-[10px] font-black text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full whitespace-nowrap">⚠ ABOVE SRP ₱{c.srp.toLocaleString("en-PH")}</span>
+                  :c.kind==="notfound"?<span className="text-[10px] font-black text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full whitespace-nowrap">? NOT IN INVENTORY</span>
+                  :<span className="text-[10px] text-gray-300">—</span>;
+                return (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                      {[["Planned slots",slots.length,""],["⚠ Price mismatches",nMis,nMis?"printed ≠ website":"all clear"],["₱0 on website",nZero,nZero?"set the price":"all priced"],["Links detected",`${nLinked}/${slots.length}`,"captions with /go/ or search"]].map(([l,v,s]:any)=>(
+                        <div key={l} className="bg-white border border-gray-100 rounded-xl p-3.5">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{l}</p>
+                          <div className={`text-2xl font-black mt-1 tabular-nums ${String(l).includes("⚠")&&v>0||l==="₱0 on website"&&v>0?"text-red-600":"text-[#0d2430]"}`}>{v}</div>
+                          <div className="text-[10px] text-gray-400 mt-0.5">{s||" "}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="bg-white border border-gray-100 rounded-xl overflow-auto">
+                      <table className="w-full text-sm min-w-[900px]">
+                        <thead><tr className="text-[10px] uppercase tracking-wider text-gray-400 text-left">
+                          <th className="px-3 py-2.5 font-semibold">Slot</th><th className="px-2 font-semibold">Photo</th>
+                          <th className="px-2 font-semibold">Product</th><th className="px-2 font-semibold">Type</th>
+                          <th className="px-2 font-semibold">Printed ₱</th><th className="px-2 font-semibold">Website ₱</th>
+                          <th className="px-2 font-semibold">Price check</th><th className="px-2 font-semibold">Link</th><th className="px-2"></th>
+                        </tr></thead>
+                        <tbody className="divide-y divide-gray-50">
+                          {checks.map(({p,c}:any,i:number)=>(
+                            <tr key={i} className={c.kind==="mismatch"||c.kind==="zero"?"bg-red-50/40":""}>
+                              <td className="px-3 py-2 text-[11px] font-bold text-[#0d2430] whitespace-nowrap">{fmtDT(soDate(p).toISOString())}</td>
+                              <td className="px-2">{p.media?.[0]?<img src={p.media[0]} style={{width:40,height:40,minWidth:40,objectFit:"cover",borderRadius:9}}/>:<span className="text-gray-300">—</span>}</td>
+                              <td className="px-2">{c.row?<><div className="text-xs font-bold text-[#0d2430] max-w-[160px] truncate">{c.row.name||"—"}</div><div className="font-mono text-[10px] text-gray-400">{c.code}</div></>
+                                :c.code?<span className="font-mono text-[11px] text-gray-500">{c.code}</span>
+                                :<span className="text-[10px] text-gray-400">My Day Story (no caption)</span>}</td>
+                              <td className="px-2"><span className={`text-[9px] font-black px-2 py-0.5 rounded-full whitespace-nowrap ${soType(p)==="Story"?"bg-purple-50 text-purple-600":"bg-gray-100 text-gray-500"}`}>{soType(p).toUpperCase()} · {soNets(p).map(n=>n[0].toUpperCase()).join("+")}</span></td>
+                              <td className="px-2 text-xs tabular-nums">{c.printed?`₱${c.printed.toLocaleString("en-PH")}`:"—"}</td>
+                              <td className="px-2 text-xs tabular-nums">{c.row?`₱${((c.row.selling_price||0)/100).toLocaleString("en-PH")}`:"—"}</td>
+                              <td className="px-2">{pill(c)}</td>
+                              <td className="px-2 font-mono text-[10px] text-blue-700">{c.code?`/go/${c.code}`:"—"}</td>
+                              <td className="px-2 whitespace-nowrap">
+                                {(c.kind==="mismatch"||c.kind==="abovesrp")&&<a href="https://app.metricool.com/planner" target="_blank" rel="noreferrer" className="text-[9.5px] font-black text-[#EA580C] border border-[#EA580C] rounded-lg px-2 py-1">🖼 Change photo</a>}
+                                {(c.kind==="zero"||c.kind==="notfound")&&c.code&&<button onClick={()=>{setSection("intake");setIntakeSearch(c.code);}} className="text-[9.5px] font-black text-[#8a6d25] border border-[#C9A84C] rounded-lg px-2 py-1">✏️ Fix price</button>}
+                              </td>
+                            </tr>
+                          ))}
+                          {checks.length===0&&<tr><td colSpan={9} className="px-4 py-8 text-center text-sm text-gray-400">{soLoading?"Loading…":"No posts in this week — use ‹ › on the Calendar tab to move weeks."}</td></tr>}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="text-[10px] text-gray-400">✓ MATCH = printed price in the caption == website price · 🖼 Change photo = the price printed on the graphic is wrong → re-render and swap it in Metricool before it publishes · ✏️ Fix price = the website is wrong or ₱0 → opens the pair in Latest Inventory · Stories without captions can't be auto-checked.</p>
+                  </div>
+                );})()}
 
               {(soTab==="up"||soTab==="pub")&&(
                 <div className="bg-white border border-gray-100 rounded-xl divide-y divide-gray-50">
