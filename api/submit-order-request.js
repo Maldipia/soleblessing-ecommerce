@@ -6,7 +6,7 @@
 // validation, idempotent on client submission_id, duplicate guard (same contact
 // within 10 min returns the existing reference). Service key never leaves server.
 // Loyalty points are NOT awarded here (server awards at conversion by MOP map).
-import { cors } from '../server/auth.js';
+import { cors, logOrderEvent } from '../server/auth.js';
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://akualfrqzaierqsfcnkp.supabase.co';
 const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -56,6 +56,44 @@ export function validate(b) {
   if (b.privacyAccepted !== true) errs.privacyAccepted = 'Privacy Policy & Terms acceptance is required';
   if (out.payment_method === 'PRE-ORDER' && b.preorderAccepted !== true) errs.preorderAccepted = 'PRE-ORDER policy acceptance is required';
   return { out, errs };
+}
+
+// Create the matching FB Form order for a submission and link the request to
+// it. Best-effort: a failure leaves the request saved for manual recovery.
+async function createFormOrder(out, requestRef) {
+  const shipping_address = [out.address, out.city, out.region].filter(Boolean).join(', ');
+  for (let i = 0; i < 3; i++) {
+    const order_number = `SB-${String(Math.floor(1e9 + Math.random() * 9e9))}`;
+    try {
+      const ins = await fetch(`${SUPABASE_URL}/rest/v1/sb_orders`, {
+        method: 'POST', headers: { ...H(), Prefer: 'return=representation' },
+        body: JSON.stringify({
+          order_number,
+          customer_name: out.receiver_name, facebook_name: out.fb_ig_name || null,
+          customer_email: out.email || null, contact_number: out.contact_number,
+          shipping_address, region: out.region || null, city: out.city || null,
+          notes: out.special_request || null,
+          items: [], subtotal: 0, shipping_fee: 0, discount_amount: 0, total: 0,
+          payment_method: out.payment_method, status: 'pending',
+          payment_status: out.payment_method === 'PRE-ORDER' ? 'awaiting_full_payment' : 'pending',
+          source: 'sheet_import',
+        }),
+      });
+      if (ins.ok) {
+        const order = (await ins.json())[0];
+        await fetch(`${SUPABASE_URL}/rest/v1/sb_order_requests?request_ref=eq.${encodeURIComponent(requestRef)}`, {
+          method: 'PATCH', headers: H(),
+          body: JSON.stringify({ status: 'converted', converted_order_number: order.order_number }),
+        }).catch(() => {});
+        await logOrderEvent({ order_number: order.order_number, actor: 'customer', action: 'create',
+          new_value: { source: 'order_form', request_ref: requestRef, payment_method: out.payment_method, total: 0 } });
+        return order;
+      }
+      const txt = await ins.text();
+      if (!/duplicate key|23505/.test(txt)) return null;
+    } catch { return null; }
+  }
+  return null;
 }
 
 const rqRef = () => {
@@ -115,7 +153,15 @@ export default async function handler(req, res) {
       });
       if (ins.ok) {
         const saved = (await ins.json())[0];
-        return res.status(200).json({ ok: true, ref: saved.request_ref });
+        // UNIFORM FLOW (Pia, Nov 25): the new link IS the FB order form.
+        // A submission immediately becomes a normal FB Form order (₱0 until
+        // the admin encodes items — exactly like sheet-imported form orders).
+        // source 'sheet_import' keeps every downstream behavior identical
+        // (badges, stats, stock-trigger exemption, edit → invoice flow);
+        // the import's refresh pass matches by sheet order numbers only, so
+        // it can never touch these. No stock, no loyalty, no GAS here.
+        const order = await createFormOrder(out, saved.request_ref);
+        return res.status(200).json({ ok: true, ref: saved.request_ref, order_number: order ? order.order_number : null });
       }
       const txt = await ins.text();
       if (!/duplicate key|23505/.test(txt) || /submission_id/.test(txt)) {
