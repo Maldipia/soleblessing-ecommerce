@@ -2263,8 +2263,11 @@ export default function AdminDashboard() {
     return {code,printed,row,kind:"match" as const,site,srp};
   };
   const soDate=(p:any)=>new Date(String(p?.publicationDate?.dateTime||"").replace(" ","T"));
-  const soType=(p:any)=>(p?.facebookData?.type==="STORY"||p?.instagramData?.type==="STORY")?"Story":"Post";
+  const soType=(p:any)=>(p?.facebookData?.type==="STORY"||p?.instagramData?.type==="STORY")?"Story"
+    :(p?.facebookData?.type==="REEL"||p?.instagramData?.type==="REEL")?"Reel":"Post";
   const soNets=(p:any)=>(Array.isArray(p?.providers)?p.providers.map((x:any)=>String(x.network||"")):[]);
+  const SO_NETL:any={facebook:"FB",instagram:"IG",tiktok:"TikTok",youtube:"YouTube",gmb:"GBP",twitter:"X"};
+  const soNetL=(p:any)=>soNets(p).map((n:string)=>SO_NETL[n]||n.toUpperCase());
   const soPublished=(p:any)=>Array.isArray(p?.providers)&&p.providers.length>0&&p.providers.every((x:any)=>x.status==="PUBLISHED");
   const soShopUrl=(p:any)=>{const m=String(p?.text||"").match(/https?:\/\/[^\s)]+/);return m?m[0]:null;};
   const soTime=(p:any)=>soDate(p).toLocaleTimeString("en-PH",{hour:"numeric",minute:"2-digit"});
@@ -4045,7 +4048,7 @@ export default function AdminDashboard() {
               <div className="grid lg:grid-cols-[300px_1fr] gap-3">
                 <div className="bg-white border border-gray-100 rounded-xl p-4">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2.5">Platform Status</p>
-                  {[["📘","Facebook Page",true],["📸","Instagram",true],["🎵","TikTok",true]].map(([ic,lbl,on]:any)=>(
+                  {[["📘","Facebook Page",true],["📸","Instagram",true],["🎵","TikTok",true],["▶️","YouTube",true],["📍","Google Business",true]].map(([ic,lbl,on]:any)=>(
                     <div key={lbl} className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
                       <span className="text-xs font-bold text-[#0d2430]">{ic} {lbl}</span>
                       {on?<span className="text-[10px] font-black text-green-600">✓ Connected</span>
@@ -4055,7 +4058,7 @@ export default function AdminDashboard() {
                 </div>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                   {[["📅","Scheduled this week",soStats.total,""],["✅","Published today",soStats.pubToday,""],["🗂","Remaining",soStats.remaining,"still pending"],
-                    ["🕒","Next post",soStats.next?soTime(soStats.next):"—",soStats.next?`${soType(soStats.next)==="Story"?"My Day Story":"Feed post"} · ${soDate(soStats.next).toLocaleDateString("en-PH",{weekday:"short"})}`:""]].map(([ic,lbl,val,sub]:any)=>(
+                    ["🕒","Next post",soStats.next?soTime(soStats.next):"—",soStats.next?`${soType(soStats.next)==="Story"?"My Day Story":soType(soStats.next)==="Reel"?"Reel":"Feed post"} · ${soDate(soStats.next).toLocaleDateString("en-PH",{weekday:"short"})}`:""]].map(([ic,lbl,val,sub]:any)=>(
                     <div key={lbl} className="bg-white border border-gray-100 rounded-xl p-3.5">
                       <div className="flex items-center justify-between"><span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{lbl}</span><span className="text-sm">{ic}</span></div>
                       <div className="text-2xl font-black text-[#0d2430] mt-1 tabular-nums">{val}</div>
@@ -4115,7 +4118,7 @@ export default function AdminDashboard() {
                 </div>
                 <div className="bg-white border border-gray-100 rounded-xl p-4">
                   <p className="text-xs font-black text-[#0d2430] mb-2.5">Next Feed Posts</p>
-                  {soPosts.filter(p=>soType(p)==="Post"&&(p.text||"").trim()&&!soPublished(p)&&soDate(p)>new Date())
+                  {soPosts.filter(p=>soType(p)!=="Story"&&(p.text||"").trim()&&!soPublished(p)&&soDate(p)>new Date())
                     .sort((a,b)=>+soDate(a)-+soDate(b)).slice(0,3).map((p:any,i:number)=>(
                     <div key={i} className="border border-gray-100 rounded-xl p-2.5 mb-2">
                       <div className="flex gap-2.5">
@@ -4126,12 +4129,12 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 mt-1.5">
-                        <span className="text-[9px] font-black text-gray-400 uppercase">{soNets(p).join(" · ")||"—"}</span>
+                        <span className="text-[9px] font-black text-gray-400 uppercase">{soType(p)==="Reel"?"🎬 ":""}{soNetL(p).join(" · ")||"—"}</span>
                         {soShopUrl(p)&&<a href={soShopUrl(p)!} target="_blank" rel="noreferrer" className="ml-auto text-[9.5px] font-black text-[#EA580C]">🔗 Shop Link</a>}
                       </div>
                     </div>
                   ))}
-                  {soPosts.filter(p=>soType(p)==="Post"&&(p.text||"").trim()&&!soPublished(p)&&soDate(p)>new Date()).length===0&&
+                  {soPosts.filter(p=>soType(p)!=="Story"&&(p.text||"").trim()&&!soPublished(p)&&soDate(p)>new Date()).length===0&&
                     <p className="text-[11px] text-gray-400">No upcoming feed posts this week.</p>}
                 </div>
               </div>
@@ -4176,7 +4179,7 @@ export default function AdminDashboard() {
                               <td className="px-2">{c.row?<><div className="text-xs font-bold text-[#0d2430] max-w-[160px] truncate">{c.row.name||"—"}</div><div className="font-mono text-[10px] text-gray-400">{c.code}</div></>
                                 :c.code?<span className="font-mono text-[11px] text-gray-500">{c.code}</span>
                                 :<span className="text-[10px] text-gray-400">My Day Story (no caption)</span>}</td>
-                              <td className="px-2"><span className={`text-[9px] font-black px-2 py-0.5 rounded-full whitespace-nowrap ${soType(p)==="Story"?"bg-purple-50 text-purple-600":"bg-gray-100 text-gray-500"}`}>{soType(p).toUpperCase()} · {soNets(p).map(n=>n[0].toUpperCase()).join("+")}</span></td>
+                              <td className="px-2"><span className={`text-[9px] font-black px-2 py-0.5 rounded-full whitespace-nowrap ${soType(p)==="Story"?"bg-purple-50 text-purple-600":soType(p)==="Reel"?"bg-[#FFF3E8] text-[#b45309]":"bg-gray-100 text-gray-500"}`}>{soType(p).toUpperCase()} · {soNets(p).map((n:string)=>(({facebook:"FB",instagram:"IG",tiktok:"TT",youtube:"YT",gmb:"GBP"} as any)[n]||n[0].toUpperCase())).join("+")}</span></td>
                               <td className="px-2 text-xs tabular-nums">{c.printed?`₱${c.printed.toLocaleString("en-PH")}`:"—"}</td>
                               <td className="px-2 text-xs tabular-nums">{c.row?`₱${((c.row.selling_price||0)/100).toLocaleString("en-PH")}`:"—"}</td>
                               <td className="px-2">{pill(c)}</td>
@@ -4276,7 +4279,7 @@ export default function AdminDashboard() {
                         {p.media?.[0]&&<img src={p.media[0]} style={{width:44,height:44,minWidth:44,objectFit:"cover",borderRadius:10}}/>}
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-bold text-[#0d2430] truncate">{(p.text||"").trim()||`My Day Story`}</p>
-                          <p className="text-[10px] text-gray-400 font-semibold">{fmtDT(soDate(p).toISOString())} · {soType(p)} · {soNets(p).join(" + ")||"—"}</p>
+                          <p className="text-[10px] text-gray-400 font-semibold">{fmtDT(soDate(p).toISOString())} · {soType(p)} · {soNetL(p).join(" + ")||"—"}</p>
                         </div>
                         {soTab==="pub"&&pub?.publicUrl
                           ?<a href={pub.publicUrl} target="_blank" rel="noreferrer" className="text-[10px] font-black text-green-700 bg-green-50 px-2.5 py-1 rounded-full whitespace-nowrap">View ↗</a>
