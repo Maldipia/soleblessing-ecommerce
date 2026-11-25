@@ -5,6 +5,24 @@ import { useLocation } from "wouter";
 import { useState, useMemo, useEffect, useRef } from "react";
 
 /** Infinite scroll sentinel — loads the next chunk when scrolled near, no button clicks. */
+// Brand column shows a mark instead of the full name (Pia). If an official logo file
+// exists in client/public/brand-logos/<slug>.png AND its slug is listed here, it renders;
+// otherwise a colored monogram badge (hover shows the full brand name).
+const BRAND_LOGO_FILES: string[] = []; // add slugs as Pia supplies official logo PNGs
+const brandSlug = (b: string) => String(b || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+function BrandMark({ brand }: { brand: string }) {
+  if (!brand) return <span className="text-gray-300">—</span>;
+  const slug = brandSlug(brand);
+  if (BRAND_LOGO_FILES.includes(slug))
+    return <img src={`/brand-logos/${slug}.png`} alt={brand} title={brand}
+      style={{ height: 26, maxWidth: 70, objectFit: "contain", display: "block" }} />;
+  // deterministic color per brand so the same brand always wears the same badge
+  let h = 0; for (let i = 0; i < brand.length; i++) h = (h * 31 + brand.charCodeAt(i)) % 360;
+  const initials = brand.trim().split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
+  return <span title={brand}
+    style={{ background: `hsl(${h} 50% 92%)`, color: `hsl(${h} 60% 30%)`, width: 32, height: 32, minWidth: 32 }}
+    className="inline-flex items-center justify-center rounded-full text-[11px] font-black cursor-default">{initials}</span>;
+}
 function AutoLoader({ onMore, remaining }: { onMore: () => void; remaining: number }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -4009,7 +4027,7 @@ export default function AdminDashboard() {
                                style={{width:84,height:84,minWidth:84,maxWidth:84,aspectRatio:"1/1",objectFit:"cover",borderRadius:12,cursor:"zoom-in",flexShrink:0,display:"block"}}/>
                             :<span className="text-gray-300">—</span>}</td>
                           <td className="px-2 font-mono font-black text-xs text-[#0d2430]">{r.item_code}</td>
-                          <td className="px-2 text-xs">{r.brand||"—"}</td>
+                          <td className="px-2 text-xs"><BrandMark brand={r.brand}/></td>
                           <td className="px-2 text-xs font-medium max-w-[180px] truncate">{(()=>{
                             // the stored name is "Brand + Model" (the store needs it) — next to
                             // the Brand column, show only the model part
