@@ -1,5 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { sbAdmin as sb, adminCred } from "@/lib/supabaseAdmin";
+import InvoiceEditor from "./InvoiceEditor";
 import { useLocation } from "wouter";
 import { useState, useMemo, useEffect, useRef } from "react";
 
@@ -2351,6 +2352,8 @@ export default function AdminDashboard() {
     }catch(err:any){toast.error("Save failed: "+(err.message||err));}
   };
   const [invBusy,setInvBusy]=useState<string|null>(null);
+  // Our own invoice editor (replaces the Google Drive invoice for FB/form orders)
+  const [invEditor,setInvEditor]=useState<any>(null);
   const generateInvoice = async (o:any, regenerate=false) => {
     if(regenerate && !confirm("Create a new invoice for "+o.order_number+"? The link on the order (and column O in the sheet) will point to the new one.")) return;
     setInvBusy(o.id);
@@ -2573,6 +2576,8 @@ export default function AdminDashboard() {
         onClose={()=>{setCreateOrder(false);setPrepareReq(null);}}
         onPlaced={()=>{loadOrders();refetchInv();refreshInventory().catch(()=>{});}}/>}
       {editOrder&&<OrderEditModal order={editOrder} onClose={()=>setEditOrder(null)} onSave={saveOrderEdit}/>}
+      {invEditor&&<InvoiceEditor order={invEditor} inventory={inventory||[]}
+        onClose={()=>setInvEditor(null)} onSaved={()=>loadOrders()}/>}
       {scanBox&&<ScanBoxModal existingCodes={existingCodes} allRows={intakeRows} nextCode={nextCode}
         onClose={()=>setScanBox(false)}
         onSaved={()=>{loadIntake();refetchInv();refreshInventory().catch(()=>{});}}/>}
@@ -3480,11 +3485,11 @@ export default function AdminDashboard() {
                                 : <button onClick={()=>sendInvoice(sel)} disabled={sendBusy===sel.id}
                                     className="text-[11px] font-bold bg-emerald-500 text-white px-2.5 py-1 rounded-lg hover:bg-emerald-600 disabled:opacity-50">{sendBusy===sel.id?"Sending…":"📧 Send invoice"}</button>}
                             </>
-                          : <button onClick={()=>generateInvoice(sel)} disabled={invBusy===sel.id}
+                          : <button onClick={()=>{(sel.source||"website")==="website"?generateInvoice(sel):setInvEditor(sel);}} disabled={invBusy===sel.id}
                               className={`text-[11px] font-bold px-2.5 py-1 rounded-lg disabled:opacity-50 ${(sel.source||"website")==="website"
                                 ?"text-gray-500 border border-gray-200 hover:border-[#C9A84C] hover:text-[#8a6d25]"
                                 :"bg-[#C9A84C] text-[#0d2430] hover:opacity-90"}`}>
-                              {invBusy===sel.id?"Generating…":(sel.source||"website")==="website"?"+ Sheet copy":"Generate invoice"}</button>}
+                              {invBusy===sel.id?"Generating…":(sel.source||"website")==="website"?"+ Sheet copy":"🧾 Generate invoice"}</button>}
                       </div>
                       {/* secure customer link — 7-day access to the site invoice; admin copy is permanent */}
                       <div className="flex items-center gap-1.5 flex-wrap mb-3 -mt-1.5">

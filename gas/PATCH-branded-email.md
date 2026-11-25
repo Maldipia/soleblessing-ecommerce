@@ -36,5 +36,9 @@ What goes live then:
 - **Checkout** → customer instantly gets the "Order received" email with item
   photos + an Upload Payment button (COD orders get a pay-on-delivery note).
 - **Verify payment** in admin → "Payment confirmed" email with the invoice link.
+- **Generate Invoice & Send Link** in the invoice editor → the confidential
+  "Your invoice is ready" notification: logo, greeting, ONE button to the
+  secure 7-day link, expiry notice, support footer — **no amounts, no items,
+  no order details** (those are visible only inside the secure invoice).
 - Every send is recorded in **sb_email_log** and stamps the order
   (`confirmation_sent_at` / `invoice_sent_at`).
