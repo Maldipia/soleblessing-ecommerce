@@ -168,7 +168,7 @@ export default function UploadPayment() {
         .pp-cp:hover{background:#FFF3E8}
         .pp-cp.copied{background:#E8F5EE;border-color:#5db87a;color:#1a7f4e}
         .pp-qr{flex:1;min-width:190px;border-left:1px dashed #e4e1dc;padding-left:22px;text-align:center}
-        @media(max-width:700px){.pp-qr{border-left:none;padding-left:0;border-top:1px dashed #e4e1dc;padding-top:16px}}
+        @media(max-width:700px){.pp-qr{border-left:none;padding-left:0;border-top:1px dashed #e4e1dc;padding-top:16px}.pp-f input,.pp-f textarea,.pp-si input{font-size:16px}.pp-qrbox{width:210px;height:210px}}
         .pp-qr p{font-size:12px;font-weight:800;color:#555;margin-bottom:10px}
         .pp-qrbox{width:164px;height:164px;border:2px solid #EA580C;border-radius:12px;margin:0 auto;background:#fff;display:flex;align-items:center;justify-content:center;cursor:zoom-in;padding:6px}
         .pp-qrbox img{width:100%;height:100%;object-fit:contain}
@@ -275,6 +275,7 @@ export default function UploadPayment() {
                   <div className="pp-qrbox" onClick={() => setLightbox({ src: selQr, label: sel.label })} title="Tap to enlarge">
                     <img src={selQr} alt={`${sel.label} QR code`} />
                   </div>
+                  <p style={{fontSize:10.5,color:"#9b968f",fontWeight:600,marginTop:6}}>🔍 Tap the QR to enlarge</p>
                   <div>
                     <a className="pp-dl" href={selQr} download={`soleblessing-${sel.id}-qr.png`}>⤓ Download QR</a>
                   </div>
