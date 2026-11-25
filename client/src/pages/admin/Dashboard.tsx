@@ -2194,8 +2194,36 @@ export default function AdminDashboard() {
   const [soLoading,setSoLoading]=useState(false);
   const [soCfg,setSoCfg]=useState<string|null>(null); // not-configured message from the server
   const [soErr,setSoErr]=useState("");
-  const [soTab,setSoTab]=useState<"cal"|"up"|"pub"|"plan">("cal");
+  const [soTab,setSoTab]=useState<"cal"|"up"|"pub"|"plan"|"perf">("cal");
   const [soSynced,setSoSynced]=useState<string|null>(null);
+  // Performance tab (approved mock): metric timelines + top posts from the metrics mirror
+  const [soMetrics,setSoMetrics]=useState<any[]>([]);
+  const [soTop,setSoTop]=useState<any[]>([]);
+  const [soPerfLoaded,setSoPerfLoaded]=useState(false);
+  const loadPerf=async()=>{
+    try{
+      const r=await fetch("/api/admin",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({...adminCred(),op:"social",view:"metrics"})});
+      const out=await r.json().catch(()=>({} as any));
+      if(r.ok&&Array.isArray(out.metrics)){setSoMetrics(out.metrics);setSoTop(Array.isArray(out.topPosts)?out.topPosts:[]);setSoPerfLoaded(true);}
+    }catch{}
+  };
+  useEffect(()=>{ if(section==="social"&&soTab==="perf"&&!soPerfLoaded) loadPerf(); },[section,soTab]); // eslint-disable-line
+  const soNetStats=useMemo(()=>{
+    const nets:any={};
+    for(const net of ["facebook","instagram","tiktok"]){
+      const rows=soMetrics.filter((m:any)=>m.network===net);
+      const f=rows.filter((m:any)=>m.metric==="followers"&&m.value!=null);
+      nets[net]={
+        followers:f.length?Number(f[f.length-1].value):null,
+        acquired:rows.filter((m:any)=>m.metric==="acquired").reduce((s:number,m:any)=>s+(Number(m.value)||0),0),
+        views:rows.filter((m:any)=>m.metric==="views").reduce((s:number,m:any)=>s+(Number(m.value)||0),0),
+        interactions:rows.filter((m:any)=>m.metric==="interactions").reduce((s:number,m:any)=>s+(Number(m.value)||0),0),
+        viewsSeries:rows.filter((m:any)=>m.metric==="views").map((m:any)=>({day:m.day,v:Number(m.value)||0})),
+      };
+    }
+    return nets;
+  },[soMetrics]);
   const [soWeek,setSoWeek]=useState<Date>(()=>{const d=new Date();const day=(d.getDay()+6)%7;d.setHours(0,0,0,0);d.setDate(d.getDate()-day);return d;}); // Monday of this week
   const soFmtLocal=(d:Date)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}T${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}:00`;
   const loadSocial=async(ws:Date)=>{
@@ -4039,7 +4067,7 @@ export default function AdminDashboard() {
 
               {/* tabs */}
               <div className="flex gap-1.5 items-center flex-wrap">
-                {([["cal","📅 Calendar"],["up","⏭ Upcoming"],["pub","✅ Published"],["plan","📋 Content Plan"]] as const).map(([k,lbl])=>(
+                {([["cal","📅 Calendar"],["up","⏭ Upcoming"],["pub","✅ Published"],["plan","📋 Content Plan"],["perf","📊 Performance"]] as const).map(([k,lbl])=>(
                   <button key={k} onClick={()=>setSoTab(k)}
                     className={`px-3.5 py-2 rounded-lg text-xs font-bold border ${soTab===k?"border-[#EA580C] bg-[#FFF7F1] text-[#b45309]":"border-gray-200 text-gray-500 bg-white hover:border-gray-300"}`}>{lbl}</button>
                 ))}
@@ -4164,6 +4192,77 @@ export default function AdminDashboard() {
                       </table>
                     </div>
                     <p className="text-[10px] text-gray-400">✓ MATCH = printed price in the caption == website price · 🖼 Change photo = the price printed on the graphic is wrong → re-render and swap it in Metricool before it publishes · ✏️ Fix price = the website is wrong or ₱0 → opens the pair in Latest Inventory · Stories without captions can't be auto-checked.</p>
+                  </div>
+                );})()}
+
+              {soTab==="perf"&&(()=>{
+                const NET_META:any={facebook:["📘","Facebook Page"],instagram:["📸","Instagram"],tiktok:["🎵","TikTok"]};
+                const fb=soNetStats.facebook||{};
+                const series=(fb.viewsSeries||[]) as any[];
+                const maxV=Math.max(1,...series.map((s:any)=>s.v));
+                const postUrl=(p:any)=>p.network==="facebook"?`https://facebook.com/${p.post_id}`:(p.raw?.url||null);
+                return (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {(["facebook","instagram","tiktok"] as const).map(net=>{
+                        const s=soNetStats[net]||{};const [ic,lbl]=NET_META[net];
+                        return (
+                          <div key={net} className="bg-white border border-gray-100 rounded-xl p-4">
+                            <p className="text-xs font-black text-[#0d2430]">{ic} {lbl}</p>
+                            <div className="flex items-baseline gap-2 mt-1">
+                              <span className="text-2xl font-black text-[#0d2430] tabular-nums">{s.followers!=null?s.followers.toLocaleString("en-PH"):"—"}</span>
+                              {s.acquired>0&&<span className="text-[11px] font-black text-green-600">+{s.acquired.toLocaleString("en-PH")} ↑</span>}
+                            </div>
+                            <p className="text-[10px] text-gray-400 mt-0.5">followers · last 30 days{s.followers==null?" — fills on next sync":""}</p>
+                          </div>
+                        );})}
+                    </div>
+                    <div className="bg-white border border-gray-100 rounded-xl p-4">
+                      <p className="text-xs font-black text-[#0d2430] mb-2.5">📘 Facebook — last 30 days</p>
+                      <div className="grid grid-cols-3 gap-3 mb-3">
+                        {[["Page views",fb.views],["Interactions",fb.interactions],["New followers",fb.acquired?`+${fb.acquired}`:0]].map(([l,v]:any)=>(
+                          <div key={l} className="bg-gray-50 rounded-lg px-3 py-2.5">
+                            <p className="text-[9.5px] font-bold uppercase tracking-wider text-gray-400">{l}</p>
+                            <p className="text-lg font-black text-[#0d2430] tabular-nums">{typeof v==="number"?v.toLocaleString("en-PH"):v}</p>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex items-end gap-[2px] h-24 px-1">
+                        {series.map((s:any,i:number)=>(
+                          <div key={i} title={`${s.day}: ${s.v.toLocaleString("en-PH")} views`} className="flex-1 rounded-t"
+                            style={{height:`${Math.max(5,Math.round(s.v/maxV*100))}%`,background:"linear-gradient(180deg,#f59e0b,#EA580C)"}}/>
+                        ))}
+                      </div>
+                      <p className="text-[9px] text-gray-400 text-center mt-1.5">Daily page views</p>
+                    </div>
+                    <div className="bg-white border border-gray-100 rounded-xl overflow-auto">
+                      <p className="text-xs font-black text-[#0d2430] px-4 pt-3.5 pb-1">🏆 Top posts (by reach)</p>
+                      <table className="w-full text-sm min-w-[700px]">
+                        <thead><tr className="text-[10px] uppercase tracking-wider text-gray-400 text-left">
+                          <th className="px-4 py-2 font-semibold">Post</th><th className="px-2 font-semibold">Date</th>
+                          <th className="px-2 font-semibold">Reach</th><th className="px-2 font-semibold">Interactions</th>
+                          <th className="px-2 font-semibold">Link clicks</th><th className="px-2 font-semibold">Engagement</th><th className="px-2"></th>
+                        </tr></thead>
+                        <tbody className="divide-y divide-gray-50">
+                          {soTop.map((p:any,i:number)=>(
+                            <tr key={i}>
+                              <td className="px-4 py-2"><div className="flex items-center gap-2">
+                                {p.raw?.picture&&<img src={p.raw.picture} style={{width:38,height:38,minWidth:38,objectFit:"cover",borderRadius:8}}/>}
+                                <span className="text-[10px] font-black text-gray-400 uppercase">{p.network==="facebook"?"FB":p.network==="instagram"?"IG":"TT"}</span>
+                              </div></td>
+                              <td className="px-2 text-[11px] text-gray-500 whitespace-nowrap">{p.posted_at?fmtDate(p.posted_at):"—"}</td>
+                              <td className="px-2 text-xs tabular-nums font-bold text-[#0d2430]">{Number(p.reach||0).toLocaleString("en-PH")}</td>
+                              <td className="px-2 text-xs tabular-nums">{Number(p.interactions||0).toLocaleString("en-PH")}</td>
+                              <td className="px-2 text-xs tabular-nums">{Number(p.link_clicks||0)>0?<b className="text-[#b45309]">{Number(p.link_clicks).toLocaleString("en-PH")}</b>:"0"}</td>
+                              <td className="px-2 text-xs tabular-nums">{p.raw?.engagement!=null?Number(p.raw.engagement).toFixed(1):"—"}</td>
+                              <td className="px-2">{postUrl(p)&&<a href={postUrl(p)!} target="_blank" rel="noreferrer" className="text-[10px] font-black text-gray-400 hover:text-[#0d2430]">View ↗</a>}</td>
+                            </tr>
+                          ))}
+                          {soTop.length===0&&<tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-400">{soPerfLoaded?"No post stats yet — they arrive with the next sync.":"Loading…"}</td></tr>}
+                        </tbody>
+                      </table>
+                      <p className="text-[10px] text-gray-400 px-4 pb-3 pt-1.5">Link clicks = taps papunta sa website — ito ang tulay ng posts sa orders · IG at TikTok post stats fill in on the next scheduled sync.</p>
+                    </div>
                   </div>
                 );})()}
 

@@ -174,6 +174,17 @@ export default async function handler(req, res) {
   if (op === 'social') {
     // Reads the sb_social_posts mirror that Claude syncs from Metricool via the
     // connector (her $25 plan has no Metricool API; this path costs nothing).
+    // view:'metrics' → follower/views/interactions timelines + top posts
+    if (body.view === 'metrics') {
+      const since = new Date(Date.now() - 35 * 86400000).toISOString().slice(0, 10);
+      const mR = await fetch(`${SUPABASE_URL}/rest/v1/sb_social_metrics?day=gte.${since}&select=network,metric,day,value,synced_at&order=day.asc&limit=1000`, { headers: H_SVC() });
+      const pR = await fetch(`${SUPABASE_URL}/rest/v1/sb_social_post_stats?select=network,post_id,posted_at,reach,interactions,link_clicks,raw&order=reach.desc&limit=12`, { headers: H_SVC() });
+      if (!mR.ok) return res.status(502).json({ error: 'metrics table unavailable — is the social_metrics_v1 migration applied?' });
+      const metrics = await mR.json();
+      const topPosts = pR.ok ? await pR.json() : [];
+      const syncedAt = metrics.reduce((m, x) => (x.synced_at > m ? x.synced_at : m), '') || null;
+      return res.status(200).json({ ok: true, metrics, topPosts, syncedAt });
+    }
     const from = String(body.from || '').slice(0, 19);
     const to = String(body.to || '').slice(0, 19);
     if (!/^\d{4}-\d{2}-\d{2}T/.test(from) || !/^\d{4}-\d{2}-\d{2}T/.test(to)) return res.status(400).json({ error: 'from/to required (YYYY-MM-DDTHH:MM:SS)' });
