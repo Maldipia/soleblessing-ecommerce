@@ -127,7 +127,14 @@ export default function IncomingRequests({ onPrepare }: { onPrepare?: (r: any) =
     setBusy(false);
   };
 
-  const filtered = chip === "all" ? rows : rows.filter(r => r.status === chip);
+  const [q, setQ] = useState("");
+  const matchesQ = (r: any) => {
+    const s = q.trim().toLowerCase();
+    if (!s) return true;
+    return [r.request_ref, r.receiver_name, r.fb_ig_name, r.email, r.contact_number, r.region, r.city, r.converted_order_number]
+      .some(v => String(v || "").toLowerCase().includes(s));
+  };
+  const filtered = (chip === "all" ? rows : rows.filter(r => r.status === chip)).filter(matchesQ);
   const cnt = (s: string) => rows.filter(r => r.status === s).length;
   const isPre = order && String(order.payment_method || "").toUpperCase() === "PRE-ORDER";
   const payState = order?.payment_status;
@@ -151,7 +158,9 @@ export default function IncomingRequests({ onPrepare }: { onPrepare?: (r: any) =
             </button>
           ))}
         </div>
-        <button onClick={() => load()} className="ml-auto text-[11px] font-bold text-gray-400 hover:text-gray-600">↻ Refresh</button>
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search ref, name, contact…"
+          className="ml-auto border border-gray-200 rounded-lg px-2.5 py-1.5 text-[11px] outline-none focus:border-[#C9A84C] w-[180px]" />
+        <button onClick={() => load()} className="text-[11px] font-bold text-gray-400 hover:text-gray-600">↻ Refresh</button>
       </div>
       {loading ? <div className="text-xs text-gray-400 py-3">Loading…</div> : !filtered.length ? (
         <div className="bg-white border border-gray-100 rounded-xl px-4 py-5 text-[12px] text-gray-400">

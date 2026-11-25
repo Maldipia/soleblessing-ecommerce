@@ -3165,8 +3165,18 @@ export default function AdminDashboard() {
                 </a>
               </div>
 
-              {/* Order-form requests live INSIDE the FB / Order Form tab (combined per Pia, Nov 24) */}
-              {channelFilter==="sheet_import"&&<IncomingRequests onPrepare={(r:any)=>{setPrepareReq(r);setCreateOrder(true);}}/>}
+              {/* Combined FB / Order Form workspace (per Pia, Nov 25): two clearly
+                  separated sections on one page — Order Requests on top (own
+                  search + status chips), FB Form Orders below (own search,
+                  filters and stats). Sources are never mixed. */}
+              {channelFilter==="sheet_import"&&<>
+                <IncomingRequests onPrepare={(r:any)=>{setPrepareReq(r);setCreateOrder(true);}}/>
+                <div className="flex items-center gap-2 mb-3 mt-1">
+                  <h3 className="text-[12px] font-black uppercase tracking-[.12em] text-[#0d2430]">📋 FB Form Orders</h3>
+                  <span className="text-[10px] font-bold text-gray-400">imported form submissions — search &amp; filters below apply to this section only</span>
+                  <div className="flex-1 border-t border-gray-200"/>
+                </div>
+              </>}
               <>
               {/* stat cards */}
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mb-5">
