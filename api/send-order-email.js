@@ -39,7 +39,7 @@ export function buildInvoiceReadyHtml(o, inviteUrl, expiresAt) {
     </td></tr>
     <tr><td style="padding:36px 32px 28px">
       <div style="width:58px;height:58px;border-radius:50%;background:#faf3e3;color:#b7791f;font-size:28px;line-height:58px;text-align:center;margin:0 auto 16px">&#9993;</div>
-      <h1 style="font-size:21px;color:#0d2430;text-align:center;margin:0 0 8px">Hi ${firstName},</h1>
+      <h1 style="font-size:21px;color:#0d2430;text-align:center;margin:0 0 8px">Hi ${firstName}! &#128075;</h1>
       <p style="color:#444444;font-size:14px;text-align:center;margin:0 0 4px;line-height:1.6">Your SoleBlessing online invoice is ready.</p>
       <p style="color:#8a8f94;font-size:13px;text-align:center;margin:0 0 26px;line-height:1.6">Please click the button below to view your invoice and complete your payment.</p>
       <a href="${esc(inviteUrl)}" style="display:block;background:#C9A84C;color:#050f12;text-decoration:none;text-align:center;padding:16px;border-radius:10px;font-size:13px;font-weight:bold;letter-spacing:.12em;text-transform:uppercase">&#128196; Click Here to View Your Invoice &#8594;</a>
