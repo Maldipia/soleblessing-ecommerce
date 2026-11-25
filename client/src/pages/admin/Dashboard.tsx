@@ -8,7 +8,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 // Brand column shows a mark instead of the full name (Pia). If an official logo file
 // exists in client/public/brand-logos/<slug>.png AND its slug is listed here, it renders;
 // otherwise a colored monogram badge (hover shows the full brand name).
-const BRAND_LOGO_FILES: string[] = []; // add slugs as Pia supplies official logo PNGs
+const BRAND_LOGO_FILES: string[] = ["adidas","nike","jordan","veja","puma"]; // logos Pia supplied; add slugs as she sends more
 const brandSlug = (b: string) => String(b || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 function BrandMark({ brand }: { brand: string }) {
   if (!brand) return <span className="text-gray-300">—</span>;
