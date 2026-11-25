@@ -2187,8 +2187,11 @@ export default function AdminDashboard() {
       if(r.ok&&out.url) window.open(out.url,"_blank"); else toast.error(out.error||"could not open attachment");
     }catch{toast.error("could not open attachment");}
   };
+  // Tab + form reset ONLY on order switch — a background orders refresh must
+  // never yank the admin out of the tab they're working in.
+  useEffect(()=>{ setPanelTab("info"); setPayForm(null); },[selOrderId]);
   useEffect(()=>{
-    setInvLink(null); setPanelTab("info"); setPayEntries([]); setPayForm(null);
+    setInvLink(null); setPayEntries([]);
     if(!selOrderId) return;
     const o=(sbOrders||[]).find((x:any)=>String(x.id)===selOrderId);
     if(!o) return;
@@ -2511,13 +2514,18 @@ export default function AdminDashboard() {
   };
   // best-effort: email the customer their tracking when an order ships
   // (gated server-side on the GAS email patch, same as the other emails)
-  const sendShippedEmail = async (o:any) => {
-    if(!o?.customer_email) return;
+  const sendShippedEmail = async (o:any, loud=false) => {
+    if(!o?.customer_email){ if(loud) toast.error("No email on this order — send the tracking number in Messenger instead."); return; }
+    if(loud&&!(o.tracking_reference||"").trim()){ toast.error("Save the courier & tracking number first."); return; }
+    if(loud) setSendBusy(o.id);
     try{
       const r=await fetch("/api/send-order-email",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({...adminCred(),order_number:o.order_number,type:"shipped"})});
-      if(r.ok) toast.success("Tracking emailed to "+o.customer_email);
-    }catch{}
+      const out=await r.json().catch(()=>({} as any));
+      if(r.ok){ toast.success("🚚 Shipping details emailed to "+o.customer_email); loadOrders(); }
+      else if(loud) toast.error("Email not sent: "+(out.error||"send failed").slice(0,140));
+    }catch(e:any){ if(loud) toast.error("Email not sent: "+(e?.message||String(e)).slice(0,120)); }
+    finally{ if(loud) setSendBusy(null); }
   };
   const saveShipAndMarkShipped = async (o:any) => {
     const se=shipEdit[o.id]||{};
@@ -3714,9 +3722,18 @@ export default function AdminDashboard() {
                           ✓ Save & Mark Shipped
                         </button>
                       )}
-                      {sel.courier&&sel.tracking_reference&&(
-                        <p className="text-[10.5px] font-semibold text-gray-500 mb-3">🚚 On file: <b className="text-[#0d2430]">{sel.courier}</b> · <span className="font-mono font-bold text-[#0d2430]">{sel.tracking_reference}</span>{sel.tracking_sent_at?<span className="text-green-600 font-bold"> · tracking emailed {fmtDate(sel.tracking_sent_at)}</span>:null}</p>
-                      )}
+                      {sel.courier&&sel.tracking_reference&&(<>
+                        <p className="text-[10.5px] font-semibold text-gray-500 mb-2">🚚 On file: <b className="text-[#0d2430]">{sel.courier}</b> · <span className="font-mono font-bold text-[#0d2430]">{sel.tracking_reference}</span></p>
+                        <div className="flex items-center gap-1.5 flex-wrap mb-3">
+                          {sel.tracking_sent_at
+                            ? <button onClick={()=>sendShippedEmail(sel,true)} disabled={sendBusy===sel.id} title={`Emailed ${fmtDate(sel.tracking_sent_at)} — send again`}
+                                className="text-[11px] font-bold text-green-700 border border-green-300 px-3 py-1.5 rounded-lg hover:bg-green-50 disabled:opacity-50">
+                                {sendBusy===sel.id?"…":`📧 Shipping details sent ${fmtDate(sel.tracking_sent_at)} ✓ · ↻`}</button>
+                            : <button onClick={()=>sendShippedEmail(sel,true)} disabled={sendBusy===sel.id}
+                                className="text-[11px] font-black bg-emerald-500 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-600 disabled:opacity-50">
+                                {sendBusy===sel.id?"Sending…":"📧 Send shipping details"}</button>}
+                        </div>
+                      </>)}
                       </>}
                       {/* activity timeline (P1 audit trail) */}
                       {panelTab==="log"&&(orderLog.length>0?(
