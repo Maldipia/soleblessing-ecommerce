@@ -3949,7 +3949,10 @@ export default function AdminDashboard() {
                       const img=imgByCode.get(r.item_code);
                       return (
                         <tr key={r.item_code} className="hover:bg-gray-50/60">
-                          <td className="px-3 py-2">{img?<img src={img} className="w-8 h-8 rounded object-cover"/>:<span className="text-gray-300">—</span>}</td>
+                          <td className="px-3 py-2">{img
+                            ?<img src={img} title="Click to view full photo" onClick={()=>{try{window.open(img,"_blank");}catch{}}}
+                               className="w-14 h-14 rounded-lg object-cover cursor-zoom-in hover:ring-2 hover:ring-[#C9A84C] flex-shrink-0"/>
+                            :<span className="text-gray-300">—</span>}</td>
                           <td className="px-2 font-mono font-black text-xs text-[#0d2430]">{r.item_code}</td>
                           <td className="px-2 text-xs">{r.brand||"—"}</td>
                           <td className="px-2 text-xs font-medium max-w-[180px] truncate">{(()=>{
