@@ -10,7 +10,7 @@ import { sbAdmin as sb, adminCred } from "@/lib/supabaseAdmin";
 import { toast } from "sonner";
 
 const peso = (c: number) => `₱${((c || 0) / 100).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const DEFAULT_SHIP = 25000; // ₱250 default — EDITABLE, never forced (confirm with Pia)
+const DEFAULT_SHIP = 25000; // ₱250 standard shipping — confirmed by Pia; EDITABLE, never forced
 
 type Line = { orig?: any; code: string; name: string; size: string; qty: number; price: string; found: boolean; imageUrl?: string };
 

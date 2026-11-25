@@ -257,7 +257,8 @@ export default function Invoice() {
               </div>
               <div className="text-[12px] font-bold text-[#0a0a0a] space-y-1 md:text-right">
                 <p>💬 <a href="https://m.me/SoleBlessingOfficial" className="hover:text-[#EA580C]">m.me/SoleBlessingOfficial</a></p>
-                <p>🌐 soleblessingofficial.com</p>
+                <p>✉️ <a href="mailto:soleblessing@gmail.com" className="hover:text-[#EA580C]">soleblessing@gmail.com</a></p>
+                <p>📍 Amadeo, Cavite, Philippines 🇵🇭</p>
               </div>
             </div>
           </div>

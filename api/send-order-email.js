@@ -49,8 +49,8 @@ export function buildInvoiceReadyHtml(o, inviteUrl, expiresAt) {
       <p style="color:#8a8f94;font-size:13px;text-align:center;font-style:italic;margin:26px 0 0">Thank you for shopping with SoleBlessing!</p>
     </td></tr>
     <tr><td style="padding:22px 32px;text-align:center;color:#9aa0a6;font-size:11px;line-height:1.7;border-top:1px solid #f0f0f0">
-      Need help? Just reply to this email or message us at <a href="https://m.me/SoleBlessingOfficial" style="color:#8a6d25;text-decoration:none;font-weight:bold">m.me/SoleBlessingOfficial</a><br>
-      <b style="color:#C9A84C">SOLEBLESSING</b> &middot; soleblessingofficial.com &middot; Authenticated sneakers shipped across the Philippines
+      Need help? Just reply to this email, write to <a href="mailto:soleblessing@gmail.com" style="color:#8a6d25;text-decoration:none;font-weight:bold">soleblessing@gmail.com</a> or message us at <a href="https://m.me/SoleBlessingOfficial" style="color:#8a6d25;text-decoration:none;font-weight:bold">m.me/SoleBlessingOfficial</a><br>
+      <b style="color:#C9A84C">SOLEBLESSING</b> &middot; soleblessingofficial.com &middot; Amadeo, Cavite, Philippines &#127477;&#127469;
     </td></tr>
   </table></td></tr></table></body></html>`;
 }
