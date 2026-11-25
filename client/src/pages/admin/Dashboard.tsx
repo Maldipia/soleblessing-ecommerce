@@ -48,7 +48,7 @@ import { useInventory, refreshInventory } from "@/hooks/useInventory";
 import AdminPromos from "./Promos";
 import ShoeCleanerCampaign from "./ShoeCleanerCampaign";
 
-type Section = "overview"|"products"|"orders"|"customers"|"intake"|"reports"|"promos"|"campaign"|"settings"|"analytics"|"system";
+type Section = "overview"|"products"|"orders"|"customers"|"intake"|"reports"|"promos"|"campaign"|"social"|"settings"|"analytics"|"system";
 
 const ADMIN_KEY = "sb_admin_v1";
 const fmt = (c: number) => `₱${(c/100).toLocaleString("en-PH")}`;
@@ -2189,6 +2189,41 @@ export default function AdminDashboard() {
   // Shipping/LBC · Activity. Resets to Order Info on every order switch.
   const [panelTab,setPanelTab]=useState<"info"|"payment"|"ship"|"log">("info");
   // Payment ledger (sb_payment_entries) — REAL records driving balances.
+  // ── Social Media (Metricool) — Pia's approved mock: read-only window into her schedule
+  const [soPosts,setSoPosts]=useState<any[]>([]);
+  const [soLoading,setSoLoading]=useState(false);
+  const [soCfg,setSoCfg]=useState<string|null>(null); // not-configured message from the server
+  const [soErr,setSoErr]=useState("");
+  const [soTab,setSoTab]=useState<"cal"|"up"|"pub">("cal");
+  const [soWeek,setSoWeek]=useState<Date>(()=>{const d=new Date();const day=(d.getDay()+6)%7;d.setHours(0,0,0,0);d.setDate(d.getDate()-day);return d;}); // Monday of this week
+  const soFmtLocal=(d:Date)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}T${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}:00`;
+  const loadSocial=async(ws:Date)=>{
+    setSoLoading(true);setSoErr("");
+    try{
+      const we=new Date(ws);we.setDate(we.getDate()+6);we.setHours(23,59,59,0);
+      const r=await fetch("/api/admin",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({...adminCred(),op:"social",from:soFmtLocal(ws),to:soFmtLocal(we)})});
+      const out=await r.json().catch(()=>({} as any));
+      if(out&&out.notConfigured){setSoCfg(out.message||"Metricool not connected yet");setSoPosts([]);}
+      else if(r.ok&&Array.isArray(out.posts)){setSoCfg(null);setSoPosts(out.posts);}
+      else setSoErr(out.error||"Could not load the schedule");
+    }catch(e:any){setSoErr(String(e.message||e));}
+    finally{setSoLoading(false);}
+  };
+  useEffect(()=>{ if(section==="social") loadSocial(soWeek); },[section,soWeek]); // eslint-disable-line
+  const soDate=(p:any)=>new Date(String(p?.publicationDate?.dateTime||"").replace(" ","T"));
+  const soType=(p:any)=>(p?.facebookData?.type==="STORY"||p?.instagramData?.type==="STORY")?"Story":"Post";
+  const soNets=(p:any)=>(Array.isArray(p?.providers)?p.providers.map((x:any)=>String(x.network||"")):[]);
+  const soPublished=(p:any)=>Array.isArray(p?.providers)&&p.providers.length>0&&p.providers.every((x:any)=>x.status==="PUBLISHED");
+  const soShopUrl=(p:any)=>{const m=String(p?.text||"").match(/https?:\/\/[^\s)]+/);return m?m[0]:null;};
+  const soTime=(p:any)=>soDate(p).toLocaleTimeString("en-PH",{hour:"numeric",minute:"2-digit"});
+  const soStats=useMemo(()=>{
+    const now=new Date();const today=now.toDateString();
+    const pubToday=soPosts.filter(p=>soPublished(p)&&soDate(p).toDateString()===today).length;
+    const pending=soPosts.filter(p=>!soPublished(p));
+    const next=pending.filter(p=>soDate(p)>now).sort((a,b)=>+soDate(a)-+soDate(b))[0];
+    return {total:soPosts.length,pubToday,remaining:pending.length,next};
+  },[soPosts]);
   const [payEntries,setPayEntries]=useState<any[]>([]);
   const [payBusy,setPayBusy]=useState(false);
   const [payForm,setPayForm]=useState<any>(null); // null = form closed
@@ -2654,6 +2689,7 @@ export default function AdminDashboard() {
     {id:"reports"   as Section, icon:TrendingUp,     label:"Sales & Reports"},
     {id:"promos"    as Section, icon:Tag,            label:"Vouchers & Promos"},
     {id:"campaign"  as Section, icon:Tag,            label:"Shoe Cleaner Campaign"},
+    {id:"social"    as Section, icon:TrendingUp,     label:"Social Media"},
     {id:"analytics" as Section, icon:BarChart3,      label:"Analytics"},
     {id:"system"    as Section, icon:Database,       label:"System"},
     {id:"settings"  as Section, icon:Settings,       label:"Settings"},
@@ -3938,6 +3974,144 @@ export default function AdminDashboard() {
           )}
 
           {/* ── LATEST INVENTORY (shoebox intake log) ── */}
+          {/* ── SOCIAL MEDIA (Metricool) — per Pia's mock: status, stats, calendar, next feed posts ── */}
+          {section==="social"&&(
+            <div className="space-y-4">
+              <div className="flex items-start justify-between flex-wrap gap-3">
+                <p className="text-xs text-gray-500 -mt-2">Your scheduled posts, My Day Stories and statuses from Metricool — view only, posting stays in Metricool.</p>
+                <a href="https://app.metricool.com/planner" target="_blank" rel="noreferrer"
+                  className="text-[11px] font-black border-2 border-[#C9A84C] text-[#8a6d25] px-3.5 py-2 rounded-lg hover:bg-[#C9A84C]/10">↗ Open in Metricool</a>
+              </div>
+
+              {soCfg?(
+                <div className="bg-[#FFF7F1] border-2 border-[#EA580C] rounded-xl p-5">
+                  <p className="text-sm font-black text-[#b45309]">🔌 One step to activate</p>
+                  <p className="text-xs text-gray-600 mt-1.5 leading-relaxed">{soCfg}</p>
+                  <p className="text-xs text-gray-600 mt-2 leading-relaxed">In Metricool (tygfsb account): <b>Settings → API → copy the token</b>, then paste it to Claude — the schedule appears here right after. The token is stored server-side only, like the email key.</p>
+                </div>
+              ):(
+              <>
+              {/* platform status + stat cards */}
+              <div className="grid lg:grid-cols-[300px_1fr] gap-3">
+                <div className="bg-white border border-gray-100 rounded-xl p-4">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2.5">Platform Status</p>
+                  {[["📘","Facebook Page",true],["📸","Instagram",true],["🎵","TikTok",false]].map(([ic,lbl,on]:any)=>(
+                    <div key={lbl} className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
+                      <span className="text-xs font-bold text-[#0d2430]">{ic} {lbl}</span>
+                      {on?<span className="text-[10px] font-black text-green-600">✓ Connected</span>
+                        :<a href="https://app.metricool.com/settings/connections" target="_blank" rel="noreferrer" className="text-[10px] font-black border border-[#EA580C] text-[#EA580C] px-2 py-1 rounded-lg hover:bg-[#FFF7F1]">Connect ↗</a>}
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  {[["📅","Scheduled this week",soStats.total,""],["✅","Published today",soStats.pubToday,""],["🗂","Remaining",soStats.remaining,"still pending"],
+                    ["🕒","Next post",soStats.next?soTime(soStats.next):"—",soStats.next?`${soType(soStats.next)==="Story"?"My Day Story":"Feed post"} · ${soDate(soStats.next).toLocaleDateString("en-PH",{weekday:"short"})}`:""]].map(([ic,lbl,val,sub]:any)=>(
+                    <div key={lbl} className="bg-white border border-gray-100 rounded-xl p-3.5">
+                      <div className="flex items-center justify-between"><span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{lbl}</span><span className="text-sm">{ic}</span></div>
+                      <div className="text-2xl font-black text-[#0d2430] mt-1 tabular-nums">{val}</div>
+                      <div className="text-[10px] text-gray-400 mt-0.5">{sub||" "}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* tabs */}
+              <div className="flex gap-1.5">
+                {([["cal","📅 Calendar"],["up","⏭ Upcoming"],["pub","✅ Published"]] as const).map(([k,lbl])=>(
+                  <button key={k} onClick={()=>setSoTab(k)}
+                    className={`px-3.5 py-2 rounded-lg text-xs font-bold border ${soTab===k?"border-[#EA580C] bg-[#FFF7F1] text-[#b45309]":"border-gray-200 text-gray-500 bg-white hover:border-gray-300"}`}>{lbl}</button>
+                ))}
+                <button onClick={()=>loadSocial(soWeek)} className="ml-auto border border-gray-200 text-gray-500 px-3 py-2 text-xs font-bold rounded-lg hover:bg-gray-50">
+                  <RefreshCw className={`h-3.5 w-3.5 ${soLoading?"animate-spin":""}`}/></button>
+              </div>
+              {soErr&&<div className="bg-red-50 border border-red-200 text-red-600 text-xs font-bold rounded-xl px-4 py-3">{soErr}</div>}
+
+              {soTab==="cal"&&(
+              <div className="grid xl:grid-cols-[1fr_280px] gap-3 items-start">
+                <div className="bg-white border border-gray-100 rounded-xl p-3">
+                  <div className="flex items-center justify-between mb-2 px-1">
+                    <p className="text-xs font-black text-[#0d2430]">Social Calendar ({soWeek.toLocaleDateString("en-PH",{month:"short",day:"numeric"})} – {new Date(soWeek.getTime()+6*86400000).toLocaleDateString("en-PH",{month:"short",day:"numeric"})})</p>
+                    <div className="flex gap-1">
+                      <button onClick={()=>setSoWeek(w=>new Date(w.getTime()-7*86400000))} className="w-7 h-7 rounded-lg border border-gray-200 text-xs text-gray-500 hover:border-gray-300">‹</button>
+                      <button onClick={()=>setSoWeek(w=>new Date(w.getTime()+7*86400000))} className="w-7 h-7 rounded-lg border border-gray-200 text-xs text-gray-500 hover:border-gray-300">›</button>
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <div className="grid grid-cols-7 gap-1.5 min-w-[780px]">
+                      {Array.from({length:7},(_,i)=>{
+                        const day=new Date(soWeek.getTime()+i*86400000);
+                        const isToday=day.toDateString()===new Date().toDateString();
+                        const items=soPosts.filter(p=>soDate(p).toDateString()===day.toDateString()).sort((a,b)=>+soDate(a)-+soDate(b));
+                        return (
+                          <div key={i} className={`rounded-xl border p-1.5 min-h-[120px] ${isToday?"border-[#EA580C] bg-[#FFF9F4]":"border-gray-100"}`}>
+                            <p className={`text-[10px] font-black text-center pb-1 ${isToday?"text-[#EA580C]":"text-gray-500"}`}>{day.toLocaleDateString("en-PH",{weekday:"short"})} <span className="font-bold text-gray-400">{day.getDate()}</span></p>
+                            {items.slice(0,6).map((p:any,j:number)=>(
+                              <div key={j} title={p.text||soType(p)} className="flex items-center gap-1.5 bg-white border border-gray-100 rounded-lg px-1.5 py-1 mb-1">
+                                {p.media?.[0]&&<img src={p.media[0]} style={{width:22,height:22,minWidth:22,objectFit:"cover",borderRadius:6}}/>}
+                                <div className="min-w-0 leading-tight">
+                                  <div className="text-[9.5px] font-black text-[#0d2430] whitespace-nowrap">{soTime(p)}</div>
+                                  <div className="text-[8.5px] text-gray-400 font-bold">{soType(p)}</div>
+                                </div>
+                                <span className={`ml-auto w-2 h-2 rounded-full flex-shrink-0 ${soPublished(p)?"bg-green-500":"bg-amber-400"}`}/>
+                              </div>
+                            ))}
+                            {items.length>6&&<p className="text-[8.5px] text-gray-400 text-center font-bold">+{items.length-6} more</p>}
+                            {items.length===0&&<p className="text-[9px] text-gray-300 text-center pt-3">—</p>}
+                          </div>
+                        );})}
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white border border-gray-100 rounded-xl p-4">
+                  <p className="text-xs font-black text-[#0d2430] mb-2.5">Next Feed Posts</p>
+                  {soPosts.filter(p=>soType(p)==="Post"&&(p.text||"").trim()&&!soPublished(p)&&soDate(p)>new Date())
+                    .sort((a,b)=>+soDate(a)-+soDate(b)).slice(0,3).map((p:any,i:number)=>(
+                    <div key={i} className="border border-gray-100 rounded-xl p-2.5 mb-2">
+                      <div className="flex gap-2.5">
+                        {p.media?.[0]&&<img src={p.media[0]} style={{width:54,height:54,minWidth:54,objectFit:"cover",borderRadius:10}}/>}
+                        <div className="min-w-0">
+                          <span className="text-[9px] font-black text-[#b45309] bg-[#FFF3E8] px-2 py-0.5 rounded-full">{soDate(p).toLocaleDateString("en-PH",{weekday:"short"})} {soTime(p)}</span>
+                          <p className="text-[11px] text-gray-600 mt-1 leading-snug" style={{display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{p.text}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <span className="text-[9px] font-black text-gray-400 uppercase">{soNets(p).join(" · ")||"—"}</span>
+                        {soShopUrl(p)&&<a href={soShopUrl(p)!} target="_blank" rel="noreferrer" className="ml-auto text-[9.5px] font-black text-[#EA580C]">🔗 Shop Link</a>}
+                      </div>
+                    </div>
+                  ))}
+                  {soPosts.filter(p=>soType(p)==="Post"&&(p.text||"").trim()&&!soPublished(p)&&soDate(p)>new Date()).length===0&&
+                    <p className="text-[11px] text-gray-400">No upcoming feed posts this week.</p>}
+                </div>
+              </div>
+              )}
+
+              {(soTab==="up"||soTab==="pub")&&(
+                <div className="bg-white border border-gray-100 rounded-xl divide-y divide-gray-50">
+                  {soPosts.filter(p=>soTab==="up"?!soPublished(p):soPublished(p))
+                    .sort((a,b)=>soTab==="up"?+soDate(a)-+soDate(b):+soDate(b)-+soDate(a)).map((p:any,i:number)=>{
+                    const pub=Array.isArray(p.providers)?p.providers.find((x:any)=>x.publicUrl):null;
+                    return (
+                      <div key={i} className="flex items-center gap-3 px-4 py-2.5">
+                        {p.media?.[0]&&<img src={p.media[0]} style={{width:44,height:44,minWidth:44,objectFit:"cover",borderRadius:10}}/>}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-[#0d2430] truncate">{(p.text||"").trim()||`My Day Story`}</p>
+                          <p className="text-[10px] text-gray-400 font-semibold">{fmtDT(soDate(p).toISOString())} · {soType(p)} · {soNets(p).join(" + ")||"—"}</p>
+                        </div>
+                        {soTab==="pub"&&pub?.publicUrl
+                          ?<a href={pub.publicUrl} target="_blank" rel="noreferrer" className="text-[10px] font-black text-green-700 bg-green-50 px-2.5 py-1 rounded-full whitespace-nowrap">View ↗</a>
+                          :<span className={`text-[9px] font-black px-2.5 py-1 rounded-full whitespace-nowrap ${soPublished(p)?"bg-green-50 text-green-700":"bg-amber-50 text-amber-700"}`}>{soPublished(p)?"PUBLISHED ✓":"PENDING"}</span>}
+                      </div>
+                    );})}
+                  {soPosts.filter(p=>soTab==="up"?!soPublished(p):soPublished(p)).length===0&&
+                    <p className="text-sm text-gray-400 text-center py-8">{soLoading?"Loading…":"Nothing here this week."}</p>}
+                </div>
+              )}
+              </>
+              )}
+            </div>
+          )}
+
           {section==="intake"&&(
             <div className="space-y-4">
               {/* Redesign per Pia's mock: subtitle + clickable stat cards (they ARE the filters) */}
