@@ -99,7 +99,7 @@ export default async function handler(req, res) {
             method: 'PATCH', headers: H(),
             body: JSON.stringify({ status: 'converted', converted_order_number: orphan.order_number, reviewed_by: actor, reviewed_at: new Date().toISOString() }),
           });
-          logOrderEvent({ order_number: requestRef, actor, action: 'request_convert',
+          await logOrderEvent({ order_number: requestRef, actor, action: 'request_convert',
             old_value: { status: row.status, stale_claim: true },
             new_value: { status: 'converted', converted_order_number: orphan.order_number, recovered_orphan: true } });
           return res.status(200).json({ ok: true, order_number: orphan.order_number, invoice_url: orphan.invoice_url || null,
@@ -167,7 +167,7 @@ export default async function handler(req, res) {
       });
       if (!ins.ok) { await release(); return res.status(502).json({ error: 'order insert failed: ' + (await ins.text()).slice(0, 200) }); }
       order = (await ins.json())[0];
-      logOrderEvent({ order_number: orderNumber, actor, action: 'create',
+      await logOrderEvent({ order_number: orderNumber, actor, action: 'create',
         new_value: { total: order.total, items: items.length, payment_method: paymentMethod, source: 'manual', preorder: true } });
     } else {
       // ── 3b. Everything else: the existing place-order pipeline, unchanged.
@@ -191,7 +191,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({ status: 'converted', converted_order_number: order.order_number }),
     });
 
-    logOrderEvent({ order_number: requestRef, actor, action: 'request_convert',
+    await logOrderEvent({ order_number: requestRef, actor, action: 'request_convert',
       old_value: { status: request.status },
       new_value: { status: 'converted', converted_order_number: order.order_number, payment_method: paymentMethod, total: orderData.total } });
 

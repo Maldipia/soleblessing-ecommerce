@@ -41,7 +41,7 @@ export default async function handler(req, res) {
 
     // Audit: who prepared the invoice.
     const actor = cred.kind === 'owner' ? 'OWNER' : (cred.staff && cred.staff.id) || 'STAFF';
-    logOrderEvent({ order_number, actor, action: 'invoice_generated', new_value: { invoice_url: out.invoiceUrl } });
+    await logOrderEvent({ order_number, actor, action: 'invoice_generated', new_value: { invoice_url: out.invoiceUrl } });
 
     return res.status(200).json({ ok: true, invoice_url: out.invoiceUrl, invoice_name: out.invoiceName });
   } catch (e) {

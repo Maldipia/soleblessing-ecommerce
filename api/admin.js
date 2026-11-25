@@ -184,7 +184,7 @@ export default async function handler(req, res) {
       );
       const rows = r.ok ? await r.json() : [];
       if (!rows.length) return res.status(409).json({ error: 'nothing to request — payment may already be verified' });
-      logOrderEvent({ order_number: orderNo, actor: actorName, action: 'proof_reupload_requested', new_value: { reason } });
+      await logOrderEvent({ order_number: orderNo, actor: actorName, action: 'proof_reupload_requested', new_value: { reason } });
       return res.status(200).json({ ok: true });
     } catch { return res.status(500).json({ error: 'request failed' }); }
   }

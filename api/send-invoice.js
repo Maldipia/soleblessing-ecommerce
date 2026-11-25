@@ -42,11 +42,13 @@ export default async function handler(req, res) {
 
     // Audit: who approved & sent the invoice.
     const actor = cred.kind === 'owner' ? 'OWNER' : (cred.staff && cred.staff.id) || 'STAFF';
-    logOrderEvent({ order_number, actor, action: 'invoice_sent', new_value: { email: out.email || null } });
+    await logOrderEvent({ order_number, actor, action: 'invoice_sent', new_value: { email: out.email || null } });
 
     // If this order came from a native order-form request, move that request
     // forward: converted → invoiced (linkage via converted_order_number).
-    fetch(`${SUPABASE_URL}/rest/v1/sb_order_requests?converted_order_number=eq.${encodeURIComponent(order_number)}&status=eq.converted`, {
+    // Awaited: an un-awaited write can be lost when the serverless function
+    // freezes right after the response.
+    await fetch(`${SUPABASE_URL}/rest/v1/sb_order_requests?converted_order_number=eq.${encodeURIComponent(order_number)}&status=eq.converted`, {
       method: 'PATCH',
       headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: 'invoiced' }),
