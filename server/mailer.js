@@ -7,12 +7,17 @@
 export async function sendBrandedEmail({ to, subject, html }) {
   const RESEND = process.env.RESEND_API_KEY || '';
   if (RESEND) {
-    const FROM = process.env.EMAIL_FROM || 'SoleBlessing <onboarding@resend.dev>';
+    // Pia's rule: NEVER fall back to onboarding@resend.dev — a missing
+    // EMAIL_FROM is a configuration error, not a reason to send as Resend.
+    const FROM = process.env.EMAIL_FROM || '';
+    if (!FROM) return { success: false, notConfigured: true, message: 'EMAIL_FROM not set — sender address must be configured and approved first' };
+    // Replies go to the SoleBlessing Gmail inbox (old behavior preserved).
+    const REPLY_TO = process.env.EMAIL_REPLY_TO || '';
     try {
       const r = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { Authorization: `Bearer ${RESEND}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: FROM, to: [to], subject, html }),
+        body: JSON.stringify({ from: FROM, to: [to], subject, html, ...(REPLY_TO ? { reply_to: [REPLY_TO] } : {}) }),
       });
       const out = await r.json().catch(() => null);
       if (!r.ok) return { success: false, message: (out && (out.message || out.error)) || `resend error ${r.status}` };
