@@ -1984,6 +1984,8 @@ export default function AdminDashboard() {
   const [scanBox,setScanBox]=useState(false);
   const [editScan,setEditScan]=useState<any|null>(null);
   const [intakeRows,setIntakeRows]=useState<any[]>([]);
+  // In-place photo zoom (no new tab — per Pia)
+  const [photoZoom,setPhotoZoom]=useState<string|null>(null);
   const [intakeLoading,setIntakeLoading]=useState(false);
   const [intakeSearch,setIntakeSearch]=useState("");
   const [intakeCond,setIntakeCond]=useState("All");
@@ -2658,6 +2660,14 @@ export default function AdminDashboard() {
       {editOrder&&<OrderEditModal order={editOrder} onClose={()=>setEditOrder(null)} onSave={saveOrderEdit}/>}
       {invEditor&&<InvoiceEditor order={invEditor} inventory={inventory||[]}
         onClose={()=>setInvEditor(null)} onSaved={()=>loadOrders()}/>}
+      {photoZoom&&(
+        <div onClick={()=>setPhotoZoom(null)}
+          style={{position:"fixed",inset:0,background:"rgba(10,10,10,.82)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",cursor:"zoom-out",backdropFilter:"blur(6px)",padding:18}}>
+          <img src={photoZoom} alt="" style={{maxWidth:"92vw",maxHeight:"88vh",objectFit:"contain",borderRadius:14,background:"#fff"}}/>
+          <button onClick={()=>setPhotoZoom(null)}
+            style={{position:"fixed",top:18,right:18,width:38,height:38,borderRadius:"50%",border:"none",background:"rgba(255,255,255,.92)",fontWeight:900,fontSize:16,cursor:"pointer"}}>✕</button>
+        </div>
+      )}
       {scanBox&&<ScanBoxModal existingCodes={existingCodes} allRows={intakeRows} nextCode={nextCode}
         onClose={()=>setScanBox(false)}
         onSaved={()=>{loadIntake();refetchInv();refreshInventory().catch(()=>{});}}/>}
@@ -3950,8 +3960,8 @@ export default function AdminDashboard() {
                       return (
                         <tr key={r.item_code} className="hover:bg-gray-50/60">
                           <td className="px-3 py-2">{img
-                            ?<img src={img} title="Click to view full photo" onClick={()=>{try{window.open(img,"_blank");}catch{}}}
-                               className="w-14 h-14 rounded-lg object-cover cursor-zoom-in hover:ring-2 hover:ring-[#C9A84C] flex-shrink-0"/>
+                            ?<img src={img} title="Tap to zoom" onClick={()=>setPhotoZoom(img)}
+                               style={{width:56,height:56,objectFit:"cover",borderRadius:10,cursor:"zoom-in",flexShrink:0,display:"block"}}/>
                             :<span className="text-gray-300">—</span>}</td>
                           <td className="px-2 font-mono font-black text-xs text-[#0d2430]">{r.item_code}</td>
                           <td className="px-2 text-xs">{r.brand||"—"}</td>
