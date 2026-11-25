@@ -25,7 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import AdminSettings from "./Settings";
 import AdminVisitors from "./Visitors";
-import IncomingRequests from "./Incoming";
+import { useOrderRequests, RequestDetailModal, REQ_STATUS_COLORS } from "./Incoming";
 import { useInventory, refreshInventory } from "@/hooks/useInventory";
 import AdminPromos from "./Promos";
 import ShoeCleanerCampaign from "./ShoeCleanerCampaign";
@@ -2086,6 +2086,8 @@ export default function AdminDashboard() {
   // ── Overview: date range, KPIs, chart, channels, activity ──
   const [createOrder,setCreateOrder]=useState(false);
   const [prepareReq,setPrepareReq]=useState<any>(null); // order-form request being converted
+  const {rows:reqRows,reload:reloadReqs}=useOrderRequests(); // merged into FB/Order Form table
+  const [selReq,setSelReq]=useState<any>(null);
   // Payment-proof verification panel state
   const [proofInfo,setProofInfo]=useState<Record<string,any>>({});
   const [reupFor,setReupFor]=useState<string|null>(null);
@@ -2521,7 +2523,10 @@ export default function AdminDashboard() {
             email:prepareReq.email||"",address:prepareReq.address||"",region:prepareReq.region||"",city:prepareReq.city||"",
             notes:prepareReq.special_request||""}}:null}
         onClose={()=>{setCreateOrder(false);setPrepareReq(null);}}
-        onPlaced={()=>{loadOrders();refetchInv();refreshInventory().catch(()=>{});}}/>}
+        onPlaced={()=>{loadOrders();reloadReqs();refetchInv();refreshInventory().catch(()=>{});}}/>}
+      {selReq&&<RequestDetailModal sel={selReq} onClose={()=>setSelReq(null)}
+        onPrepare={(r:any)=>{setPrepareReq(r);setCreateOrder(true);}}
+        onChanged={()=>{reloadReqs();loadOrders();}}/>}
       {editOrder&&<OrderEditModal order={editOrder} onClose={()=>setEditOrder(null)} onSave={saveOrderEdit}/>}
       {scanBox&&<ScanBoxModal existingCodes={existingCodes} allRows={intakeRows} nextCode={nextCode}
         onClose={()=>setScanBox(false)}
@@ -3123,6 +3128,12 @@ export default function AdminDashboard() {
             const pages=Math.max(1,Math.ceil(filteredOrders.length/ordPer));
             const page=Math.min(ordPage,pages-1);
             const rows=filteredOrders.slice(page*ordPer,(page+1)*ordPer);
+            // Order-form requests, merged into the same table (sheet_import tab, page 1).
+            const reqQ=orderSearch.trim().toLowerCase();
+            const reqVisible=(channelFilter==="sheet_import"&&page===0)
+              ? reqRows.filter((r:any)=>!reqQ||[r.request_ref,r.receiver_name,r.fb_ig_name,r.contact_number,r.email,r.converted_order_number]
+                  .some(v=>String(v||"").toLowerCase().includes(reqQ)))
+              : [];
             // thumbnails: website orders carry imageUrl; FB orders fall back to the
             // inventory photo matched by item code
             const invImg:Record<string,string>={};
@@ -3150,7 +3161,7 @@ export default function AdminDashboard() {
                   {orderSearch&&<button onClick={()=>setOrderSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm font-bold">✕</button>}
                 </div>
                 <div className="flex items-center rounded-lg border border-gray-200 bg-white overflow-hidden">
-                  {([["website",`🌐 Website ${srcCnt("website")}`],["sheet_import",`📋 FB / Order Form ${srcCnt("sheet_import")}`]] as const).map(([v,l])=>(
+                  {([["website",`🌐 Website ${srcCnt("website")}`],["sheet_import",`📋 FB / Order Form ${srcCnt("sheet_import")+reqRows.length}${reqRows.filter((r:any)=>r.status==="new").length?` · ${reqRows.filter((r:any)=>r.status==="new").length} new`:""}`]] as const).map(([v,l])=>(
                     <button key={v} onClick={()=>setChannelFilter(v)}
                       className={`px-3 py-2 text-[11px] font-bold ${channelFilter===v?"bg-[#0d2430] text-white":"text-gray-500 hover:bg-gray-50"}`}>{l}</button>
                   ))}
@@ -3165,18 +3176,8 @@ export default function AdminDashboard() {
                 </a>
               </div>
 
-              {/* Combined FB / Order Form workspace (per Pia, Nov 25): two clearly
-                  separated sections on one page — Order Requests on top (own
-                  search + status chips), FB Form Orders below (own search,
-                  filters and stats). Sources are never mixed. */}
-              {channelFilter==="sheet_import"&&<>
-                <IncomingRequests onPrepare={(r:any)=>{setPrepareReq(r);setCreateOrder(true);}}/>
-                <div className="flex items-center gap-2 mb-3 mt-1">
-                  <h3 className="text-[12px] font-black uppercase tracking-[.12em] text-[#0d2430]">📋 FB Form Orders</h3>
-                  <span className="text-[10px] font-bold text-gray-400">imported form submissions — search &amp; filters below apply to this section only</span>
-                  <div className="flex-1 border-t border-gray-200"/>
-                </div>
-              </>}
+              {/* Order-form requests are rows INSIDE the orders table below —
+                  one list, no separate area (per Pia, Nov 25). */}
               <>
               {/* stat cards */}
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mb-5">
@@ -3245,6 +3246,39 @@ export default function AdminDashboard() {
                         </tr>
                       </thead>
                       <tbody>
+                        {reqVisible.map((r:any)=>(
+                          <tr key={r.request_ref} onClick={()=>setSelReq(r)}
+                            className="border-b border-gray-50 cursor-pointer text-[11px] bg-[#fffdf6] hover:bg-[#fcf4e3]">
+                            <td className="pl-3 pr-1.5 py-2.5">
+                              <div className="flex items-center gap-2">
+                                <div className="w-9 h-9 rounded-lg bg-[#fff3df] flex items-center justify-center flex-shrink-0 text-[15px]">🧾</div>
+                                <div>
+                                  <span className="font-black text-[#0d2430] whitespace-nowrap font-mono text-[10.5px]">{r.request_ref}</span>
+                                  <div className="flex items-center gap-1">
+                                    <span className={`text-[8.5px] font-black px-1.5 py-0.5 rounded-full uppercase ${REQ_STATUS_COLORS[r.status]||"bg-gray-100"}`}>{r.status.replace("_"," ")}</span>
+                                    <span className="text-[8.5px] font-bold text-gray-400 uppercase">order form</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-1.5 py-2.5 text-gray-500 whitespace-nowrap">{fmtDT(r.created_at)}</td>
+                            <td className="px-1.5 py-2.5">
+                              <div className="font-bold text-[#0d2430] whitespace-nowrap max-w-[130px] truncate">{r.receiver_name}</div>
+                              <div className="text-[10px] text-gray-400 whitespace-nowrap">{r.contact_number}</div>
+                            </td>
+                            <td className="px-1.5 py-2.5">
+                              <span className="text-[10px] font-bold whitespace-nowrap">{r.payment_method}</span>
+                              {r.payment_method==="PRE-ORDER"&&<div className="text-[8.5px] font-black text-orange-600 whitespace-nowrap">⚠ FULL PAYMENT</div>}
+                            </td>
+                            <td className="px-1.5 py-2.5"><span className="text-gray-300">—</span></td>
+                            <td className="px-1.5 py-2.5"><span className="text-gray-300">—</span></td>
+                            <td className="pl-1.5 pr-3 py-2.5 text-right whitespace-nowrap">
+                              {r.converted_order_number&&r.converted_order_number!=="CONVERTING"
+                                ? <span className="font-mono text-[9.5px] font-bold text-[#8a6d25]">→ {r.converted_order_number}</span>
+                                : <span className="text-gray-300">—</span>}
+                            </td>
+                          </tr>
+                        ))}
                         {rows.map(o=>{
                           const t=thumbOf(o);
                           return (
@@ -3278,7 +3312,7 @@ export default function AdminDashboard() {
                             <td className="pl-1.5 pr-3 py-2.5 text-right font-black text-[#0d2430] whitespace-nowrap">{fmt(o.total)}</td>
                           </tr>);
                         })}
-                        {rows.length===0&&<tr><td colSpan={7} className="py-16 text-center text-sm text-gray-400">No orders found</td></tr>}
+                        {rows.length===0&&reqVisible.length===0&&<tr><td colSpan={7} className="py-16 text-center text-sm text-gray-400">No orders found</td></tr>}
                       </tbody>
                     </table>
                   </div>
