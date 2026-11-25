@@ -2133,8 +2133,62 @@ export default function AdminDashboard() {
   // Secure customer invoice links (7-day access; admin copy is permanent)
   const [invLink,setInvLink]=useState<any>(null);
   const [linkBusy,setLinkBusy]=useState(false);
+  // Selected Order panel tabs (approved layout): Order Info · Payment/Proof ·
+  // Shipping/LBC · Activity. Resets to Order Info on every order switch.
+  const [panelTab,setPanelTab]=useState<"info"|"payment"|"ship"|"log">("info");
+  // Payment ledger (sb_payment_entries) — REAL records driving balances.
+  const [payEntries,setPayEntries]=useState<any[]>([]);
+  const [payBusy,setPayBusy]=useState(false);
+  const [payForm,setPayForm]=useState<any>(null); // null = form closed
+  const loadPayEntries=async(orderNumber:string)=>{
+    try{
+      const r=await fetch("/api/admin",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({...adminCred(),op:"payment_entry",action:"list",order_number:orderNumber})});
+      const out=await r.json().catch(()=>({} as any));
+      // Array.isArray guard matters: on a bare-array response, out.entries is
+      // Array.prototype.entries (a FUNCTION) and setState would run it as an
+      // updater — crashing the whole dashboard.
+      if(r.ok) setPayEntries(Array.isArray(out.entries)?out.entries:[]);
+    }catch{}
+  };
+  const addPayEntry=async(o:any)=>{
+    const amt=Math.round((Number(payForm?.amount)||0)*100);
+    if(!(amt>0)){toast.error("Enter the amount paid");return;}
+    setPayBusy(true);
+    try{
+      const r=await fetch("/api/admin",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({...adminCred(),op:"payment_entry",action:"add",order_number:o.order_number,
+          amount:amt,paid_at:payForm?.date||undefined,reference:payForm?.reference||"",remarks:payForm?.remarks||"",
+          ...(payForm?.fileB64?{fileBase64:payForm.fileB64,mimeType:payForm.fileType}:{})})});
+      const out=await r.json().catch(()=>({} as any));
+      if(!r.ok) throw new Error(out.error||"save failed");
+      toast.success("Payment recorded — pending verification");
+      setPayForm(null); loadPayEntries(o.order_number);
+    }catch(e:any){toast.error("Not saved: "+(e?.message||String(e)).slice(0,140));}
+    finally{setPayBusy(false);}
+  };
+  const decidePayEntry=async(o:any,id:number,action:"verify"|"reject"|"remove")=>{
+    setPayBusy(true);
+    try{
+      const r=await fetch("/api/admin",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({...adminCred(),op:"payment_entry",action,order_number:o.order_number,entry_id:id})});
+      const out=await r.json().catch(()=>({} as any));
+      if(!r.ok) throw new Error(out.error||"failed");
+      toast.success(action==="verify"?"Payment verified ✓":action==="reject"?"Entry rejected":"Entry removed");
+      loadPayEntries(o.order_number);
+    }catch(e:any){toast.error((e?.message||String(e)).slice(0,140));}
+    finally{setPayBusy(false);}
+  };
+  const openPayAttachment=async(path:string)=>{
+    try{
+      const r=await fetch("/api/admin",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({...adminCred(),op:"proof_url",path})});
+      const out=await r.json().catch(()=>({} as any));
+      if(r.ok&&out.url) window.open(out.url,"_blank"); else toast.error(out.error||"could not open attachment");
+    }catch{toast.error("could not open attachment");}
+  };
   useEffect(()=>{
-    setInvLink(null);
+    setInvLink(null); setPanelTab("info"); setPayEntries([]); setPayForm(null);
     if(!selOrderId) return;
     const o=(sbOrders||[]).find((x:any)=>String(x.id)===selOrderId);
     if(!o) return;
@@ -2145,6 +2199,7 @@ export default function AdminDashboard() {
       const out=await r.json().catch(()=>({} as any));
       if(!dead&&r.ok) setInvLink(out.link?{...out.link,url:out.link.token?`${location.origin}/invoice/t/${out.link.token}`:null}:{active:false});
     }catch{}})();
+    loadPayEntries(o.order_number);
     return()=>{dead=true;};
   },[selOrderId,sbOrders]);
   // Native "invoice ready" email for FB/form orders — confidential notification
@@ -3403,6 +3458,15 @@ export default function AdminDashboard() {
                         {orderFormRefs[sel.order_number]&&<span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 ml-1.5 font-mono">{orderFormRefs[sel.order_number]}</span>}
                         {sel.promo_code&&<span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700 ml-1.5">🏷 {sel.promo_code}</span>}
                       </div>
+                      {/* ── panel tabs (approved layout) ── */}
+                      <div className="flex gap-1 bg-[#f3f1ec] rounded-xl p-1 mb-3">
+                        {([["info","📦 Order Info"],["payment","💳 Payment"],["ship","🚚 Shipping"],["log","📜 Activity"]] as const).map(([k,lbl])=>(
+                          <button key={k} onClick={()=>setPanelTab(k)}
+                            className={`flex-1 text-[10px] font-black py-1.5 rounded-lg whitespace-nowrap ${panelTab===k?"bg-[#0d2430] text-white":"text-gray-500 hover:text-[#0d2430]"}`}>
+                            {lbl}{k==="payment"&&payEntries.length>0?` (${payEntries.length})`:""}</button>
+                        ))}
+                      </div>
+                      {panelTab==="info"&&<>
                       {/* items */}
                       <div className="space-y-2 mb-3">
                         {(sel.items||[]).map((item:any,i:number)=>(
@@ -3421,6 +3485,12 @@ export default function AdminDashboard() {
                           <span className="text-[11px] font-bold text-gray-500">Total{sel.discount_amount>0?<span className="text-green-600 font-semibold"> (saved {fmt(sel.discount_amount)}{sel.promo_code?` · ${sel.promo_code}`:""})</span>:null}</span>
                           <span className="text-base font-black text-[#0d2430]">{fmt(sel.total)}</span>
                         </div>
+                        {(()=>{const vp=payEntries.filter((e:any)=>e.status==="verified").reduce((s:number,e:any)=>s+(e.amount||0),0)
+                            ||((sel.items||[]).reduce((s:number,i:any)=>s+(i.paid||0),0));
+                          return vp>0?<>
+                            <div className="flex justify-between text-[11px] font-black text-green-600"><span>Total Paid{String(sel.payment_method||"").toUpperCase().includes("LAY")?" (Layaway)":""}</span><span>{fmt(vp)}</span></div>
+                            <div className="flex justify-between text-[11px] font-black text-red-500"><span>Remaining Balance</span><span>{fmt(Math.max(0,(sel.total||0)-vp))}</span></div>
+                          </>:null;})()}
                       </div>
                       {/* customer / address */}
                       <div className="space-y-2.5 text-xs border-t border-gray-100 pt-3 mb-3">
@@ -3436,6 +3506,74 @@ export default function AdminDashboard() {
                           {sel.payment_status==="reupload"&&<span className="text-[10px] font-black text-orange-600">↻ new proof requested</span>}
                           {sel.payment_status==="awaiting_full_payment"&&<span className="text-[10px] font-black text-orange-600">PRE-ORDER — full payment first</span>}
                         </div>
+                      </div>
+                      {/* invoice + customer link stay here (Order Info tab); proof
+                          review and the payment ledger live in the Payment tab. */}
+                      </>}
+                      {panelTab==="payment"&&<div className="space-y-2.5 text-xs">
+                        {/* balance box — from VERIFIED ledger entries (or editor PAID column) */}
+                        {(()=>{const vp=payEntries.filter((e:any)=>e.status==="verified").reduce((s:number,e:any)=>s+(e.amount||0),0)
+                            ||((sel.items||[]).reduce((s:number,i:any)=>s+(i.paid||0),0));
+                          return <div className="bg-[#fdf6e3] border border-[#C9A84C]/40 rounded-xl px-3.5 py-2.5 space-y-1">
+                            <div className="flex justify-between text-[11.5px] font-black text-[#0d2430]"><span>Total Amount Due</span><span>{fmt(sel.total)}</span></div>
+                            <div className="flex justify-between text-[11.5px] font-black text-green-600"><span>Total Paid (verified)</span><span>{fmt(vp)}</span></div>
+                            <div className="flex justify-between text-[12.5px] font-black text-red-500"><span>Remaining Balance</span><span>{fmt(Math.max(0,(sel.total||0)-vp))}</span></div>
+                          </div>;})()}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <a href={`/upload-payment?order=${encodeURIComponent(sel.order_number)}&name=${encodeURIComponent(sel.customer_name||"")}&amount=${encodeURIComponent(String(Math.round((sel.total||0)/100)))}`}
+                            target="_blank" rel="noopener noreferrer"
+                            className="text-[11px] font-bold bg-[#0d2430] text-white px-2.5 py-1.5 rounded-lg hover:bg-[#122d3a]">⬆ Upload Proof</a>
+                          <button onClick={()=>setPayForm(payForm?null:{date:new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Manila"}),amount:"",reference:"",remarks:""})}
+                            className="text-[11px] font-black bg-[#C9A84C] text-[#0d2430] px-2.5 py-1.5 rounded-lg hover:opacity-90">➕ Add Payment (Manual)</button>
+                        </div>
+                        {payForm&&(
+                          <div className="border-[1.5px] border-dashed border-[#C9A84C]/70 bg-[#fffdf7] rounded-xl p-3 space-y-2">
+                            <p className="text-[11px] font-black text-[#0d2430]">➕ Record a payment <span className="text-gray-400 font-semibold">(your admin identity is logged)</span></p>
+                            <div className="flex gap-2">
+                              <input type="date" value={payForm.date} onChange={e=>setPayForm({...payForm,date:e.target.value})}
+                                className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-[11px] outline-none focus:border-[#C9A84C]"/>
+                              <input inputMode="decimal" placeholder="Amount ₱" value={payForm.amount} onChange={e=>setPayForm({...payForm,amount:e.target.value})}
+                                className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-[11px] outline-none focus:border-[#C9A84C] text-right"/>
+                            </div>
+                            <input placeholder="Reference no. (GCash ref, bank slip…)" value={payForm.reference} onChange={e=>setPayForm({...payForm,reference:e.target.value})}
+                              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-[11px] outline-none focus:border-[#C9A84C] font-mono"/>
+                            <input placeholder="Remarks (e.g. Layaway installment 1 of 4)" value={payForm.remarks} onChange={e=>setPayForm({...payForm,remarks:e.target.value})}
+                              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-[11px] outline-none focus:border-[#C9A84C]"/>
+                            <label className="flex items-center gap-2 text-[10.5px] font-bold text-gray-500 cursor-pointer">
+                              <span className="border border-gray-200 rounded-lg px-2 py-1.5">📎 {payForm.fileName||"Attach screenshot (optional)"}</span>
+                              <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="hidden"
+                                onChange={e=>{const f=e.target.files?.[0]; e.currentTarget.value=""; if(!f)return;
+                                  if(f.size>5*1024*1024){toast.error("Max 5MB");return;}
+                                  const rd=new FileReader(); rd.onload=()=>setPayForm((p:any)=>({...p,fileB64:String(rd.result).split(",")[1],fileType:f.type,fileName:f.name})); rd.readAsDataURL(f);}}/>
+                              {payForm.fileName&&<button onClick={()=>setPayForm({...payForm,fileB64:undefined,fileType:undefined,fileName:undefined})} className="text-red-400">✕</button>}
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <button onClick={()=>addPayEntry(sel)} disabled={payBusy}
+                                className="text-[11px] font-black bg-[#C9A84C] text-[#0d2430] px-3 py-1.5 rounded-lg disabled:opacity-50">{payBusy?"Saving…":"💾 Save payment"}</button>
+                              <span className="text-[9.5px] font-semibold text-gray-400">Saved as RECORDED — verifying follows the existing rules</span>
+                            </div>
+                          </div>
+                        )}
+                        {payEntries.length>0&&(
+                          <div className="border border-gray-100 rounded-xl overflow-hidden">
+                            {payEntries.map((e:any)=>(
+                              <div key={e.id} className="flex items-center gap-2 px-2.5 py-2 border-t border-gray-50 first:border-t-0 text-[10.5px]">
+                                <span className="text-gray-400 font-mono whitespace-nowrap">{new Date(e.paid_at+"T00:00:00").toLocaleDateString("en-PH",{month:"short",day:"numeric"})}</span>
+                                <b className="text-[#0d2430] tabular-nums">{fmt(e.amount)}</b>
+                                <span className="text-gray-500 font-semibold truncate min-w-0">{e.reference||e.remarks||""} · by {e.entered_by}</span>
+                                {e.attachment_path&&<button onClick={()=>openPayAttachment(e.attachment_path)} className="text-[#8a6d25] font-bold">📎</button>}
+                                <span className="ml-auto flex items-center gap-1 flex-shrink-0">
+                                  {e.status==="verified"?<span className="text-[9px] font-black bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Verified ✓</span>
+                                  :e.status==="rejected"?<span className="text-[9px] font-black bg-red-50 text-red-500 px-2 py-0.5 rounded-full">Rejected</span>
+                                  :<>
+                                    <button onClick={()=>decidePayEntry(sel,e.id,"verify")} disabled={payBusy} className="text-[9px] font-black bg-emerald-600 text-white px-2 py-1 rounded-lg disabled:opacity-50">✓ Verify</button>
+                                    <button onClick={()=>decidePayEntry(sel,e.id,"reject")} disabled={payBusy} className="text-[9px] font-bold text-red-500 border border-red-200 px-2 py-1 rounded-lg disabled:opacity-50">✕</button>
+                                  </>}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                         {(sel.payment_proof_url||sel.payment_status==="submitted"||sel.payment_status==="reupload")&&(
                           <div className="mt-1.5 bg-[#fbfaf7] border border-gray-200 rounded-xl p-2.5 space-y-2">
                             <div className="flex items-center gap-2 flex-wrap text-[11px]">
@@ -3476,7 +3614,8 @@ export default function AdminDashboard() {
                             {sel.payment_status==="reupload"&&<p className="text-[10.5px] font-semibold text-orange-700">Waiting for the customer to upload a new proof — they see your reason on their invoice page.</p>}
                           </div>
                         )}
-                      </div>
+                      </div>}
+                      {panelTab==="info"&&<>
                       {/* invoice — WEBSITE orders: site's branded /invoice page (Google Sheet
                           as archive). FB/form orders: the NATIVE invoice (built in our own
                           editor). Once it exists: View + Edit + Send — never "Generate" again. */}
@@ -3535,6 +3674,8 @@ export default function AdminDashboard() {
                             className="text-[10.5px] font-bold text-red-500 border border-red-200 px-2 py-1 rounded-lg hover:bg-red-50">Revoke</button>
                         </>}
                       </div>
+                      </>}
+                      {panelTab==="ship"&&<>
                       {/* per-order receipt scan — above tracking (per approved mockup) */}
                       <label className={`flex items-center gap-2.5 border-[1.5px] border-dashed border-[#C9A84C]/70 bg-[#fffdf7] rounded-xl px-3 py-2.5 mb-2.5 cursor-pointer hover:bg-[#C9A84C]/10 ${receiptBusy?"opacity-50 pointer-events-none":""}`}>
                         <span className="text-[15px]">📄</span>
@@ -3573,17 +3714,30 @@ export default function AdminDashboard() {
                           ✓ Save & Mark Shipped
                         </button>
                       )}
+                      {sel.courier&&sel.tracking_reference&&(
+                        <p className="text-[10.5px] font-semibold text-gray-500 mb-3">🚚 On file: <b className="text-[#0d2430]">{sel.courier}</b> · <span className="font-mono font-bold text-[#0d2430]">{sel.tracking_reference}</span>{sel.tracking_sent_at?<span className="text-green-600 font-bold"> · tracking emailed {fmtDate(sel.tracking_sent_at)}</span>:null}</p>
+                      )}
+                      </>}
                       {/* activity timeline (P1 audit trail) */}
-                      {orderLog.length>0&&(
-                        <div className="border-t border-gray-100 pt-3 mb-3">
-                          <p className="text-[9px] font-black uppercase tracking-[.14em] text-gray-300 mb-2">Activity</p>
-                          <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                      {panelTab==="log"&&(orderLog.length>0?(
+                        <div className="pt-1 mb-3">
+                          <p className="text-[9px] font-black uppercase tracking-[.14em] text-gray-300 mb-2">Activity — who did what, when</p>
+                          <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1">
                             {orderLog.map((l:any)=>{
                               const nv=l.new_value||{}, ov=l.old_value||{};
                               let what=l.action;
                               if(l.action==="create") what=`Order placed · ${fmt(nv.total||0)}`;
                               else if(l.action==="payment_proof_submitted") what=`Payment proof submitted${nv.reference?` · ref ${nv.reference}`:""}`;
                               else if(l.action==="duplicate_checkout_blocked") what="Duplicate checkout blocked";
+                              else if(l.action==="payment_recorded") what=`Manual payment recorded · ${fmt(nv.amount||0)}${nv.reference?` · ${nv.reference}`:""}`;
+                              else if(l.action==="payment_entry_verified") what=`Payment verified ✓ · ${fmt(nv.amount||0)}`;
+                              else if(l.action==="payment_entry_rejected") what=`Payment entry rejected · ${fmt(nv.amount||0)}`;
+                              else if(l.action==="payment_entry_deleted") what="Payment entry removed";
+                              else if(l.action==="invoice_generated") what="Invoice generated";
+                              else if(l.action==="invoice_sent") what="Invoice emailed to customer";
+                              else if(l.action==="invoice_link_issued") what="Customer invoice link issued";
+                              else if(l.action==="invoice_link_extended") what="Customer link extended";
+                              else if(l.action==="invoice_link_revoked") what="Customer link revoked";
                               else if(l.action==="delete") what="Order deleted";
                               else if(l.action==="update"){
                                 const bits:string[]=[];
@@ -3603,9 +3757,11 @@ export default function AdminDashboard() {
                             })}
                           </div>
                         </div>
-                      )}
-                      {/* status */}
-                      <div className="flex items-center gap-2">
+                      ):(
+                        <p className="text-[10.5px] text-gray-400 font-semibold py-4 text-center">No activity recorded for this order yet.</p>
+                      ))}
+                      {/* status — stays visible on every tab */}
+                      <div className="flex items-center gap-2 border-t border-gray-100 pt-3">
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_COLOR[sel.status]||"bg-gray-100 text-gray-600"}`}>{TAB_LABEL[sel.status]||sel.status}</span>
                         <div className="ml-auto flex items-center gap-1.5">
                           <span className="text-[11px] text-gray-400 font-semibold">Update Status</span>

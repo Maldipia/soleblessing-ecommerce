@@ -185,8 +185,9 @@ export default function Invoice() {
                   <span className="text-[15px] md:text-[17px] font-black text-[#0a0a0a]">Total Amount Due</span>
                   <span className="text-[22px] md:text-[26px] font-black text-[#0a0a0a]">{fmt(order.total)}</span>
                 </div>
-                {/* layaway: recorded installments → running balance */}
-                {(() => { const paid = items.reduce((s: number, i: any) => s + (i.paid || 0), 0);
+                {/* layaway: verified ledger payments (preferred) or editor PAID
+                    column → running balance */}
+                {(() => { const paid = order.payments_total || items.reduce((s: number, i: any) => s + (i.paid || 0), 0);
                   return paid > 0 ? (<>
                     <div className="flex justify-end gap-10 text-[13px] font-black text-[#1a7f4e] pt-2.5">
                       <span>Total Paid (Layaway)</span><span className="w-28 text-right">{fmt(paid)}</span>

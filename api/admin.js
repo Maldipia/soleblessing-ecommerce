@@ -166,6 +166,86 @@ export default async function handler(req, res) {
     } catch { return res.status(500).json({ error: 'could not sign proof URL' }); }
   }
 
+  // Payment ledger (manual / staff-recorded payments + layaway installments).
+  // Entries are REAL database records — balances everywhere compute from them.
+  // Any authenticated staff can RECORD (with their identity stamped);
+  // VERIFY / REJECT / REMOVE stay owner-manager only, mirroring the existing
+  // proof-verification rules. Recording NEVER flips the order's payment_status.
+  if (op === 'payment_entry') {
+    const actorName = staff ? staff.id : 'OWNER';
+    const action = String(body.action || 'list');
+    const orderNo = String(body.order_number || '').trim().toUpperCase();
+    if (!orderNo) return res.status(400).json({ error: 'order_number required' });
+    const H2 = { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=representation' };
+    try {
+      if (action === 'list') {
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/sb_payment_entries?order_number=eq.${encodeURIComponent(orderNo)}&order=paid_at.asc,created_at.asc`, { headers: H2 });
+        const entries = r.ok ? await r.json() : [];
+        return res.status(200).json({ ok: true, entries });
+      }
+      if (action === 'add') {
+        const amount = Math.round(Number(body.amount) || 0); // centavos
+        if (!(amount > 0)) return res.status(400).json({ error: 'amount (centavos) required' });
+        const paidAt = /^\d{4}-\d{2}-\d{2}$/.test(String(body.paid_at || '')) ? body.paid_at : undefined;
+        let attachment_path = null;
+        if (body.fileBase64 && body.mimeType) {
+          if (!/^(image\/(jpeg|png|webp)|application\/pdf)$/.test(body.mimeType)) return res.status(400).json({ error: 'jpeg/png/webp/pdf only' });
+          const buf = Buffer.from(String(body.fileBase64), 'base64');
+          if (buf.length > 5 * 1024 * 1024) return res.status(413).json({ error: 'max 5MB' });
+          const ext = body.mimeType === 'application/pdf' ? 'pdf' : body.mimeType === 'image/png' ? 'png' : body.mimeType === 'image/webp' ? 'webp' : 'jpg';
+          const p = `manual-payments/${orderNo}/${Date.now()}.${ext}`;
+          const up = await fetch(`${SUPABASE_URL}/storage/v1/object/payment-proofs/${p}`, {
+            method: 'POST', headers: { Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': body.mimeType, 'x-upsert': 'true' }, body: buf,
+          });
+          if (!up.ok) return res.status(502).json({ error: 'attachment upload failed' });
+          attachment_path = `payment-proofs/${p}`;
+        }
+        const ins = await fetch(`${SUPABASE_URL}/rest/v1/sb_payment_entries`, {
+          method: 'POST', headers: H2,
+          body: JSON.stringify({ order_number: orderNo, amount, ...(paidAt ? { paid_at: paidAt } : {}),
+            reference: String(body.reference || '').slice(0, 120) || null,
+            remarks: String(body.remarks || '').slice(0, 300) || null,
+            attachment_path, entered_by: actorName }),
+        });
+        const [entry] = ins.ok ? await ins.json() : [];
+        if (!entry) return res.status(502).json({ error: 'could not save payment entry' });
+        await logOrderEvent({ order_number: orderNo, actor: actorName, action: 'payment_recorded',
+          new_value: { entry_id: entry.id, amount, reference: entry.reference, paid_at: entry.paid_at } });
+        return res.status(200).json({ ok: true, entry });
+      }
+      // verify / reject / remove — owner-manager only
+      if (staff && staff.role !== 'manager') return res.status(403).json({ error: 'not allowed' });
+      const entryId = parseInt(body.entry_id);
+      if (!entryId) return res.status(400).json({ error: 'entry_id required' });
+      if (action === 'verify' || action === 'reject') {
+        // Only a RECORDED entry can move — a verified one is final (duplicate-
+        // verification guard, same spirit as the proof flow).
+        const nextStatus = action === 'verify' ? 'verified' : 'rejected';
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/sb_payment_entries?id=eq.${entryId}&order_number=eq.${encodeURIComponent(orderNo)}&status=eq.recorded`, {
+          method: 'PATCH', headers: H2,
+          body: JSON.stringify({ status: nextStatus, verified_by: actorName, verified_at: new Date().toISOString() }),
+        });
+        const rows = r.ok ? await r.json() : [];
+        if (!rows.length) return res.status(409).json({ error: 'entry not found or already decided' });
+        await logOrderEvent({ order_number: orderNo, actor: actorName, action: `payment_entry_${nextStatus}`,
+          new_value: { entry_id: entryId, amount: rows[0].amount, reference: rows[0].reference } });
+        return res.status(200).json({ ok: true, entry: rows[0] });
+      }
+      if (action === 'remove') {
+        const g = await fetch(`${SUPABASE_URL}/rest/v1/sb_payment_entries?id=eq.${entryId}&order_number=eq.${encodeURIComponent(orderNo)}`, { headers: H2 });
+        const [old] = g.ok ? await g.json() : [];
+        if (!old) return res.status(404).json({ error: 'entry not found' });
+        await fetch(`${SUPABASE_URL}/rest/v1/sb_payment_entries?id=eq.${entryId}`, { method: 'DELETE', headers: H2 });
+        await logOrderEvent({ order_number: orderNo, actor: actorName, action: 'payment_entry_deleted',
+          old_value: { entry_id: entryId, amount: old.amount, reference: old.reference, status: old.status } });
+        return res.status(200).json({ ok: true });
+      }
+      return res.status(400).json({ error: 'unknown payment_entry action' });
+    } catch (e) {
+      return res.status(500).json({ error: String(e && e.message || e) });
+    }
+  }
+
   // Secure customer invoice links — owner/manager only. The customer gets
   // /invoice/t/<token> with 7-day access by default. Issue = reissue (old
   // links die), extend pushes the expiry, revoke kills access NOW. Expiry and

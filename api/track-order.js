@@ -21,7 +21,7 @@ const PUBLIC_FIELDS = [
   'customer_name', 'customer_email', 'contact_number', 'shipping_address',
   'items', 'subtotal', 'shipping_fee', 'discount_amount', 'total',
   'payment_method', 'payment_status', 'payment_reference', 'promo_code',
-  'courier', 'tracking_reference',
+  'courier', 'tracking_reference', 'invoice_no',
 ];
 
 // ── per-IP rate limit (per-instance; durable cross-instance limiting would
@@ -91,6 +91,16 @@ export default async function handler(req, res) {
       // Admin asked for a NEW payment proof → surface the reason to the
       // customer (latest proof_reupload_requested audit entry; reason only).
       if (tokenMeta) o.invoice_access = tokenMeta; // show the customer their link validity
+      // Layaway balance: VERIFIED payment-ledger entries drive the customer's
+      // Total Paid / Remaining Balance (amounts only — no admin details leak).
+      try {
+        const pr = await fetch(
+          `${SUPABASE_URL}/rest/v1/sb_payment_entries?order_number=eq.${encodeURIComponent(o.order_number)}&status=eq.verified&select=amount,paid_at`,
+          { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } },
+        );
+        const pe = pr.ok ? await pr.json() : [];
+        if (Array.isArray(pe) && pe.length) o.payments_total = pe.reduce((s, x) => s + (x.amount || 0), 0);
+      } catch {}
       if (o.payment_status === 'reupload') {
         try {
           const lr = await fetch(
