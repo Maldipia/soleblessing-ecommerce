@@ -2147,6 +2147,23 @@ export default function AdminDashboard() {
     }catch{}})();
     return()=>{dead=true;};
   },[selOrderId,sbOrders]);
+  // Native "invoice ready" email for FB/form orders — confidential notification
+  // carrying only the secure link (which must already be active). Server stamps
+  // invoice_sent_at ONLY on a confirmed send, so "Sent ✓" never lies.
+  const sendNativeInvoice=async(o:any)=>{
+    if(!o.customer_email){toast.error("No email on this order — copy the customer link and send it in Messenger instead.");return;}
+    if(!invLink?.active){toast.error("Issue the customer link first (🔗 button below) — the email carries that secure link.");return;}
+    setSendBusy(o.id);
+    try{
+      const r=await fetch("/api/send-order-email",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({...adminCred(),order_number:o.order_number,type:"invoice_ready"})});
+      const out=await r.json().catch(()=>({} as any));
+      if(!r.ok) throw new Error(out.error||"send failed");
+      toast.success(`📧 Invoice emailed to ${o.customer_email}`);
+      loadOrders();
+    }catch(e:any){toast.error("Email not sent: "+(e?.message||String(e)).slice(0,140));}
+    finally{setSendBusy(null);}
+  };
   const invoiceLinkOp=async(o:any,action:string,days=7)=>{
     setLinkBusy(true);
     try{
@@ -3461,35 +3478,47 @@ export default function AdminDashboard() {
                         )}
                       </div>
                       {/* invoice — WEBSITE orders: site's branded /invoice page (Google Sheet
-                          as archive). FB orders: Google Drive invoice is THE invoice —
-                          generate it here, no site-invoice button. */}
+                          as archive). FB/form orders: the NATIVE invoice (built in our own
+                          editor). Once it exists: View + Edit + Send — never "Generate" again. */}
                       <div className="flex items-center gap-1.5 flex-wrap border-t border-gray-100 pt-3 mb-3">
-                        {(sel.source||"website")==="website"&&(
+                        {(sel.source||"website")==="website" ? <>
                           <a href={`/invoice/${encodeURIComponent(sel.order_number)}`} target="_blank" rel="noopener noreferrer"
                             className="text-[11px] font-bold bg-[#C9A84C] text-[#0d2430] px-2.5 py-1 rounded-lg hover:opacity-90 flex items-center gap-1">
                             🧾 Invoice</a>
-                        )}
-                        {sel.invoice_url
-                          ? <>
-                              <a href={sel.invoice_url} target="_blank" rel="noopener noreferrer" title="Google Drive invoice"
-                                className={`text-[11px] font-bold px-2.5 py-1 rounded-lg flex items-center gap-1 ${(sel.source||"website")==="website"
-                                  ?"text-gray-500 border border-gray-200 hover:border-[#C9A84C] hover:text-[#8a6d25]"
-                                  :"bg-[#C9A84C] text-[#0d2430] hover:opacity-90"}`}>
-                                {(sel.source||"website")==="website"?<><ExternalLink className="h-3 w-3"/> Sheet</>:<>🧾 Invoice</>}</a>
-                              <button onClick={()=>generateInvoice(sel,true)} disabled={invBusy===sel.id} title="Regenerate the Google invoice"
-                                className="text-[11px] font-bold text-gray-500 border border-gray-200 px-2 py-1 rounded-lg hover:border-[#C9A84C] hover:text-[#8a6d25] disabled:opacity-50">
-                                {invBusy===sel.id?"…":"↻"}</button>
-                              {sel.invoice_sent_at
-                                ? <button onClick={()=>sendInvoice(sel,true)} disabled={sendBusy===sel.id} title={`Emailed ${fmtDate(sel.invoice_sent_at)} — send again`}
-                                    className="text-[11px] font-bold text-green-700 border border-green-300 px-2 py-1 rounded-lg hover:bg-green-50 disabled:opacity-50">{sendBusy===sel.id?"…":"📧 ↻"}</button>
-                                : <button onClick={()=>sendInvoice(sel)} disabled={sendBusy===sel.id}
-                                    className="text-[11px] font-bold bg-emerald-500 text-white px-2.5 py-1 rounded-lg hover:bg-emerald-600 disabled:opacity-50">{sendBusy===sel.id?"Sending…":"📧 Send invoice"}</button>}
-                            </>
-                          : <button onClick={()=>{(sel.source||"website")==="website"?generateInvoice(sel):setInvEditor(sel);}} disabled={invBusy===sel.id}
-                              className={`text-[11px] font-bold px-2.5 py-1 rounded-lg disabled:opacity-50 ${(sel.source||"website")==="website"
+                          {sel.invoice_url
+                            ? <>
+                                <a href={sel.invoice_url} target="_blank" rel="noopener noreferrer" title="Google Drive invoice"
+                                  className="text-[11px] font-bold px-2.5 py-1 rounded-lg flex items-center gap-1 text-gray-500 border border-gray-200 hover:border-[#C9A84C] hover:text-[#8a6d25]">
+                                  <ExternalLink className="h-3 w-3"/> Sheet</a>
+                                <button onClick={()=>generateInvoice(sel,true)} disabled={invBusy===sel.id} title="Regenerate the Google invoice"
+                                  className="text-[11px] font-bold text-gray-500 border border-gray-200 px-2 py-1 rounded-lg hover:border-[#C9A84C] hover:text-[#8a6d25] disabled:opacity-50">
+                                  {invBusy===sel.id?"…":"↻"}</button>
+                                {sel.invoice_sent_at
+                                  ? <button onClick={()=>sendInvoice(sel,true)} disabled={sendBusy===sel.id} title={`Emailed ${fmtDate(sel.invoice_sent_at)} — send again`}
+                                      className="text-[11px] font-bold text-green-700 border border-green-300 px-2 py-1 rounded-lg hover:bg-green-50 disabled:opacity-50">{sendBusy===sel.id?"…":"📧 ↻"}</button>
+                                  : <button onClick={()=>sendInvoice(sel)} disabled={sendBusy===sel.id}
+                                      className="text-[11px] font-bold bg-emerald-500 text-white px-2.5 py-1 rounded-lg hover:bg-emerald-600 disabled:opacity-50">{sendBusy===sel.id?"Sending…":"📧 Send invoice"}</button>}
+                              </>
+                            : <button onClick={()=>generateInvoice(sel)} disabled={invBusy===sel.id}
+                                className="text-[11px] font-bold px-2.5 py-1 rounded-lg disabled:opacity-50 text-gray-500 border border-gray-200 hover:border-[#C9A84C] hover:text-[#8a6d25]">
+                                {invBusy===sel.id?"Generating…":"+ Sheet copy"}</button>}
+                        </> : (()=>{ const hasInv=(Array.isArray(sel.items)&&sel.items.length>0&&(sel.total||0)>0)||!!sel.invoice_no;
+                          return <>
+                            {hasInv&&<a href={`/invoice/${encodeURIComponent(sel.order_number)}`} target="_blank" rel="noopener noreferrer"
+                              className="text-[11px] font-bold bg-[#C9A84C] text-[#0d2430] px-2.5 py-1 rounded-lg hover:opacity-90 flex items-center gap-1">🧾 Invoice</a>}
+                            <button onClick={()=>setInvEditor(sel)}
+                              className={`text-[11px] font-bold px-2.5 py-1 rounded-lg ${hasInv
                                 ?"text-gray-500 border border-gray-200 hover:border-[#C9A84C] hover:text-[#8a6d25]"
                                 :"bg-[#C9A84C] text-[#0d2430] hover:opacity-90"}`}>
-                              {invBusy===sel.id?"Generating…":(sel.source||"website")==="website"?"+ Sheet copy":"🧾 Generate invoice"}</button>}
+                              {hasInv?"✏️ Edit invoice":"🧾 Generate invoice"}</button>
+                            {hasInv&&(sel.invoice_sent_at
+                              ? <button onClick={()=>sendNativeInvoice(sel)} disabled={sendBusy===sel.id} title={`Emailed ${fmtDate(sel.invoice_sent_at)} — send again`}
+                                  className="text-[11px] font-bold text-green-700 border border-green-300 px-2 py-1 rounded-lg hover:bg-green-50 disabled:opacity-50">{sendBusy===sel.id?"…":"📧 Sent ✓ · ↻"}</button>
+                              : <button onClick={()=>sendNativeInvoice(sel)} disabled={sendBusy===sel.id}
+                                  className="text-[11px] font-bold bg-emerald-500 text-white px-2.5 py-1 rounded-lg hover:bg-emerald-600 disabled:opacity-50">{sendBusy===sel.id?"Sending…":"📧 Send invoice"}</button>)}
+                            {sel.invoice_url&&<a href={sel.invoice_url} target="_blank" rel="noopener noreferrer" title="Old Google Drive invoice (archive)"
+                              className="text-[10.5px] font-bold text-gray-400 border border-gray-200 px-2 py-1 rounded-lg hover:border-[#C9A84C] hover:text-[#8a6d25]">Drive</a>}
+                          </>; })()}
                       </div>
                       {/* secure customer link — 7-day access to the site invoice; admin copy is permanent */}
                       <div className="flex items-center gap-1.5 flex-wrap mb-3 -mt-1.5">
