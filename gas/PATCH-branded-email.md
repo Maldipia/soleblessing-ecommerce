@@ -1,3 +1,5 @@
+> ⚠️ **DEPRECATED (Nov 25, 2026)** — emails are now sent NATIVELY by the website server (`server/mailer.js`, Resend / Gmail SMTP). **No GAS patch is needed.** Kept as history only.
+
 # GAS patch 3 — branded order emails (send_html_email)
 
 The website now builds Nike/Adidas-style order emails (product photos, totals,
