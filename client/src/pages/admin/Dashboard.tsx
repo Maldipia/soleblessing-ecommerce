@@ -2196,6 +2196,9 @@ export default function AdminDashboard() {
   const [soErr,setSoErr]=useState("");
   const [soTab,setSoTab]=useState<"cal"|"up"|"pub"|"plan"|"perf">("cal");
   const [soSynced,setSoSynced]=useState<string|null>(null);
+  // Type filter dropdown (Pia's approved mock): filters Calendar/Upcoming/Published/Plan + stat cards
+  const [soFilter,setSoFilter]=useState<"all"|"story"|"post"|"reel"|"gbp"|"ttyt">("all");
+  const [soFilterOpen,setSoFilterOpen]=useState(false);
   // Performance tab (approved mock): metric timelines + top posts from the metrics mirror
   const [soMetrics,setSoMetrics]=useState<any[]>([]);
   const [soTop,setSoTop]=useState<any[]>([]);
@@ -2271,13 +2274,23 @@ export default function AdminDashboard() {
   const soPublished=(p:any)=>Array.isArray(p?.providers)&&p.providers.length>0&&p.providers.every((x:any)=>x.status==="PUBLISHED");
   const soShopUrl=(p:any)=>{const m=String(p?.text||"").match(/https?:\/\/[^\s)]+/);return m?m[0]:null;};
   const soTime=(p:any)=>soDate(p).toLocaleTimeString("en-PH",{hour:"numeric",minute:"2-digit"});
+  const soMatch=(p:any,f:string)=>{
+    if(f==="story")return soType(p)==="Story";
+    if(f==="post")return soType(p)==="Post";
+    if(f==="reel")return soType(p)==="Reel";
+    if(f==="gbp")return soNets(p).includes("gmb");
+    if(f==="ttyt")return soNets(p).some((n:string)=>n==="tiktok"||n==="youtube");
+    return true;
+  };
+  const soShown=useMemo(()=>soPosts.filter(p=>soMatch(p,soFilter)),[soPosts,soFilter]);
+  const SO_FILTERS:[string,string][]=[["all","All types"],["story","📖 My Day Stories"],["post","📝 Feed / Product Posts"],["reel","🎬 Reels"],["gbp","📍 With Google Business"],["ttyt","🎵 With TikTok / YouTube"]];
   const soStats=useMemo(()=>{
     const now=new Date();const today=now.toDateString();
-    const pubToday=soPosts.filter(p=>soPublished(p)&&soDate(p).toDateString()===today).length;
-    const pending=soPosts.filter(p=>!soPublished(p));
+    const pubToday=soShown.filter(p=>soPublished(p)&&soDate(p).toDateString()===today).length;
+    const pending=soShown.filter(p=>!soPublished(p));
     const next=pending.filter(p=>soDate(p)>now).sort((a,b)=>+soDate(a)-+soDate(b))[0];
-    return {total:soPosts.length,pubToday,remaining:pending.length,next};
-  },[soPosts]);
+    return {total:soShown.length,pubToday,remaining:pending.length,next};
+  },[soShown]);
   const [payEntries,setPayEntries]=useState<any[]>([]);
   const [payBusy,setPayBusy]=useState(false);
   const [payForm,setPayForm]=useState<any>(null); // null = form closed
@@ -4074,7 +4087,26 @@ export default function AdminDashboard() {
                   <button key={k} onClick={()=>setSoTab(k)}
                     className={`px-3.5 py-2 rounded-lg text-xs font-bold border ${soTab===k?"border-[#EA580C] bg-[#FFF7F1] text-[#b45309]":"border-gray-200 text-gray-500 bg-white hover:border-gray-300"}`}>{lbl}</button>
                 ))}
-                <span className="ml-auto text-[10px] text-gray-400 font-semibold">{soSynced?`Last synced ${fmtDT(soSynced)}`:""}</span>
+                {soTab!=="perf"&&(
+                <div className="relative ml-auto">
+                  <button onClick={()=>setSoFilterOpen(o=>!o)}
+                    className={`px-3.5 py-2 rounded-lg text-xs font-black border-2 ${soFilter!=="all"?"border-[#EA580C] bg-white text-[#b45309]":"border-gray-200 bg-white text-gray-500 hover:border-gray-300"}`}>
+                    {SO_FILTERS.find(([k])=>k===soFilter)?.[1]} ▾
+                  </button>
+                  {soFilterOpen&&(
+                    <div className="absolute right-0 top-10 bg-white border border-gray-100 rounded-xl shadow-xl min-w-[230px] p-1.5 z-30">
+                      {SO_FILTERS.map(([k,lbl])=>{
+                        const n=soPosts.filter(p=>soMatch(p,k)).length;
+                        return (
+                          <button key={k} onClick={()=>{setSoFilter(k as any);setSoFilterOpen(false);}}
+                            className={`w-full flex items-center justify-between text-xs font-bold rounded-lg px-3 py-2 ${soFilter===k?"bg-[#FFF7F1] text-[#b45309]":"text-[#0d2430] hover:bg-gray-50"}`}>
+                            <span>{lbl}</span><span className="text-[10px] font-black text-gray-400">{n}</span>
+                          </button>
+                        );})}
+                    </div>
+                  )}
+                </div>)}
+                <span className={`${soTab==="perf"?"ml-auto ":""}text-[10px] text-gray-400 font-semibold`}>{soSynced?`Last synced ${fmtDT(soSynced)}`:""}</span>
                 <button onClick={()=>loadSocial(soWeek)} className="border border-gray-200 text-gray-500 px-3 py-2 text-xs font-bold rounded-lg hover:bg-gray-50">
                   <RefreshCw className={`h-3.5 w-3.5 ${soLoading?"animate-spin":""}`}/></button>
               </div>
@@ -4095,7 +4127,7 @@ export default function AdminDashboard() {
                       {Array.from({length:7},(_,i)=>{
                         const day=new Date(soWeek.getTime()+i*86400000);
                         const isToday=day.toDateString()===new Date().toDateString();
-                        const items=soPosts.filter(p=>soDate(p).toDateString()===day.toDateString()).sort((a,b)=>+soDate(a)-+soDate(b));
+                        const items=soShown.filter(p=>soDate(p).toDateString()===day.toDateString()).sort((a,b)=>+soDate(a)-+soDate(b));
                         return (
                           <div key={i} className={`rounded-xl border p-1.5 min-h-[120px] ${isToday?"border-[#EA580C] bg-[#FFF9F4]":"border-gray-100"}`}>
                             <p className={`text-[10px] font-black text-center pb-1 ${isToday?"text-[#EA580C]":"text-gray-500"}`}>{day.toLocaleDateString("en-PH",{weekday:"short"})} <span className="font-bold text-gray-400">{day.getDate()}</span></p>
@@ -4118,7 +4150,7 @@ export default function AdminDashboard() {
                 </div>
                 <div className="bg-white border border-gray-100 rounded-xl p-4">
                   <p className="text-xs font-black text-[#0d2430] mb-2.5">Next Feed Posts</p>
-                  {soPosts.filter(p=>soType(p)!=="Story"&&(p.text||"").trim()&&!soPublished(p)&&soDate(p)>new Date())
+                  {soShown.filter(p=>soType(p)!=="Story"&&(p.text||"").trim()&&!soPublished(p)&&soDate(p)>new Date())
                     .sort((a,b)=>+soDate(a)-+soDate(b)).slice(0,3).map((p:any,i:number)=>(
                     <div key={i} className="border border-gray-100 rounded-xl p-2.5 mb-2">
                       <div className="flex gap-2.5">
@@ -4134,14 +4166,14 @@ export default function AdminDashboard() {
                       </div>
                     </div>
                   ))}
-                  {soPosts.filter(p=>soType(p)!=="Story"&&(p.text||"").trim()&&!soPublished(p)&&soDate(p)>new Date()).length===0&&
+                  {soShown.filter(p=>soType(p)!=="Story"&&(p.text||"").trim()&&!soPublished(p)&&soDate(p)>new Date()).length===0&&
                     <p className="text-[11px] text-gray-400">No upcoming feed posts this week.</p>}
                 </div>
               </div>
               )}
 
               {soTab==="plan"&&(()=>{
-                const slots=[...soPosts].sort((a,b)=>+soDate(a)-+soDate(b));
+                const slots=[...soShown].sort((a,b)=>+soDate(a)-+soDate(b));
                 const checks=slots.map(p=>({p,c:planCheck(p)}));
                 const nMis=checks.filter(x=>x.c.kind==="mismatch").length;
                 const nZero=checks.filter(x=>x.c.kind==="zero").length;
@@ -4271,7 +4303,7 @@ export default function AdminDashboard() {
 
               {(soTab==="up"||soTab==="pub")&&(
                 <div className="bg-white border border-gray-100 rounded-xl divide-y divide-gray-50">
-                  {soPosts.filter(p=>soTab==="up"?!soPublished(p):soPublished(p))
+                  {soShown.filter(p=>soTab==="up"?!soPublished(p):soPublished(p))
                     .sort((a,b)=>soTab==="up"?+soDate(a)-+soDate(b):+soDate(b)-+soDate(a)).map((p:any,i:number)=>{
                     const pub=Array.isArray(p.providers)?p.providers.find((x:any)=>x.publicUrl):null;
                     return (
@@ -4286,7 +4318,7 @@ export default function AdminDashboard() {
                           :<span className={`text-[9px] font-black px-2.5 py-1 rounded-full whitespace-nowrap ${soPublished(p)?"bg-green-50 text-green-700":"bg-amber-50 text-amber-700"}`}>{soPublished(p)?"PUBLISHED ✓":"PENDING"}</span>}
                       </div>
                     );})}
-                  {soPosts.filter(p=>soTab==="up"?!soPublished(p):soPublished(p)).length===0&&
+                  {soShown.filter(p=>soTab==="up"?!soPublished(p):soPublished(p)).length===0&&
                     <p className="text-sm text-gray-400 text-center py-8">{soLoading?"Loading…":"Nothing here this week."}</p>}
                 </div>
               )}
