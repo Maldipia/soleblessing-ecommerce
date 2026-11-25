@@ -23,6 +23,7 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, m => ({ '&': '&am
 // carry NO amounts, NO items, NO quantities, NO shipping fee, NO address — the
 // customer sees those only after opening the secure link. Do not add order
 // details here.
+export { buildShippedHtml };
 export function buildInvoiceReadyHtml(o, inviteUrl, expiresAt) {
   const firstName = esc((o.customer_name || 'there').trim().split(/\s+/)[0]);
   const expDate = expiresAt
@@ -53,6 +54,76 @@ export function buildInvoiceReadyHtml(o, inviteUrl, expiresAt) {
     <tr><td style="padding:22px 32px;text-align:center;color:#9aa0a6;font-size:11px;line-height:1.7;border-top:1px solid #f0f0f0">
       Need help? Just reply to this email, write to <a href="mailto:soleblessing@gmail.com" style="color:#8a6d25;text-decoration:none;font-weight:bold">soleblessing@gmail.com</a> or message us at <a href="https://m.me/SoleBlessingOfficial" style="color:#8a6d25;text-decoration:none;font-weight:bold">m.me/SoleBlessingOfficial</a><br>
       <b style="color:#C9A84C">SOLEBLESSING</b> &middot; soleblessingofficial.com &middot; Amadeo, Cavite, Philippines &#127477;&#127469;
+    </td></tr>
+  </table></td></tr></table></body></html>`;
+}
+
+// Courier-aware public tracking link; falls back to the site's own tracker.
+function trackingUrl(courier, ref, orderNumber) {
+  const c = String(courier || '').toLowerCase();
+  const r = encodeURIComponent(String(ref || ''));
+  if (r && c.includes('lbc')) return `https://www.lbcexpress.com/track/?tracking_no=${r}`;
+  if (r && (c.includes('j&t') || c.includes('jt'))) return `https://www.jtexpress.ph/trajectoryQuery?billcode=${r}`;
+  if (r && c.includes('flash')) return `https://www.flashexpress.ph/tracking/?se=${r}`;
+  if (r && c.includes('ninja')) return `https://www.ninjavan.co/en-ph/tracking?id=${r}`;
+  return `${SITE}/order/${encodeURIComponent(orderNumber || '')}`;
+}
+
+// "On The Way" shipping email — per Pia's Shipment Tracking mockup (Nov 25):
+// shipping details card, Track Your Package button, Delivering To, ID tip.
+function buildShippedHtml(o) {
+  const firstName = esc((o.customer_name || 'there').trim().split(/\s+/)[0]);
+  const courier = esc(o.courier || 'Courier');
+  const track = o.tracking_reference ? esc(o.tracking_reference) : '';
+  const url = trackingUrl(o.courier, o.tracking_reference, o.order_number);
+  const external = !url.startsWith(SITE);
+  const row = (label, value) => `
+    <tr><td style="padding:9px 0;border-bottom:1px solid #eeeeee;font-size:13px;color:#555555;font-weight:bold;width:110px">${label}</td>
+        <td style="padding:9px 0;border-bottom:1px solid #eeeeee;font-size:13.5px;color:#0d2430;font-weight:900">${value}</td></tr>`;
+  return `<!doctype html><html><body style="margin:0;background:#ece9e4;font-family:Arial,Helvetica,sans-serif">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px">
+  <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden">
+    <tr><td style="background:#050f12;padding:24px 32px;text-align:center">
+      <img src="${SITE}/sb-logo.jpg" width="52" height="52" alt="SoleBlessing" style="display:inline-block;width:52px;height:52px;border-radius:50%;background:#ffffff;margin-bottom:8px">
+      <div style="color:#ffffff;font-size:22px;font-weight:900;letter-spacing:.18em">SOLE<span style="color:#EA580C">BLESSING</span></div>
+      <div style="color:#8f969b;font-size:10px;letter-spacing:.3em;margin-top:6px;text-transform:uppercase">Sneakers &middot; Apparel &middot; Lifestyle</div>
+    </td></tr>
+    <tr><td style="padding:30px 32px 10px">
+      <h1 style="font-size:24px;color:#0d2430;margin:0 0 16px;text-align:center">&#128666; Your Order Is <span style="color:#EA580C">On The Way!</span></h1>
+      <p style="font-size:16px;font-weight:900;color:#0d2430;margin:0 0 4px">Great news, ${firstName}!</p>
+      <p style="font-size:13.5px;color:#555555;margin:0 0 18px;line-height:1.6">Your order has been shipped and is now in transit to you.</p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7f6f3;border-radius:12px"><tr><td style="padding:16px 20px">
+        <p style="font-size:14px;font-weight:900;color:#0d2430;margin:0 0 6px">&#128230; Shipping Details</p>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+          ${row('&#128203; Order ID:', `<span style="background:#e9e7e2;border-radius:8px;padding:2px 10px">${esc(o.order_number)}</span>`)}
+          ${row('&#128666; Courier:', courier)}
+          ${track ? row('&#124;&#124;&#124; Tracking #:', `<span style="font-family:monospace;letter-spacing:.04em">${track}</span>`) : ''}
+          ${row('&#128197; Est. Delivery:', '7&ndash;10 working days')}
+        </table>
+      </td></tr></table>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:20px 0 6px">
+        <a href="${url}" style="display:block;background:#EA580C;color:#ffffff;text-decoration:none;text-align:center;padding:16px;border-radius:999px;font-size:15px;font-weight:900;letter-spacing:.02em">&#128205; Track Your Package &#8594;</a>
+      </td></tr></table>
+      <p style="font-size:11px;color:#8a8f94;text-align:center;margin:0 0 18px;line-height:1.5">${external
+        ? `This will open ${courier} tracking:<br>${esc(url.replace('https://', ''))}`
+        : 'This will open your order tracking page on soleblessingofficial.com'}</p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-left:4px solid #EA580C;background:#fbfaf7;border-radius:10px"><tr><td style="padding:14px 18px">
+        <p style="font-size:13px;font-weight:900;color:#0d2430;margin:0 0 4px">&#128205; Delivering To</p>
+        <p style="font-size:13px;color:#444444;margin:0;line-height:1.7">
+          <b style="color:#0d2430">${esc(o.customer_name)}</b><br>
+          ${esc(o.shipping_address)}<br>
+          &#128222; ${esc(o.contact_number)}
+        </p>
+      </td></tr></table>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fdf3d8;border-radius:10px;margin:16px 0 20px"><tr><td style="padding:12px 18px;font-size:12px;color:#7a5d13;line-height:1.6">
+        &#8505;&#65039; <b>Tip:</b> Please ensure someone is available to receive the package and have a valid ID ready for verification.
+      </td></tr></table>
+    </td></tr>
+    <tr><td style="background:#0a0a0a;padding:14px 24px;text-align:center">
+      <p style="color:#ffffff;font-size:12px;margin:0">&#9993;&#65039; Questions about your delivery? Reply to this email and our team will be happy to assist you.</p>
+    </td></tr>
+    <tr><td style="padding:18px 32px;text-align:center;color:#9aa0a6;font-size:11px;line-height:1.7">
+      <b style="color:#EA580C">SOLEBLESSING</b> &middot; soleblessingofficial.com &middot; <a href="https://m.me/SoleBlessingOfficial" style="color:#8a6d25;text-decoration:none;font-weight:bold">m.me/SoleBlessingOfficial</a> &middot; Amadeo, Cavite &#127477;&#127469;
     </td></tr>
   </table></td></tr></table></body></html>`;
 }
@@ -182,11 +253,11 @@ export default async function handler(req, res) {
       html = buildInvoiceReadyHtml(o, `https://${host}/invoice/t/${tok.token}`, tok.expires_at);
     } else {
       subject = type === 'shipped'
-        ? `Shipped! ${o.courier ? o.courier + ' ' : ''}${o.tracking_reference || ''} — ${o.order_number} · SoleBlessing`
+        ? `Your order is on the way! ${o.courier ? o.courier + ' ' : ''}${o.tracking_reference || ''} — ${o.order_number} · SoleBlessing`
         : type === 'payment_verified'
         ? `Payment confirmed — ${o.order_number} · SoleBlessing`
         : `Order received — ${o.order_number} · SoleBlessing`;
-      html = buildHtml(o, type);
+      html = type === 'shipped' ? buildShippedHtml(o) : buildHtml(o, type);
     }
 
     // NATIVE send — no GAS. Status stamps happen ONLY on a confirmed send.
