@@ -97,7 +97,7 @@ function buildShippedHtml(o) {
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
           ${row('&#128203; Order ID:', `<span style="background:#e9e7e2;border-radius:8px;padding:2px 10px">${esc(o.order_number)}</span>`)}
           ${row('&#128666; Courier:', courier)}
-          ${track ? row('&#124;&#124;&#124; Tracking #:', `<span style="font-family:monospace;letter-spacing:.04em">${track}</span>`) : ''}
+          ${track ? row('&#124;&#124;&#124; Tracking #:', `<span style="font-family:monospace;letter-spacing:.04em;background:#ffffff;border:1px solid #e4e2dd;border-radius:8px;padding:3px 10px;display:inline-block">${track}</span>&nbsp;<a href="${url}" title="Open tracking" style="display:inline-block;border:1px solid #e4e2dd;border-radius:8px;padding:3px 8px;text-decoration:none;color:#555555;background:#ffffff;vertical-align:middle">&#10697;</a>`) : ''}
           ${row('&#128197; Est. Delivery:', '7&ndash;10 working days')}
         </table>
       </td></tr></table>
