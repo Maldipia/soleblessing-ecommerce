@@ -2011,8 +2011,6 @@ export default function AdminDashboard() {
   const intakeAll=false; // Latest Inventory is the scan log ONLY — full stock lives in Products & Inventory
   // Redesign (Pia's mock) + her correction: sortable columns, but NO pagination — scroll down only
   const [intakeSort,setIntakeSort]=useState<{k:string;d:1|-1}>({k:"created_at",d:-1});
-  // View dropdown (Pia's approved mock): Simple List = no photos, no SRP, no SALE, no COST
-  const [intakeView,setIntakeView]=useState<"full"|"simple">("full");
   const [intakeShown,setIntakeShown]=useState(100);
   const loadIntake=async()=>{
     setIntakeLoading(true);
@@ -4360,7 +4358,6 @@ export default function AdminDashboard() {
                   <span className="text-lg font-black text-white">{scanTotals.pairs}</span>
                   <span className="text-[10px] text-white/40">pairs</span>
                 </div>
-                {intakeView==="full"&&<>
                 <div className="flex items-baseline gap-2">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">Total SRP</span>
                   <span className="text-lg font-normal tabular-nums text-[#C9A84C]">₱{scanTotals.srp.toLocaleString()}</span>
@@ -4370,7 +4367,7 @@ export default function AdminDashboard() {
                   <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">Total Cost</span>
                   <span className="text-lg font-normal tabular-nums text-white">₱{scanTotals.cost.toLocaleString()}</span>
                   <span className="text-[10px] text-white/40">{scanTotals.costed} of {scanTotals.pairs} costed</span>
-                </div></>}
+                </div>
               </div>
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div className="flex gap-2 flex-wrap">
@@ -4383,11 +4380,6 @@ export default function AdminDashboard() {
                   <select value={intakeCond} onChange={e=>setIntakeCond(e.target.value)}
                     className="border border-gray-200 rounded-lg px-2.5 py-2 text-xs font-semibold text-gray-600 outline-none focus:border-[#EA580C] bg-white">
                     {["All","Good","Stained","Missing pair","Unknown"].map(c=><option key={c} value={c}>{c==="All"?"All Categories":c}</option>)}
-                  </select>
-                  <select value={intakeView} onChange={e=>setIntakeView(e.target.value as any)}
-                    className={`rounded-lg px-2.5 py-2 text-xs font-black outline-none bg-white ${intakeView==="simple"?"border-2 border-[#EA580C] text-[#b45309]":"border border-gray-200 text-gray-600 focus:border-[#EA580C]"}`}>
-                    <option value="full">💰 Full View</option>
-                    <option value="simple">📋 Simple List</option>
                   </select>
                   <span className="text-[11px] font-bold text-gray-400 self-center">📷 {scannedCount} scanned pair{scannedCount===1?"":"s"}</span>
                 </div>
@@ -4406,9 +4398,9 @@ export default function AdminDashboard() {
               </div>
 
               <div className="bg-white border border-gray-100 rounded-xl overflow-auto max-h-[68vh]">
-                <table className={`w-full text-sm ${intakeView==="simple"?"min-w-[880px]":"min-w-[1120px]"}`}>
+                <table className="w-full text-sm min-w-[1120px]">
                   <thead className="sticky top-0 bg-white z-10 shadow-[0_1px_0_0_rgba(0,0,0,.06)]"><tr className="text-[10px] uppercase tracking-wider text-gray-400 text-left">
-                    {intakeView==="full"&&<th className="px-3 py-2.5 font-semibold">📸</th>}
+                    <th className="px-3 py-2.5 font-semibold">📸</th>
                     {thSort("item_code","Item Code")}
                     {thSort("brand","Brand")}
                     {thSort("model","Model")}
@@ -4417,10 +4409,9 @@ export default function AdminDashboard() {
                     <th className="px-2 font-semibold">EUR</th>
                     <th className="px-2 font-semibold">CM</th>
                     <th className="px-2 font-semibold">Barcode</th>
-                    {intakeView==="full"&&<>
                     {thSort("srp","SRP ₱","bg-[#C9A84C]/10")}
                     {thSort("selling_price","Sale ₱","bg-green-50")}
-                    {thSort("unit_cost","Cost ₱")}</>}
+                    {thSort("unit_cost","Cost ₱")}
                     {thSort("condition","Status")}
                     <th className="px-2 font-semibold">By</th>
                     {thSort("created_at","Added")}
@@ -4433,12 +4424,12 @@ export default function AdminDashboard() {
                       const img=imgByCode.get(r.item_code);
                       return (
                         <tr key={r.item_code} className="hover:bg-gray-50/60">
-                          {intakeView==="full"&&<td className="px-3 py-2">{img
+                          <td className="px-3 py-2">{img
                             ?<img src={img} title="Tap to zoom" onClick={()=>setPhotoZoom(img)}
                                style={{width:84,height:84,minWidth:84,maxWidth:84,aspectRatio:"1/1",objectFit:"cover",borderRadius:12,cursor:"zoom-in",flexShrink:0,display:"block"}}/>
-                            :<span className="text-gray-300">—</span>}</td>}
-                          <td className={`px-2 font-mono font-black text-xs text-[#0d2430] ${intakeView==="simple"?"py-2.5":""}`}>{r.item_code}</td>
-                          <td className="px-2 text-xs">{intakeView==="full"?<BrandMark brand={r.brand}/>:<span className="font-bold text-[#0d2430] uppercase text-[11px]">{r.brand||"—"}</span>}</td>
+                            :<span className="text-gray-300">—</span>}</td>
+                          <td className="px-2 font-mono font-black text-xs text-[#0d2430]">{r.item_code}</td>
+                          <td className="px-2 text-xs"><BrandMark brand={r.brand}/></td>
                           <td className="px-2 text-xs font-medium max-w-[180px] truncate">{(()=>{
                             // the stored name is "Brand + Model" (the store needs it) — next to
                             // the Brand column, show only the model part
@@ -4454,7 +4445,6 @@ export default function AdminDashboard() {
                           <td className="px-2 font-mono text-[10px] text-gray-400">{r.barcode?("…"+String(r.barcode).slice(-6)):"—"}</td>
                           {/* SRP / Sale / Cost — click any to edit in place. yellow ✦ = SRP didn't come from the box label */}
                           {/* money typography = the Cost column's (Pia: regular weight, tabular numerals, no bold) */}
-                          {intakeView==="full"&&<>
                           {priceCell(r,"srp",`px-2 text-xs tabular-nums ${/srp updated/i.test(r.notes||"")?"bg-yellow-200 text-yellow-900":"bg-[#C9A84C]/[.06]"}`,
                             <>{r.srp?((r.srp/100).toLocaleString("en-PH")):"—"}{/srp updated/i.test(r.notes||"")?" ✦":""}</>)}
                           {/* Sale ₱ = selling_price — the website price, NOT the SRP */}
@@ -4462,7 +4452,7 @@ export default function AdminDashboard() {
                             <>{r.selling_price?((r.selling_price/100).toLocaleString("en-PH")):"—"}</>)}
                           {/* Cost ₱ = unit_cost — internal only, never sent to the website */}
                           {priceCell(r,"unit_cost","px-2 text-xs tabular-nums text-gray-500",
-                            <>{r.unit_cost>0?((r.unit_cost/100).toLocaleString("en-PH")):"0"}</>)}</>}
+                            <>{r.unit_cost>0?((r.unit_cost/100).toLocaleString("en-PH")):"0"}</>)}
                           <td className="px-2"><span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${condCls}`}>{cond}</span>
                             {r.status==="Sold"&&<span className="ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-gray-800 text-white">Sold</span>}</td>
                           <td className="px-2">{r.added_by
@@ -4490,7 +4480,7 @@ export default function AdminDashboard() {
               {sortedIntake.length>0&&(
                 <p className="text-xs text-gray-500 tabular-nums px-1">{sortedIntake.length.toLocaleString()} item{sortedIntake.length===1?"":"s"}</p>
               )}
-              <p className="text-[10px] text-gray-400">Newest first. <b>Good/Stained</b> are sellable once priced · <b>Missing pair/Unknown</b> never reach the website{intakeView==="full"&&<> · <b>Sale ₱</b> is the website price (SRP is the compare-at price) · <b>Cost ₱</b> is internal — it never reaches the website</>} · ✏️ edits the pair right here (scans never join the sheet inventory) · QR reprints the box sticker.</p>
+              <p className="text-[10px] text-gray-400">Newest first. <b>Good/Stained</b> are sellable once priced · <b>Missing pair/Unknown</b> never reach the website · <b>Sale ₱</b> is the website price (SRP is the compare-at price) · <b>Cost ₱</b> is internal — it never reaches the website · ✏️ edits the pair right here (scans never join the sheet inventory) · QR reprints the box sticker.</p>
             </div>
           )}
 
