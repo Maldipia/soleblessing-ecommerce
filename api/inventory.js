@@ -113,6 +113,8 @@ export default async function handler(req, res) {
         price: fb.sale_price || null, percent: fb.percent || null,
         origPrice, imageUrl, productName: prodName,
         sku: (fb.skus || [])[0] || '', search: ((fb.skus || [])[0] || '').toLowerCase().replace(/\s+/g, '-'),
+        // landing-page stock urgency: "X of Y pairs left"
+        sold: fb.sold || 0, stockLimit: fb.stock_limit || null, totalPairs: (fb.item_codes || []).length,
       }});
     }
 

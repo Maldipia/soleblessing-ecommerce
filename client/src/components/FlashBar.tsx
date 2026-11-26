@@ -44,7 +44,8 @@ export default function FlashBar() {
   if (!flash || left <= 0) return null;
 
   const h = Math.floor(left / 3600000), m = Math.floor((left % 3600000) / 60000), s = Math.floor((left % 60000) / 1000);
-  const go = () => setLocation(`/products?search=${encodeURIComponent(flash.search || flash.sku)}`);
+  const go = () => setLocation("/flash-sale");
+  if (location === "/flash-sale") return null; // the landing page has its own hero/countdown
   const flashPrice = flash.price || (flash.origPrice && flash.percent ? Math.floor(flash.origPrice * (100 - flash.percent) / 100) : 0);
 
   return (

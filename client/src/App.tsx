@@ -10,6 +10,7 @@ import { CartProvider } from "./contexts/CartContext";
 import { WishlistProvider } from "./pages/Wishlist";
 import Home from "./pages/Home";
 import Products from "./pages/Products";
+import FlashSale from "./pages/FlashSale";
 import ProductDetail from "./pages/ProductDetail";
 import Cart from "./pages/Cart";
 import Checkout from "./pages/Checkout";
@@ -64,6 +65,7 @@ function Router() {
       <Switch>
         <Route path={"/"} component={Home} />
         <Route path={"/products"} component={Products} />
+        <Route path={"/flash-sale"} component={FlashSale} />
         <Route path={"/clearance"} component={ClearanceSale} />
         <Route path={"/shoe-cleaner/play-and-win"} component={PlayAndWin} />
         <Route path={"/shoe-cleaner"} component={ShoeCleaner} />
