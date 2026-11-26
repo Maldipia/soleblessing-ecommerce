@@ -67,8 +67,19 @@ function flush() {
   try { fetch("/api/track", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {}); } catch {}
 }
 
+// Staff/bot guard (same rules as the Metricool tracker): automated browsers
+// (navigator.webdriver — bots/tests) and any browser that has ever logged into
+// the admin (sb_owner, set on admin auth) are never counted. Checked per event
+// so logging in mid-session mutes immediately.
+const isMuted = () => {
+  try { return !!(navigator as any).webdriver || localStorage.getItem("sb_owner") === "1"; }
+  catch { return false; }
+};
+
 export function track(t: string, extra: Omit<Ev, "t"> = {}) {
   try {
+    if (isMuted()) return;
+    if (typeof extra.p === "string" && extra.p.startsWith("/admin")) return;
     queue.push({ t, ...extra });
     if (queue.length >= 20) flush();
     else if (!timer) timer = setTimeout(flush, 5000);
