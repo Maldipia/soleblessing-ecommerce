@@ -2318,7 +2318,7 @@ export default function AdminDashboard() {
       const r=await fetch("/api/admin",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
       const d=await r.json();
       if(!r.ok) throw new Error(d.error||"launch failed");
-      setFsMsg("✅ Campaign launched!");setFsPick(null);setFsSkuQ("");setFsPrice("");
+      setFsMsg(`✅ Campaign launched! 🌐 View it: /products?search=${String((d.campaign?.skus||[])[0]||"").toLowerCase().replace(/\s+/g,"-")}`);setFsPick(null);setFsSkuQ("");setFsPrice("");
       loadFlash();
     }catch(e:any){setFsMsg("⚠ "+String(e.message||e));}
     setFsBusy(false);
@@ -4166,8 +4166,12 @@ export default function AdminDashboard() {
                         Sold: <b>{f.sold||0}</b>{f.stock_limit?` / limit ${f.stock_limit}`:""} · Flash revenue: <b>{peso(f.revenue||0)}</b> · Banner: {f.banner?"ON":"off"}
                       </div>
                     </div>
-                    <button onClick={()=>fsEnd(f.id)} disabled={fsBusy}
-                      className="text-[10px] font-black text-red-600 border-2 border-red-600 rounded-lg px-3 py-1.5 hover:bg-red-600 hover:text-white transition">■ END NOW</button>
+                    <div className="flex items-center gap-2">
+                      <a href={`/products?search=${encodeURIComponent(String((f.skus||[])[0]||"").toLowerCase().replace(/\s+/g,"-"))}`} target="_blank" rel="noreferrer"
+                        className="text-[10px] font-black text-white bg-[#0d2430] rounded-lg px-3 py-1.5 hover:opacity-90">🌐 View on website ↗</a>
+                      <button onClick={()=>fsEnd(f.id)} disabled={fsBusy}
+                        className="text-[10px] font-black text-red-600 border-2 border-red-600 rounded-lg px-3 py-1.5 hover:bg-red-600 hover:text-white transition">■ END NOW</button>
+                    </div>
                   </div>
                 </div>
               ))}
