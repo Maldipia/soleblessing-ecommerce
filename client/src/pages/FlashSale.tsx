@@ -90,11 +90,11 @@ export default function FlashSale() {
     if (!selected) { toast.error("Please select a size first"); return; }
     addItem({
       id: selected.itemCode, sku: single.sku, name: single.name,
-      brand: String(single.sku || "").split(/[^a-zA-Z]/)[0] || "Brand",
+      brand: selected.brand || single.pairs?.[0]?.brand || "SoleBlessing",
       size: selected.size, price: selected.sellingPrice > 0 ? selected.sellingPrice : selected.srp,
       imageUrl: selected.imageUrl || single.imageUrl || undefined,
     });
-    if (goCheckout) { setLocation("/order"); return; }
+    if (goCheckout) { setLocation("/checkout"); return; }
     setAdded(true); setTimeout(() => setAdded(false), 2500);
   };
 
