@@ -10,6 +10,29 @@ import { useCart } from "@/contexts/CartContext";
 import { ReviewList } from "@/components/ReviewList";
 import { ReviewForm } from "@/components/ReviewForm";
 
+// ⚡ ticking countdown + urgency line, shown only while a flash campaign covers this pair
+function FlashCountdown({ endsAt }: { endsAt: string }) {
+  const [left, setLeft] = useState(() => Math.max(new Date(endsAt).getTime() - Date.now(), 0));
+  useEffect(() => {
+    const t = setInterval(() => setLeft(Math.max(new Date(endsAt).getTime() - Date.now(), 0)), 1000);
+    return () => clearInterval(t);
+  }, [endsAt]);
+  if (left <= 0) return null;
+  const h = Math.floor(left / 3600000), m = Math.floor((left % 3600000) / 60000), s = Math.floor((left % 60000) / 1000);
+  const two = (n: number) => String(n).padStart(2, "0");
+  return (
+    <div className="mb-2" data-testid="flash-countdown">
+      <div className="inline-flex items-center gap-1.5 bg-[#0a0a0a] text-white rounded-xl px-3.5 py-2">
+        <span className="text-[10px] font-black uppercase tracking-[.08em] text-red-400 mr-1">⚡ Sale ends in</span>
+        <span className="text-[16px] font-black tabular-nums">{two(h)}</span><span className="text-[10px] opacity-60">h</span>
+        <span className="text-[16px] font-black tabular-nums">{two(m)}</span><span className="text-[10px] opacity-60">m</span>
+        <span className="text-[16px] font-black tabular-nums">{two(s)}</span><span className="text-[10px] opacity-60">s</span>
+      </div>
+      <p className="text-[11px] font-bold text-red-600 mt-1.5">⏳ Offer ends when the timer hits zero · While stocks last · Price is locked once you order</p>
+    </div>
+  );
+}
+
 export default function InventoryDetail() {
   const params = useParams();
   const [, setLocation] = useLocation();
@@ -90,6 +113,7 @@ export default function InventoryDetail() {
   );
 
   const discount = selectedProduct?.discount || 0;
+  const flash = (selectedProduct as any)?.flash || null; // active flash campaign on this pair
   const brand = product.sku.split(/[^a-zA-Z]/)[0] || "Brand";
   const availableCount = allSizes.filter(s => s.status === "AVAILABLE").length;
   const fmt = (c: number) => `₱${Math.round(c / 100).toLocaleString("en-PH")}`;
@@ -115,7 +139,8 @@ export default function InventoryDetail() {
                 <span className="text-[9.5px] font-black tracking-[.1em] uppercase">Scan In-Store</span>
               </div>
               <div className="absolute top-3 left-3 flex flex-col gap-1.5 items-start">
-                {discount > 0 && <span className="bg-[#FF5A1F] text-white text-[9px] font-black px-2.5 py-1 uppercase rounded-full tracking-[.06em]">Sale {discount}% Off</span>}
+                {flash ? <span className="bg-red-600 text-white text-[9px] font-black px-2.5 py-1 uppercase rounded-full tracking-[.06em] animate-pulse">⚡ Flash Sale {discount > 0 ? `${discount}% Off` : ""}</span>
+                  : discount > 0 && <span className="bg-[#FF5A1F] text-white text-[9px] font-black px-2.5 py-1 uppercase rounded-full tracking-[.06em]">Sale {discount}% Off</span>}
                 {availableCount === 1 && <span className="bg-white text-[#0a0a0a] border-[1.5px] border-[#0a0a0a] text-[9px] font-black px-2.5 py-1 uppercase rounded-full tracking-[.06em]">Last Pair</span>}
                 {availableCount > 1 && availableCount <= 3 && <span className="bg-[#0a0a0a] text-white text-[9px] font-black px-2.5 py-1 uppercase rounded-full tracking-[.06em]">Low Stock</span>}
               </div>
@@ -142,6 +167,15 @@ export default function InventoryDetail() {
                 <span className="bg-[#FF5A1F] text-white text-[11px] font-black px-2.5 py-1 rounded-full">-{discount}%</span>
               </>}
             </div>
+
+            {flash && selectedProduct.srp > bigPrice && (
+              <div className="flex items-center gap-2 mb-2 flex-wrap" data-testid="flash-save">
+                <span className="bg-red-50 text-red-600 text-[11px] font-black px-3 py-1 rounded-full">
+                  YOU SAVE {fmt(selectedProduct.srp - bigPrice)}{discount > 0 ? ` · ${discount}% OFF` : ""}
+                </span>
+              </div>
+            )}
+            {flash && <FlashCountdown endsAt={flash.endsAt} />}
 
             <div className="flex items-center gap-3 mb-6">
               <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${selectedProduct.status === "AVAILABLE" ? "bg-[#e8f5ee] text-[#1a7f4e]" : "bg-red-50 text-red-600"}`}>
