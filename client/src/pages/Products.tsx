@@ -56,6 +56,7 @@ export default function Products() {
           sizes: sz ? [sz] : [],
           rawSizes: [item.size],
           discount: item.discount,
+          flash: (item as any).flash || null,
           addedAt: item.itemCode,
         });
       } else {
@@ -63,6 +64,7 @@ export default function Products() {
         if (sz && !p.sizes.includes(sz)) p.sizes.push(sz);
         if (!p.rawSizes.includes(item.size)) p.rawSizes.push(item.size);
         if (!p.imageUrl && item.imageUrl) p.imageUrl = item.imageUrl;
+        if (!p.flash && (item as any).flash) p.flash = (item as any).flash;
       }
     });
     return Array.from(grouped.values());
@@ -219,7 +221,11 @@ export default function Products() {
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-5xl opacity-20">👟</div>
                     )}
-                    {p.discount > 0 && (
+                    {p.flash ? (
+                      <span className="absolute top-2 left-2 bg-red-600 text-white text-[8.5px] font-black tracking-[.06em] px-2 py-1 rounded-full animate-pulse">
+                        ⚡ FLASH {p.discount > 0 ? `-${p.discount}%` : ""}
+                      </span>
+                    ) : p.discount > 0 && (
                       <span className="absolute top-2 left-2 bg-[#FF5A1F] text-white text-[8.5px] font-black tracking-[.06em] px-2 py-1 rounded-full">
                         SALE
                       </span>

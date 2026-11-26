@@ -49,6 +49,20 @@ function convertDriveUrl(url) {
   return url;
 }
 
+// Flash sales (Promotions module): the ACTIVE campaign's price is applied here
+// server-side, so every page, the cart and the catalog all see the flash price.
+// Checkout re-validates in sb_place_order, so stale carts can never keep it.
+const normCode = s => String(s || '').toUpperCase().replace(/\s+/g, '');
+async function fetchActiveFlash(sbAuth) {
+  const now = new Date().toISOString();
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/sb_flash_sales?status=eq.active&starts_at=lte.${encodeURIComponent(now)}&ends_at=gt.${encodeURIComponent(now)}&order=starts_at.desc`, { headers: sbAuth });
+  if (!r.ok) return [];
+  const rows = await r.json().catch(() => []);
+  // stock-limit reached → campaign no longer prices anything
+  return (Array.isArray(rows) ? rows : []).filter(f => f.stock_limit == null || (f.sold || 0) < f.stock_limit);
+}
+const flashPriceOf = (f, basePrice) => f.sale_price || Math.max(Math.floor(basePrice * (100 - (f.percent || 0)) / 100), 0);
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
@@ -75,10 +89,38 @@ export default async function handler(req, res) {
       return out;
     }
 
-    const [invRes, imgRes] = await Promise.allSettled([
+    // Fast path for the site-wide banner: ?flash=1 returns only the active
+    // banner-enabled campaign (cheap — no inventory scan).
+    if (req.query && req.query.flash) {
+      res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=60');
+      const actives = await fetchActiveFlash(sbAuth);
+      const fb = actives.find(f => f.banner);
+      if (!fb) return res.status(200).json({ flash: null });
+      let origPrice = 0, imageUrl = '', prodName = '';
+      try {
+        const code = (fb.item_codes || [])[0] || '';
+        if (code) {
+          const r = await fetch(`${SUPABASE_URL}/rest/v1/sb_inventory?item_code=eq.${encodeURIComponent(code)}&select=name,srp,selling_price&limit=1`, { headers: sbAuth });
+          const [row] = await r.json().catch(() => []);
+          if (row) { origPrice = row.srp || row.selling_price || 0; prodName = row.name || ''; }
+          const ri = await fetch(`${SUPABASE_URL}/rest/v1/product_image_cache?item_code=eq.${encodeURIComponent(code)}&sync_status=eq.OK&is_box=not.is.true&select=supabase_url&limit=1`, { headers: sbAuth });
+          const [img] = await ri.json().catch(() => []);
+          if (img) imageUrl = img.supabase_url || '';
+        }
+      } catch {}
+      return res.status(200).json({ flash: {
+        name: fb.name, endsAt: fb.ends_at,
+        price: fb.sale_price || null, percent: fb.percent || null,
+        origPrice, imageUrl, productName: prodName,
+        sku: (fb.skus || [])[0] || '', search: ((fb.skus || [])[0] || '').toLowerCase().replace(/\s+/g, '-'),
+      }});
+    }
+
+    const [invRes, imgRes, flashRows] = await Promise.allSettled([
       fetchAll('sb_inventory?select=*&order=item_code.asc'),
       // is_box=true are warehouse box/label scans — never storefront material
       fetchAll('product_image_cache?select=item_code,supabase_url&sync_status=eq.OK&is_box=not.is.true&order=item_code.asc'),
+      fetchActiveFlash(sbAuth),
     ]);
 
     if (invRes.status !== 'fulfilled') {
@@ -91,6 +133,14 @@ export default async function handler(req, res) {
       imgRes.value.forEach(r => { if (r.supabase_url) cdnImages.set(r.item_code, r.supabase_url); });
     }
 
+    // normCode(item_code) → its active flash sale (first match wins)
+    const flashByCode = new Map();
+    const actives = flashRows.status === 'fulfilled' ? flashRows.value : [];
+    for (const f of actives) for (const c of (f.item_codes || [])) {
+      const k = normCode(c);
+      if (!flashByCode.has(k)) flashByCode.set(k, f);
+    }
+
     const products = [];
     for (const r of rows) {
       const status = (r.status || '').toUpperCase().trim();
@@ -101,23 +151,31 @@ export default async function handler(req, res) {
       // Intake condition gate: Missing pair / Unknown are held off the store
       const cond = (r.condition || '').toUpperCase().trim();
       if (cond === 'MISSING PAIR' || cond === 'UNKNOWN') continue;
-      const price = r.selling_price || r.srp || 0;
-      if (!price) continue;
+      const basePrice = r.selling_price || r.srp || 0;
+      if (!basePrice) continue;
       if ((r.stock ?? 1) <= 0) continue;
 
+      // Active flash sale covering this pair? Flash price becomes the selling
+      // price everywhere (cards, cart, checkout display). SRP stays for the
+      // strikethrough, so the discount % recomputes automatically.
+      const fsHit = flashByCode.get(normCode(r.item_code));
+      const flashPrice = fsHit ? flashPriceOf(fsHit, basePrice) : 0;
+
       products.push({
+        ...(fsHit && flashPrice > 0 ? { flash: { name: fsHit.name, endsAt: fsHit.ends_at, origPrice: basePrice } } : {}),
         itemCode: r.item_code,
         name: r.name,
         sku: r.sku || '',
         size: r.size || '',
-        sellingPrice: r.selling_price || 0,
+        sellingPrice: (fsHit && flashPrice > 0) ? flashPrice : (r.selling_price || 0),
         srp: r.srp || 0,
         status: status || 'AVAILABLE',
         imageUrl: cdnImages.get(r.item_code) || convertDriveUrl(r.drive_url || ''),
         productsUrl: r.drive_url || '',
         stock: r.stock ?? 1,
         discount: (() => {
-          const sp = r.srp || 0, pp = r.selling_price || 0;
+          const sp = r.srp || 0;
+          const pp = (fsHit && flashPrice > 0) ? flashPrice : (r.selling_price || 0);
           if (!sp || !pp || pp >= sp) return 0;
           return Math.round(((sp - pp) / sp) * 100);
         })(),

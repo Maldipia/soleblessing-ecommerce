@@ -203,6 +203,85 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true, posts: rows.map((x) => x.raw), syncedAt: lastSync });
   }
 
+  // ⚡ Promotions (flash sales) — campaign manager, OWNER/manager only.
+  // Prices are NEVER edited in inventory; campaigns overlay them. Checkout
+  // enforcement lives in sb_place_order (server-side), the site applies the
+  // flash price via /api/inventory.
+  if (op === 'flash') {
+    if (staff && staff.role !== 'manager') return res.status(403).json({ error: 'not allowed' });
+    const action = String(body.action || 'list');
+    const nowIso = () => new Date().toISOString();
+
+    if (action === 'list') {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/sb_flash_sales?select=*&order=created_at.desc&limit=100`, { headers: H_SVC() });
+      if (!r.ok) return res.status(502).json({ error: 'flash table unavailable — is the flash_sales_v1 migration applied?' });
+      const rows = await r.json();
+      const now = Date.now();
+      const state = (f) => f.status !== 'active' ? f.status
+        : now < new Date(f.starts_at).getTime() ? 'scheduled'
+        : now >= new Date(f.ends_at).getTime() ? 'ended'
+        : (f.stock_limit != null && (f.sold || 0) >= f.stock_limit) ? 'soldout' : 'live';
+      return res.status(200).json({ ok: true, campaigns: rows.map(f => ({ ...f, state: state(f) })) });
+    }
+
+    if (action === 'create') {
+      const name = String(body.name || '').trim();
+      const codes = Array.isArray(body.item_codes) ? body.item_codes.map(c => String(c).trim()).filter(Boolean) : [];
+      const skus = Array.isArray(body.skus) ? body.skus.map(s => String(s).trim()).filter(Boolean) : [];
+      const salePrice = Number(body.sale_price) > 0 ? Math.round(Number(body.sale_price)) : null; // centavos
+      const percent = Number(body.percent) >= 1 && Number(body.percent) <= 90 ? Math.round(Number(body.percent)) : null;
+      const hours = Math.min(Math.max(Number(body.hours) || 12, 1), 24 * 14);
+      const startsAt = body.starts_at ? new Date(body.starts_at) : new Date();
+      const stockLimit = Number(body.stock_limit) > 0 ? Math.round(Number(body.stock_limit)) : null;
+      const banner = body.banner !== false;
+      if (!name) return res.status(400).json({ error: 'name required' });
+      if (!codes.length) return res.status(400).json({ error: 'item_codes required' });
+      if (!salePrice && !percent) return res.status(400).json({ error: 'sale_price (centavos) or percent (1-90) required' });
+      if (isNaN(startsAt)) return res.status(400).json({ error: 'bad starts_at' });
+      const endsAt = new Date(startsAt.getTime() + hours * 3600000);
+
+      // SAFEGUARD: no stacking — reject overlap with any other non-ended campaign
+      const r0 = await fetch(`${SUPABASE_URL}/rest/v1/sb_flash_sales?status=eq.active&ends_at=gt.${encodeURIComponent(nowIso())}&select=id,name,item_codes,starts_at,ends_at`, { headers: H_SVC() });
+      const existing = r0.ok ? await r0.json() : [];
+      const norm = (s) => String(s || '').toUpperCase().replace(/\s+/g, '');
+      const mine = new Set(codes.map(norm));
+      for (const f of existing) {
+        const tOverlap = new Date(f.starts_at) < endsAt && new Date(f.ends_at) > startsAt;
+        if (tOverlap && (f.item_codes || []).some(c => mine.has(norm(c)))) {
+          return res.status(409).json({ error: `overlaps campaign "${f.name}" — end it first or pick other items` });
+        }
+      }
+      // items must exist & be priced (flash needs a base price for % + display)
+      const inList = codes.map(c => encodeURIComponent(c)).join(',');
+      const r1 = await fetch(`${SUPABASE_URL}/rest/v1/sb_inventory?item_code=in.(${inList})&select=item_code,selling_price,srp,status`, { headers: H_SVC() });
+      const found = r1.ok ? await r1.json() : [];
+      if (found.length !== codes.length) return res.status(400).json({ error: `only ${found.length} of ${codes.length} item codes found in inventory` });
+      const unpriced = found.filter(x => !(x.selling_price || x.srp));
+      if (unpriced.length) return res.status(400).json({ error: `unpriced items: ${unpriced.map(x => x.item_code).join(', ')}` });
+
+      const ins = await fetch(`${SUPABASE_URL}/rest/v1/sb_flash_sales`, {
+        method: 'POST', headers: { ...H_SVC(), 'Content-Type': 'application/json', Prefer: 'return=representation' },
+        body: JSON.stringify({ name, promo_type: salePrice ? 'flash' : 'percent', item_codes: codes, skus, sale_price: salePrice, percent, starts_at: startsAt.toISOString(), ends_at: endsAt.toISOString(), stock_limit: stockLimit, banner, status: 'active' }),
+      });
+      const [row] = ins.ok ? await ins.json() : [];
+      if (!row) return res.status(502).json({ error: 'create failed' });
+      return res.status(200).json({ ok: true, campaign: row });
+    }
+
+    if (action === 'end' || action === 'cancel') {
+      const id = String(body.id || '');
+      if (!/^[0-9a-f-]{36}$/.test(id)) return res.status(400).json({ error: 'bad id' });
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/sb_flash_sales?id=eq.${id}`, {
+        method: 'PATCH', headers: { ...H_SVC(), 'Content-Type': 'application/json', Prefer: 'return=representation' },
+        body: JSON.stringify({ status: action === 'cancel' ? 'cancelled' : 'ended', ends_at: nowIso() }),
+      });
+      const [row] = r.ok ? await r.json() : [];
+      if (!row) return res.status(502).json({ error: 'end failed' });
+      return res.status(200).json({ ok: true, campaign: row });
+    }
+    return res.status(400).json({ error: 'unknown flash action' });
+  }
+
   // Entries are REAL database records — balances everywhere compute from them.
   // Any authenticated staff can RECORD (with their identity stamped);
   // VERIFY / REJECT / REMOVE stay owner-manager only, mirroring the existing

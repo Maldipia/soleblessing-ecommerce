@@ -38,6 +38,7 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import OrderForm from "./pages/OrderForm";
 import Header from "./components/Header";
+import FlashBar from "./components/FlashBar";
 import Footer from "./components/Footer";
 import CartDrawer from "./components/CartDrawer";
 import ChatWidget from "./components/ChatWidget";
@@ -58,6 +59,7 @@ function Router() {
 
   return (
     <>
+      {!isBare && <FlashBar />}
       {!isBare && <Header />}
       <Switch>
         <Route path={"/"} component={Home} />

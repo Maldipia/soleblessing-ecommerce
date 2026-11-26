@@ -48,7 +48,7 @@ import { useInventory, refreshInventory } from "@/hooks/useInventory";
 import AdminPromos from "./Promos";
 import ShoeCleanerCampaign from "./ShoeCleanerCampaign";
 
-type Section = "overview"|"products"|"orders"|"customers"|"intake"|"reports"|"promos"|"campaign"|"social"|"settings"|"analytics"|"system";
+type Section = "overview"|"products"|"orders"|"customers"|"intake"|"reports"|"promos"|"flash"|"campaign"|"social"|"settings"|"analytics"|"system";
 
 const ADMIN_KEY = "sb_admin_v1";
 const fmt = (c: number) => `₱${(c/100).toLocaleString("en-PH")}`;
@@ -2261,6 +2261,80 @@ export default function AdminDashboard() {
   };
   useEffect(()=>{ if(section==="social") loadSocial(soWeek); },[section,soWeek]); // eslint-disable-line
   useEffect(()=>{ if(section==="social"&&!intakeRows.length) loadIntake(); },[section]); // eslint-disable-line — plan tab price-checks against inventory
+
+  // ─── ⚡ Promotions (flash sales) ──────────────────────────────────────────
+  const [fsRows,setFsRows]=useState<any[]>([]);
+  const [fsLoading,setFsLoading]=useState(false);
+  const [fsErr,setFsErr]=useState("");
+  const [fsName,setFsName]=useState("12-Hour Super Sale");
+  const [fsType,setFsType]=useState<"flash"|"percent">("flash");
+  const [fsSkuQ,setFsSkuQ]=useState("");
+  const [fsPick,setFsPick]=useState<any|null>(null);
+  const [fsPrice,setFsPrice]=useState("");   // pesos
+  const [fsPercent,setFsPercent]=useState("20");
+  const [fsHours,setFsHours]=useState(12);
+  const [fsLimit,setFsLimit]=useState("");
+  const [fsBanner,setFsBanner]=useState(true);
+  const [fsBusy,setFsBusy]=useState(false);
+  const [fsMsg,setFsMsg]=useState("");
+  const [,fsTick]=useState(0);
+  const loadFlash=async()=>{
+    setFsLoading(true);setFsErr("");
+    try{
+      const r=await fetch("/api/admin",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({...adminCred(),op:"flash",action:"list"})});
+      const d=await r.json();
+      if(!r.ok) throw new Error(d.error||"load failed");
+      setFsRows(d.campaigns||[]);
+    }catch(e:any){setFsErr(String(e.message||e));}
+    setFsLoading(false);
+  };
+  useEffect(()=>{ if(section==="flash"){ loadFlash(); if(!intakeRows.length) loadIntake(); } },[section]); // eslint-disable-line
+  useEffect(()=>{ if(section!=="flash")return; const t=setInterval(()=>fsTick(x=>x+1),1000); return()=>clearInterval(t); },[section]);
+  // SKU picker: group AVAILABLE priced pairs by SKU, match query against sku/code/name
+  const fsMatches=useMemo(()=>{
+    const q=fsSkuQ.trim().toLowerCase(); if(!q) return [];
+    const by:Record<string,any>={};
+    for(const r of intakeRows as any[]){
+      if(String(r.status||"").toUpperCase()!=="AVAILABLE") continue;
+      if(!((r.selling_price||0)>0||(r.srp||0)>0)) continue;
+      const hit=[r.sku,r.item_code,r.name].some(v=>String(v||"").toLowerCase().includes(q));
+      if(!hit) continue;
+      const k=String(r.sku||r.item_code);
+      if(!by[k]) by[k]={sku:r.sku||r.item_code,name:r.name,srp:r.srp||0,sell:r.selling_price||0,codes:[] as string[]};
+      by[k].codes.push(r.item_code);
+    }
+    return Object.values(by).slice(0,6);
+  },[fsSkuQ,intakeRows]);
+  const fsLaunch=async()=>{
+    if(!fsPick) return;
+    setFsBusy(true);setFsMsg("");
+    try{
+      const payload:any={...adminCred(),op:"flash",action:"create",name:fsName.trim(),
+        item_codes:fsPick.codes,skus:[fsPick.sku],hours:fsHours,banner:fsBanner};
+      if(fsType==="flash"){ const p=Math.round(parseFloat(fsPrice||"0")*100); if(!(p>0)){setFsMsg("Enter the sale price in pesos");setFsBusy(false);return;} payload.sale_price=p; }
+      else { const pc=Math.round(parseFloat(fsPercent||"0")); if(!(pc>=1&&pc<=90)){setFsMsg("Percent must be 1–90");setFsBusy(false);return;} payload.percent=pc; }
+      if(fsLimit.trim()) payload.stock_limit=Math.round(parseFloat(fsLimit));
+      const r=await fetch("/api/admin",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+      const d=await r.json();
+      if(!r.ok) throw new Error(d.error||"launch failed");
+      setFsMsg("✅ Campaign launched!");setFsPick(null);setFsSkuQ("");setFsPrice("");
+      loadFlash();
+    }catch(e:any){setFsMsg("⚠ "+String(e.message||e));}
+    setFsBusy(false);
+  };
+  const fsEnd=async(id:string)=>{
+    setFsBusy(true);
+    try{
+      const r=await fetch("/api/admin",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({...adminCred(),op:"flash",action:"end",id})});
+      if(!r.ok) throw new Error((await r.json()).error||"end failed");
+      loadFlash();
+    }catch(e:any){setFsMsg("⚠ "+String(e.message||e));}
+    setFsBusy(false);
+  };
+  const fsLeft=(f:any)=>Math.max(new Date(f.ends_at).getTime()-Date.now(),0);
+  const fsLeftTxt=(f:any)=>{const ms=fsLeft(f);const h=Math.floor(ms/3600000),m=Math.floor(ms%3600000/60000),s=Math.floor(ms%60000/1000);return `${h}h ${String(m).padStart(2,"0")}m ${String(s).padStart(2,"0")}s`;};
   // Content Plan helpers (approved mock): code + printed price parsed from the caption,
   // matched to sb_inventory → automatic price check vs the live website
   const planCode=(p:any)=>{const t=String(p?.text||"");const m=t.match(/\/go\/([a-z0-9\-]+)/i)||t.match(/[?&]search=([a-z0-9\-]+)/i);return m?m[1]:null;};
@@ -2770,6 +2844,7 @@ export default function AdminDashboard() {
     {id:"intake"    as Section, icon:QrCode,         label:"Latest Inventory"},
     {id:"reports"   as Section, icon:TrendingUp,     label:"Sales & Reports"},
     {id:"promos"    as Section, icon:Tag,            label:"Vouchers & Promos"},
+    {id:"flash"     as Section, icon:Zap,            label:"Promotions"},
     {id:"campaign"  as Section, icon:Tag,            label:"Shoe Cleaner Campaign"},
     {id:"social"    as Section, icon:TrendingUp,     label:"Social Media"},
     {id:"analytics" as Section, icon:BarChart3,      label:"Analytics"},
@@ -4057,6 +4132,116 @@ export default function AdminDashboard() {
 
           {/* ── LATEST INVENTORY (shoebox intake log) ── */}
           {/* ── SOCIAL MEDIA (Metricool) — per Pia's mock: status, stats, calendar, next feed posts ── */}
+          {section==="flash"&&(()=>{
+            const live=fsRows.filter(f=>f.state==="live");
+            const sched=fsRows.filter(f=>f.state==="scheduled");
+            const done=fsRows.filter(f=>["ended","cancelled","soldout"].includes(f.state));
+            const peso=(c:number)=>"₱"+Math.round((c||0)/100).toLocaleString("en-PH");
+            return (
+            <div className="space-y-5">
+              <div>
+                <h2 className="text-xl font-black text-[#0d2430]">⚡ Promotions</h2>
+                <p className="text-xs text-gray-400">Campaign manager — original prices sa inventory hindi ginagalaw; ang campaign ang nagpapatong ng sale price, at auto-expire.</p>
+              </div>
+              {/* stats */}
+              <div className="grid grid-cols-3 gap-3">
+                {[["● Active",live.length,"text-red-600 border-red-200 bg-red-50"],["Scheduled",sched.length,""],["Completed",done.length,""]].map(([lbl,n,cls]:any)=>(
+                  <div key={lbl} className={`rounded-xl border p-4 ${cls||"border-gray-100 bg-white"}`}>
+                    <div className={`text-2xl font-black ${String(cls).includes("red")?"text-red-600":"text-[#0d2430]"}`}>{n}</div>
+                    <div className="text-[10px] font-black uppercase tracking-wider text-gray-400">{lbl}</div>
+                  </div>
+                ))}
+              </div>
+              {fsErr&&<div className="text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-xl p-3">{fsErr}</div>}
+              {/* live cards */}
+              {live.map(f=>(
+                <div key={f.id} className="rounded-2xl border border-red-200 bg-red-50 p-4">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div>
+                      <div className="text-sm font-black text-red-600">● LIVE — {f.name}</div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {(f.skus||[]).join(", ")||`${(f.item_codes||[]).length} items`} · {f.sale_price?`${peso(f.sale_price)} fixed`:`${f.percent}% off`} · ends {new Date(f.ends_at).toLocaleString("en-PH",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})} · <b className="tabular-nums">{fsLeftTxt(f)} left</b>
+                      </div>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        Sold: <b>{f.sold||0}</b>{f.stock_limit?` / limit ${f.stock_limit}`:""} · Flash revenue: <b>{peso(f.revenue||0)}</b> · Banner: {f.banner?"ON":"off"}
+                      </div>
+                    </div>
+                    <button onClick={()=>fsEnd(f.id)} disabled={fsBusy}
+                      className="text-[10px] font-black text-red-600 border-2 border-red-600 rounded-lg px-3 py-1.5 hover:bg-red-600 hover:text-white transition">■ END NOW</button>
+                  </div>
+                </div>
+              ))}
+              {/* create */}
+              <div className="rounded-2xl border border-gray-100 bg-white p-4 space-y-3">
+                <div className="text-xs font-black text-[#0d2430]">➕ Create promotion</div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[9.5px] font-black uppercase text-gray-400 w-20">Name</span>
+                  <input value={fsName} onChange={e=>setFsName(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-xs font-bold w-64 outline-none focus:border-[#EA580C]"/>
+                  <span className="text-[9.5px] font-black uppercase text-gray-400 ml-2">Type</span>
+                  {[["flash","⚡ Fixed price"],["percent","% Discount"]].map(([v,l])=>(
+                    <button key={v} onClick={()=>setFsType(v as any)} className={`text-[10px] font-black rounded-full px-3 py-1.5 border ${fsType===v?"bg-[#FFF7F1] border-[#EA580C] text-[#b45309]":"border-gray-200 text-gray-500"}`}>{l}</button>
+                  ))}
+                </div>
+                <div className="flex items-start gap-2 flex-wrap">
+                  <span className="text-[9.5px] font-black uppercase text-gray-400 w-20 mt-2.5">Product</span>
+                  {fsPick?(
+                    <div className="flex items-center gap-2 bg-[#FFF7F1] border-2 border-[#EA580C] rounded-lg px-3 py-2">
+                      <span className="text-xs font-black text-[#b45309]">{fsPick.sku} — {fsPick.name} ({fsPick.codes.length} pairs · SRP {peso(fsPick.srp)} · now {peso(fsPick.sell||fsPick.srp)})</span>
+                      <button onClick={()=>setFsPick(null)} className="text-[10px] font-black text-gray-400">✕</button>
+                    </div>
+                  ):(
+                    <div className="relative">
+                      <input value={fsSkuQ} onChange={e=>setFsSkuQ(e.target.value)} placeholder="🔍 Search SKU / code / model…"
+                        className="border border-gray-200 rounded-lg px-3 py-2 text-xs font-bold w-72 outline-none focus:border-[#EA580C]"/>
+                      {fsMatches.length>0&&(
+                        <div className="absolute left-0 top-10 bg-white border border-gray-100 rounded-xl shadow-xl z-30 min-w-[320px] p-1.5">
+                          {fsMatches.map((m:any)=>(
+                            <button key={m.sku} onClick={()=>{setFsPick(m);setFsSkuQ("");}}
+                              className="w-full text-left text-xs font-bold text-[#0d2430] rounded-lg px-3 py-2 hover:bg-gray-50">
+                              {m.sku} — {m.name} <span className="text-gray-400">({m.codes.length} pairs · {peso(m.sell||m.srp)})</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[9.5px] font-black uppercase text-gray-400 w-20">{fsType==="flash"?"Sale ₱":"Percent"}</span>
+                  {fsType==="flash"
+                    ?<input value={fsPrice} onChange={e=>setFsPrice(e.target.value)} placeholder="1499" inputMode="decimal" className="border-2 border-[#EA580C] rounded-lg px-3 py-2 text-xs font-black text-[#b45309] w-28 outline-none"/>
+                    :<input value={fsPercent} onChange={e=>setFsPercent(e.target.value)} placeholder="20" inputMode="numeric" className="border-2 border-[#EA580C] rounded-lg px-3 py-2 text-xs font-black text-[#b45309] w-20 outline-none"/>}
+                  <span className="text-[9.5px] font-black uppercase text-gray-400 ml-2">Duration</span>
+                  {[6,12,24].map(h=>(
+                    <button key={h} onClick={()=>setFsHours(h)} className={`text-[10px] font-black rounded-full px-3 py-1.5 border ${fsHours===h?"bg-[#FFF7F1] border-[#EA580C] text-[#b45309]":"border-gray-200 text-gray-500"}`}>{h}h</button>
+                  ))}
+                  <span className="text-[9.5px] font-black uppercase text-gray-400 ml-2">Stock limit</span>
+                  <input value={fsLimit} onChange={e=>setFsLimit(e.target.value)} placeholder={fsPick?`all ${fsPick.codes.length}`:"all"} inputMode="numeric" className="border border-gray-200 rounded-lg px-3 py-2 text-xs font-bold w-20 outline-none focus:border-[#EA580C]"/>
+                  <button onClick={()=>setFsBanner(b=>!b)} className={`text-[10px] font-black rounded-full px-3 py-1.5 border ${fsBanner?"bg-[#FFF7F1] border-[#EA580C] text-[#b45309]":"border-gray-200 text-gray-500"}`}>Banner {fsBanner?"ON":"off"}</button>
+                </div>
+                <button onClick={fsLaunch} disabled={fsBusy||!fsPick||!fsName.trim()}
+                  className="w-full rounded-xl py-3 text-sm font-black text-white bg-gradient-to-r from-red-600 to-[#EA580C] disabled:opacity-40">
+                  ⚡ LAUNCH CAMPAIGN{fsPick?` — ${fsPick.sku} · ends ${new Date(Date.now()+fsHours*3600000).toLocaleTimeString("en-PH",{hour:"numeric",minute:"2-digit"})}`:""}
+                </button>
+                {fsMsg&&<div className="text-xs font-bold text-[#0d2430]">{fsMsg}</div>}
+                <p className="text-[10px] text-gray-400">Server-side lahat: website at checkout kukuha ng campaign price habang live; pag-expire o END NOW, balik agad sa normal. Walang galawan ng inventory prices.</p>
+              </div>
+              {/* history */}
+              <div className="rounded-2xl border border-gray-100 bg-white p-4">
+                <div className="text-xs font-black text-[#0d2430] mb-2">📜 History</div>
+                {fsLoading&&<div className="text-xs text-gray-400">Loading…</div>}
+                {!fsLoading&&fsRows.length===0&&<div className="text-xs text-gray-400">No campaigns yet — your 12-Hour Super Sale will be the first.</div>}
+                {fsRows.map(f=>(
+                  <div key={f.id} className="flex items-center justify-between gap-2 text-xs font-bold text-[#0d2430] border-b border-gray-50 py-2 last:border-0">
+                    <span className="truncate">{f.name} — {(f.skus||[]).join(", ")||`${(f.item_codes||[]).length} items`}</span>
+                    <span className="text-gray-400 whitespace-nowrap">{f.sale_price?peso(f.sale_price):`${f.percent}%`} · sold {f.sold||0} · {peso(f.revenue||0)}</span>
+                    <span className={`text-[9px] font-black rounded-full px-2 py-0.5 whitespace-nowrap ${f.state==="live"?"bg-red-50 text-red-600":f.state==="scheduled"?"bg-[#FFF7F1] text-[#b45309]":"bg-gray-100 text-gray-500"}`}>{f.state.toUpperCase()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>);
+          })()}
+
           {section==="social"&&(
             <div className="space-y-4">
               <div className="flex items-start justify-between flex-wrap gap-3">
