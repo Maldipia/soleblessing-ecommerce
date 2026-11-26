@@ -47,6 +47,9 @@ export const sbAdmin = {
           st.setItem('sb_admin_role', out.role || 'OWNER');
           st.setItem('sb_admin_color', out.color || '#C9A84C');
         }
+        // Staff device marker: the Metricool web tracker skips this browser
+        // forever so owner/staff browsing never pollutes visitor analytics.
+        try { localStorage.setItem('sb_owner', '1'); } catch {}
         // Legacy server without token support: fall back to the old behavior
         // so login never bricks mid-deploy.
         if (!out.token) { localStorage.setItem(PW_KEY, password); sessionStorage.setItem(PW_KEY, password); }
