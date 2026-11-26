@@ -36,7 +36,7 @@ function FlashCountdown({ endsAt }: { endsAt: string }) {
 export default function InventoryDetail() {
   const params = useParams();
   const [, setLocation] = useLocation();
-  const { addItem } = useCart();
+  const { addItem, items: cartItems } = useCart();
   const itemCode = params.itemCode || "";
 
   const { data: inventoryProducts, isLoading } = useInventory();
@@ -226,7 +226,22 @@ export default function InventoryDetail() {
                 }`}>
                 {addedToCart ? <><Check className="h-4 w-4" /> Added to Cart!</> : <><ShoppingCart className="h-4 w-4" /> Add to Cart</>}
               </button>
-              <button onClick={() => setLocation("/checkout")}
+              <button onClick={() => {
+                  // Buy Now = add the selected pair (silently — no drawer over
+                  // checkout) and go straight to checkout; needs a size first
+                  if (!selectedSize || !selectedProduct) {
+                    if (cartItems.length > 0) { setLocation("/checkout"); return; }
+                    toast.error("Please select a size first"); return;
+                  }
+                  addItem({
+                    id: selectedProduct.itemCode, sku: product.sku, name: product.name,
+                    brand: (selectedProduct as any).brand || product.sku.split(/[^a-zA-Z]/)[0] || "Brand",
+                    size: selectedSize,
+                    price: selectedProduct.sellingPrice > 0 ? selectedProduct.sellingPrice : selectedProduct.srp,
+                    imageUrl: selectedProduct.imageUrl || product.imageUrl || undefined,
+                  }, { drawer: false });
+                  setLocation("/checkout");
+                }}
                 className="w-full py-4 text-xs font-black tracking-[.12em] uppercase bg-[#FF5A1F] text-white hover:opacity-90 transition-opacity rounded-full">
                 Buy Now — GCash / Maya / COD →
               </button>

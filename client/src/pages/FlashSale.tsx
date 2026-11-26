@@ -93,7 +93,7 @@ export default function FlashSale() {
       brand: selected.brand || single.pairs?.[0]?.brand || "SoleBlessing",
       size: selected.size, price: selected.sellingPrice > 0 ? selected.sellingPrice : selected.srp,
       imageUrl: selected.imageUrl || single.imageUrl || undefined,
-    });
+    }, { drawer: !goCheckout }); // Buy Now: no drawer over checkout
     if (goCheckout) { setLocation("/checkout"); return; }
     setAdded(true); setTimeout(() => setAdded(false), 2500);
   };

@@ -16,7 +16,7 @@ interface CartContextType {
   items: CartItem[];
   count: number;
   total: number;
-  addItem: (item: Omit<CartItem, "qty">) => void;
+  addItem: (item: Omit<CartItem, "qty">, opts?: { drawer?: boolean }) => void;
   removeItem: (id: string, size: string) => void;
   updateQty: (id: string, size: string, qty: number) => void;
   clearCart: () => void;
@@ -41,13 +41,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const addItem = (item: Omit<CartItem, "qty">) => {
+  // opts.drawer=false: Buy-Now paths add silently and go straight to /checkout —
+  // otherwise the drawer pops over the checkout page and eats the first click
+  const addItem = (item: Omit<CartItem, "qty">, opts?: { drawer?: boolean }) => {
     setItems(prev => {
       const existing = prev.find(i => i.id === item.id && i.size === item.size);
       if (existing) return prev.map(i => i.id === item.id && i.size === item.size ? { ...i, qty: i.qty + 1 } : i);
       return [...prev, { ...item, qty: 1 }];
     });
-    setDrawerOpen(true);
+    if (opts?.drawer !== false) setDrawerOpen(true);
     track("add_to_cart", { ic: item.id, sku: item.sku, d: { size: item.size, price: item.price } });
   };
 

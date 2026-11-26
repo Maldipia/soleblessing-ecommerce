@@ -79,16 +79,25 @@ export default function OrderConfirmation() {
   if (!order) return null;
   const cod = order.paymentMethod === "cod";
   const firstName = String(order.customerName || "").trim().split(/\s+/)[0] || "friend";
+  // COD policy: the shipping fee is paid IN ADVANCE before dispatch; the product
+  // balance is collected by the courier. So COD still pays + uploads proof here,
+  // just for the shipping fee instead of the full total.
+  const shipFee = Number(order.shipping || 0);
+  const codAdvance = cod && shipFee > 0;
+  const dueNow = codAdvance ? shipFee : order.total;
   const method = methods.find(m => m.id === order.paymentMethod) || null;
+  const payVia = method || methods.find(m => m.id !== "cod") || null; // COD pays the fee via GCash/bank
 
   const timeline = [
     { label: "Order received", sub: "Confirmation emailed with your order details", state: "done" },
-    cod
+    cod && !codAdvance
       ? { label: "Confirmation call", sub: `We'll contact ${order.contactNumber || "you"} to confirm delivery`, state: "now" }
       : uploaded
-      ? { label: "Payment proof submitted", sub: "We're verifying it — confirmation email follows", state: "done" }
+      ? { label: codAdvance ? "Shipping fee proof submitted" : "Payment proof submitted", sub: "We're verifying it — confirmation email follows", state: "done" }
+      : codAdvance
+      ? { label: "Pay shipping fee (advance)", sub: "Send the shipping fee below, then upload your proof — we dispatch after it's confirmed", state: "now" }
       : { label: "Payment", sub: "Send the amount below, then upload your proof", state: "now" },
-    { label: "Packing", sub: "We prepare your pairs after verification", state: uploaded && !cod ? "now" : "" },
+    { label: "Packing", sub: "We prepare your pairs after verification", state: uploaded && (!cod || codAdvance) ? "now" : "" },
     { label: "Shipped", sub: "Tracking number emailed (J&T / LBC)", state: "" },
     { label: "Delivered", sub: "Enjoy! 🎉", state: "" },
   ];
@@ -145,17 +154,24 @@ export default function OrderConfirmation() {
             </div>
           )}
           <div className="border-t-2 border-[#0a0a0a] pt-3 flex justify-between items-baseline font-black text-[#0a0a0a]">
-            <span>{cod ? "Total (pay on delivery)" : "Total"}</span>
+            <span>{cod && !codAdvance ? "Total (pay on delivery)" : "Total"}</span>
             <span className="text-[20px]">{fmt(order.total)}</span>
           </div>
+          {codAdvance && (
+            <div className="mt-2 space-y-1 text-[12px] font-bold">
+              <div className="flex justify-between text-[#b45309]"><span>Due now — shipping fee (advance)</span><span>{fmt(shipFee)}</span></div>
+              <div className="flex justify-between text-[#8b8b88]"><span>Balance on delivery (cash)</span><span>{fmt(Math.max(order.total - shipFee, 0))}</span></div>
+            </div>
+          )}
           <div className="mt-3 pt-3 border-t border-[#f0f0ef] flex justify-between text-[12.5px] text-[#8b8b88] font-semibold">
             <span>Payment Method</span>
             <span className="font-black capitalize text-[#0a0a0a]">{order.paymentMethod?.replace("_", " ")}</span>
           </div>
         </div>
 
-        {/* Inline payment + proof upload / COD note */}
-        {!cod ? (
+        {/* Inline payment + proof upload — regular payments AND the COD advance
+            shipping fee (per policy); legacy COD orders w/o a fee keep the old note */}
+        {(!cod || codAdvance) ? (
           uploaded ? (
             <div className="bg-[#e8f5ee] rounded-2xl p-5 mb-3 text-center">
               <CheckCircle className="h-6 w-6 text-[#1a7f4e] mx-auto mb-2" />
@@ -168,15 +184,20 @@ export default function OrderConfirmation() {
               <Upload className="h-3.5 w-3.5 text-[#FF5A1F]" /> Pay & Upload Proof
             </h3>
             <p className="text-[12px] text-[#8b8b88] font-semibold mb-3">
-              Send <b className="text-[#0a0a0a]">{fmt(order.total)}</b>{method ? <> via <b className="text-[#0a0a0a]">{method.label}</b></> : null}, then upload your screenshot here — done in one step, no retyping.
+              Send <b className="text-[#0a0a0a]">{fmt(dueNow)}</b>{codAdvance ? <> (shipping fee — paid in advance)</> : null}{payVia ? <> via <b className="text-[#0a0a0a]">{payVia.label}</b></> : null}, then upload your screenshot here — done in one step, no retyping.
             </p>
-            {method && (
+            {codAdvance && (
+              <div className="rounded-xl p-3 mb-3 border" style={{ background: "#FFF9F4", borderColor: "#F8C89B" }}>
+                <p className="text-[11px] font-bold text-[#b45309] leading-relaxed">🚚 COD: we pay the courier upfront, kaya the {fmt(shipFee)} shipping fee is paid in advance. The {fmt(Math.max(order.total - shipFee, 0))} balance is collected in cash on delivery. We dispatch once the fee is confirmed.</p>
+              </div>
+            )}
+            {payVia && (
               <div className="bg-[#f6f6f5] rounded-xl p-3 mb-3 flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="text-[12.5px] font-black text-[#0a0a0a]">{method.icon} {method.label}</p>
-                  <p className="text-[11.5px] text-[#555] font-semibold truncate">{method.detail}</p>
+                  <p className="text-[12.5px] font-black text-[#0a0a0a]">{payVia.icon} {payVia.label}</p>
+                  <p className="text-[11.5px] text-[#555] font-semibold truncate">{payVia.detail}</p>
                 </div>
-                <button onClick={() => { try { navigator.clipboard.writeText(method.detail); } catch {} setCopiedAcct(true); setTimeout(()=>setCopiedAcct(false),2000); }}
+                <button onClick={() => { try { navigator.clipboard.writeText(payVia.detail); } catch {} setCopiedAcct(true); setTimeout(()=>setCopiedAcct(false),2000); }}
                   className="text-[10px] font-black uppercase tracking-wide text-[#FF5A1F] border border-[#FF5A1F] px-2.5 py-1.5 rounded-full hover:bg-[#fff7f3] flex-shrink-0">
                   {copiedAcct ? "Copied!" : "Copy"}
                 </button>
@@ -196,7 +217,7 @@ export default function OrderConfirmation() {
             {upErr && <p className="text-[11.5px] text-red-500 font-bold mb-2">{upErr}</p>}
             <button onClick={submitProof} disabled={busy}
               className="w-full bg-[#FF5A1F] text-white py-4 text-xs font-black tracking-[.12em] uppercase rounded-full hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2">
-              <Upload className="h-4 w-4" /> {busy ? "Uploading…" : `Submit Proof — ${fmt(order.total)}`}
+              <Upload className="h-4 w-4" /> {busy ? "Uploading…" : `Submit Proof — ${fmt(dueNow)}`}
             </button>
           </div>
           )

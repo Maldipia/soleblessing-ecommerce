@@ -165,7 +165,7 @@ export default function Checkout() {
       sessionStorage.setItem("sb_last_order", JSON.stringify({
         orderNumber: finalOrderNumber, total: grandTotal, discount, promoCode: promoApplied?.code || null,
         paymentMethod: form.paymentMethod, customerName: form.customerName,
-        contactNumber: form.contactNumber, items: orderItems,
+        contactNumber: form.contactNumber, items: orderItems, shipping,
       }));
       setLocation("/order-confirm");
     } catch(e: any) { setError("Failed to place order. Please try again."); }
@@ -278,10 +278,21 @@ export default function Checkout() {
                       </label>
                     ))}
                   </div>
-                  {form.paymentMethod !== "cod" && (
+                  {form.paymentMethod !== "cod" ? (
                     <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
                       <p className="text-xs text-amber-800 font-medium leading-relaxed">
                         After placing your order, you'll be directed to upload your payment screenshot.
+                      </p>
+                    </div>
+                  ) : (
+                    /* COD SHIPPING NOTICE — same policy wording as the FB order form */
+                    <div className="rounded-xl p-4 border" style={{ background: "#FFF9F4", borderColor: "#F8C89B" }} data-testid="cod-notice">
+                      <p className="text-[12px] font-black text-[#b45309] mb-1">🚚 SOLEBLESSING · COD SHIPPING POLICY</p>
+                      <p className="text-xs text-[#6b6b68] leading-relaxed">
+                        For COD orders, the shipping fee of <b>{fmt(shipping)}</b> must be paid in advance before dispatch.
+                        We pay the courier upfront, and the remaining product balance of <b>{fmt(Math.max(grandTotal - shipping, 0))}</b> will
+                        still be collected by the courier upon delivery. After placing your order, you'll upload your
+                        shipping-fee payment screenshot.
                       </p>
                     </div>
                   )}
@@ -372,6 +383,12 @@ export default function Checkout() {
                     <div className="flex justify-between text-base font-black text-[#0a0a0a] pt-2 border-t-2 border-[#0a0a0a]">
                       <span>Total</span><span>{fmt(grandTotal)}</span>
                     </div>
+                    {form.paymentMethod === "cod" && (
+                      <div className="pt-1 space-y-1">
+                        <div className="flex justify-between text-[#b45309] font-black"><span>Due now — shipping fee</span><span>{fmt(shipping)}</span></div>
+                        <div className="flex justify-between text-gray-500"><span>Balance on delivery (cash)</span><span>{fmt(Math.max(grandTotal - shipping, 0))}</span></div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -413,6 +430,12 @@ export default function Checkout() {
                 <div className="flex justify-between text-sm font-black text-[#0a0a0a] pt-1.5 border-t-2 border-[#0a0a0a]">
                   <span>Total</span><span>{fmt(grandTotal)}</span>
                 </div>
+                {form.paymentMethod === "cod" && (
+                  <>
+                    <div className="flex justify-between text-[#b45309] font-black"><span>Due now — shipping</span><span>{fmt(shipping)}</span></div>
+                    <div className="flex justify-between text-gray-500"><span>Balance on delivery</span><span>{fmt(Math.max(grandTotal - shipping, 0))}</span></div>
+                  </>
+                )}
               </div>
               {promoApplied && (
                 <div className="mt-3 bg-green-50 rounded-lg px-3 py-2 flex items-center gap-2">
