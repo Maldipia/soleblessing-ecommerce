@@ -2011,6 +2011,16 @@ export default function AdminDashboard() {
   const intakeAll=false; // Latest Inventory is the scan log ONLY — full stock lives in Products & Inventory
   // Redesign (Pia's mock) + her correction: sortable columns, but NO pagination — scroll down only
   const [intakeSort,setIntakeSort]=useState<{k:string;d:1|-1}>({k:"created_at",d:-1});
+  // Price-gap filter (Pia's approved mock): see which pairs are MISSING SRP / Sale / Cost
+  const [intakePrice,setIntakePrice]=useState<"all"|"nosrp"|"nosale"|"nocost"|"missing"|"complete">("all");
+  const priceGap=(r:any,f:string)=>{
+    if(f==="nosrp")return !r.srp;
+    if(f==="nosale")return !r.selling_price;
+    if(f==="nocost")return !(r.unit_cost>0);
+    if(f==="missing")return !r.srp||!r.selling_price||!(r.unit_cost>0);
+    if(f==="complete")return !!r.srp&&!!r.selling_price&&r.unit_cost>0;
+    return true;
+  };
   const [intakeShown,setIntakeShown]=useState(100);
   const loadIntake=async()=>{
     setIntakeLoading(true);
@@ -2042,11 +2052,16 @@ export default function AdminDashboard() {
     if(intakeTab==="mine"&&r.added_by!==getRole())return false;
     if(intakeTab==="unpriced"&&(r.srp||r.selling_price))return false;
     if(intakeCond!=="All"&&(r.condition||"Good")!==intakeCond&&!(intakeCond==="Good"&&(r.condition||"")==="New"))return false;
+    if(!priceGap(r,intakePrice))return false;
     if(!intakeSearch)return true;
     const q=intakeSearch.toLowerCase();
     // notes included so corrected/merged identifiers (old SKUs, duplicate links) stay findable
     return [r.item_code,r.name,r.brand,r.sku,r.size,r.size_eur,r.size_cm,r.barcode,r.notes].some(v=>String(v||"").toLowerCase().includes(q));
-  }),[intakeRows,intakeSearch,intakeCond,intakeAll,intakeTab]);
+  }),[intakeRows,intakeSearch,intakeCond,intakeAll,intakeTab,intakePrice]);
+  const priceGapCounts=useMemo(()=>{const s=intakeRows.filter((r:any)=>r.tab==="SCAN");
+    const n=(f:string)=>s.filter((r:any)=>priceGap(r,f)).length;
+    return {all:s.length,nosrp:n("nosrp"),nosale:n("nosale"),nocost:n("nocost"),missing:n("missing"),complete:n("complete")};
+  },[intakeRows]);
   // Sort (mock: ⇅ arrows on headers), then page
   const sortedIntake=useMemo(()=>{
     const {k,d}=intakeSort;
@@ -2114,7 +2129,7 @@ export default function AdminDashboard() {
       </td>
     );
   };
-  useEffect(()=>{setIntakeShown(100);},[intakeSearch,intakeCond,intakeAll,intakeTab,intakeSort]);
+  useEffect(()=>{setIntakeShown(100);},[intakeSearch,intakeCond,intakeAll,intakeTab,intakeSort,intakePrice]);
   // sortable column header (mock: ⇅ arrows; active column shows ↑/↓ in orange)
   const thSort=(k:string,label:string,extra:string="")=>{
     const on=intakeSort.k===k;
@@ -4380,6 +4395,15 @@ export default function AdminDashboard() {
                   <select value={intakeCond} onChange={e=>setIntakeCond(e.target.value)}
                     className="border border-gray-200 rounded-lg px-2.5 py-2 text-xs font-semibold text-gray-600 outline-none focus:border-[#EA580C] bg-white">
                     {["All","Good","Stained","Missing pair","Unknown"].map(c=><option key={c} value={c}>{c==="All"?"All Categories":c}</option>)}
+                  </select>
+                  <select value={intakePrice} onChange={e=>setIntakePrice(e.target.value as any)}
+                    className={`rounded-lg px-2.5 py-2 text-xs font-black outline-none bg-white ${intakePrice!=="all"?"border-2 border-red-500 text-red-600":"border border-gray-200 text-gray-600 focus:border-[#EA580C]"}`}>
+                    <option value="all">All pairs ({priceGapCounts.all.toLocaleString()})</option>
+                    <option value="nosrp">⚠ No SRP ({priceGapCounts.nosrp.toLocaleString()})</option>
+                    <option value="nosale">⚠ No Sale price ({priceGapCounts.nosale.toLocaleString()})</option>
+                    <option value="nocost">⚠ No Cost ({priceGapCounts.nocost.toLocaleString()})</option>
+                    <option value="missing">⚠ Missing any price ({priceGapCounts.missing.toLocaleString()})</option>
+                    <option value="complete">✓ Complete ({priceGapCounts.complete.toLocaleString()})</option>
                   </select>
                   <span className="text-[11px] font-bold text-gray-400 self-center">📷 {scannedCount} scanned pair{scannedCount===1?"":"s"}</span>
                 </div>
